@@ -60,6 +60,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
 }
 
 .result-panel {
@@ -96,6 +98,7 @@ button {
 
 .brand span,
 .result-head span,
+.section-head span,
 small,
 label span,
 .field-head span {
@@ -195,6 +198,18 @@ textarea:focus {
   justify-content: space-between;
 }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.section-head strong {
+  display: block;
+  font-size: 13px;
+}
+
 .text-button,
 .secondary-action {
   border: 1px solid var(--line);
@@ -228,6 +243,49 @@ textarea:focus {
   font-size: 13px;
 }
 
+.quick-panel {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.preset-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.preset-button {
+  min-height: 58px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+
+.preset-button strong {
+  font-size: 13px;
+}
+
+.preset-button span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.preset-button.active {
+  border-color: var(--accent);
+  background: #eef5ff;
+  box-shadow: 0 0 0 3px rgba(29, 95, 209, 0.1);
+}
+
 #referencePreview {
   width: 100%;
   max-height: 210px;
@@ -240,12 +298,32 @@ textarea:focus {
 .option-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 .option-grid label:first-child,
 .option-grid label:nth-child(2) {
   grid-column: span 2;
+}
+
+.option-summary {
+  min-height: 34px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.option-summary span {
+  display: inline-grid;
+  place-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font-size: 12px;
 }
 
 .result-head {

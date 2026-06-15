@@ -76,11 +76,14 @@ def load_settings() -> AppSettings:
     )
 
 
-def save_settings(settings: AppSettings) -> AppSettings:
+def save_settings(settings: AppSettings, keep_existing_key: bool = False) -> AppSettings:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    api_key = settings.api_key.strip()
+    if keep_existing_key and not api_key:
+        api_key = load_settings().api_key
     clean = AppSettings(
         base_url=normalize_base_url(settings.base_url),
-        api_key=settings.api_key.strip(),
+        api_key=api_key,
         model=settings.model.strip() or "gpt-image-2",
     )
     SETTINGS_PATH.write_text(json.dumps(clean.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -246,9 +249,10 @@ def get_settings() -> dict[str, object]:
 def update_settings(settings: AppSettings) -> dict[str, object]:
     if not settings.base_url.strip():
         raise HTTPException(status_code=400, detail="请填写 API 地址。")
-    if not settings.api_key.strip():
+    if not settings.api_key.strip() and not load_settings().api_key:
         raise HTTPException(status_code=400, detail="请填写 API Key。")
-    return public_settings(save_settings(settings))
+    saved = save_settings(settings, keep_existing_key=True)
+    return public_settings(saved)
 
 
 @app.post("/api/generate")

@@ -41,6 +41,24 @@ def test_save_and_load_settings_round_trip(tmp_path, monkeypatch):
     assert loaded.model == "gpt-image-2"
 
 
+def test_save_settings_keeps_existing_key_when_update_key_is_blank(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(main, "SETTINGS_PATH", tmp_path / "settings.json")
+    main.save_settings(main.AppSettings(base_url="https://api.example.com", api_key="sk-existing", model="gpt-image-2"))
+
+    saved = main.save_settings(
+        main.AppSettings(
+            base_url="https://api.example.com",
+            api_key="",
+            model="gpt-image-1",
+        ),
+        keep_existing_key=True,
+    )
+
+    assert saved.api_key == "sk-existing"
+    assert saved.model == "gpt-image-1"
+
+
 def test_save_base64_accepts_data_url(tmp_path):
     encoded = base64.b64encode(b"png-bytes").decode("ascii")
 

@@ -5,6 +5,10 @@ const apiKeyInput = document.querySelector("#apiKey");
 const apiModelInput = document.querySelector("#apiModel");
 const settingsStatus = document.querySelector("#settingsStatus");
 const promptInput = document.querySelector("#prompt");
+const clearPromptBtn = document.querySelector("#clearPromptBtn");
+const presetList = document.querySelector("#presetList");
+const lastPresetText = document.querySelector("#lastPresetText");
+const resetOptionsBtn = document.querySelector("#resetOptionsBtn");
 const referenceInput = document.querySelector("#reference");
 const referenceText = document.querySelector("#referenceText");
 const referencePreview = document.querySelector("#referencePreview");
@@ -22,9 +26,12 @@ const errorText = document.querySelector("#errorText");
 const copyErrorBtn = document.querySelector("#copyErrorBtn");
 const resultGrid = document.querySelector("#resultGrid");
 const resultMeta = document.querySelector("#resultMeta");
+const optionSummary = document.querySelector("#optionSummary");
 const toast = document.querySelector("#toast");
 
 let toastTimer = null;
+let currentState = window.ImageToolsPreferences.defaultUiState();
+let apiKeyWasSaved = false;
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -46,6 +53,90 @@ function currentModel() {
   return modelInput.value.trim() || apiModelInput.value.trim() || "gpt-image-2";
 }
 
+function readUiStateFromForm() {
+  return window.ImageToolsPreferences.normalizeUiState({
+    prompt: promptInput.value,
+    size: sizeSelect.value,
+    quality: qualitySelect.value,
+    count: countSelect.value,
+    model: currentModel(),
+    apiBaseUrl: apiBaseUrlInput.value,
+    apiModel: apiModelInput.value,
+    lastPresetId: currentState.lastPresetId,
+  });
+}
+
+function persistUiState() {
+  currentState = readUiStateFromForm();
+  window.ImageToolsPreferences.saveUiState(localStorage, currentState);
+  renderOptionSummary();
+  renderPresetButtons();
+}
+
+function applyUiState(state) {
+  currentState = window.ImageToolsPreferences.normalizeUiState(state);
+  promptInput.value = currentState.prompt;
+  sizeSelect.value = currentState.size;
+  qualitySelect.value = currentState.quality;
+  countSelect.value = String(currentState.count);
+  modelInput.value = currentState.model;
+  if (currentState.apiBaseUrl) {
+    apiBaseUrlInput.value = currentState.apiBaseUrl;
+  }
+  if (currentState.apiModel) {
+    apiModelInput.value = currentState.apiModel;
+  }
+  renderOptionSummary();
+  renderPresetButtons();
+}
+
+function selectedPreset() {
+  return (
+    window.ImageToolsPreferences.QUICK_PRESETS.find(
+      (preset) => preset.id === currentState.lastPresetId,
+    ) || null
+  );
+}
+
+function renderOptionSummary() {
+  const state = readUiStateFromForm();
+  const preset = selectedPreset();
+  optionSummary.innerHTML = "";
+  [
+    preset ? preset.label : "自定义",
+    state.size,
+    state.quality === "auto" ? "质量自动" : `质量 ${state.quality}`,
+    `${state.count} 张`,
+  ].forEach((item) => {
+    const chip = document.createElement("span");
+    chip.textContent = item;
+    optionSummary.appendChild(chip);
+  });
+  lastPresetText.textContent = preset
+    ? `上次使用：${preset.label}`
+    : "自动记住上次参数";
+}
+
+function renderPresetButtons() {
+  presetList.innerHTML = "";
+  window.ImageToolsPreferences.QUICK_PRESETS.forEach((preset) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `preset-button ${currentState.lastPresetId === preset.id ? "active" : ""}`;
+    button.innerHTML = `<strong>${preset.label}</strong><span>${preset.description}</span>`;
+    button.addEventListener("click", () => {
+      const next = window.ImageToolsPreferences.applyPreset(
+        readUiStateFromForm(),
+        preset,
+      );
+      applyUiState(next);
+      persistUiState();
+      showToast(`已切换到 ${preset.label}`);
+    });
+    presetList.appendChild(button);
+  });
+}
+
 async function readJson(response) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -56,12 +147,18 @@ async function readJson(response) {
 
 async function loadSettings() {
   try {
+    applyUiState(window.ImageToolsPreferences.loadUiState(localStorage));
     const settings = await fetch("/api/settings").then(readJson);
-    apiBaseUrlInput.value = settings.base_url || "";
+    apiBaseUrlInput.value = settings.base_url || currentState.apiBaseUrl || "";
     apiKeyInput.value = "";
-    apiModelInput.value = settings.model || "gpt-image-2";
-    modelInput.value = settings.model || "gpt-image-2";
-    settingsStatus.textContent = settings.api_key_set ? "已保存 API Key" : "尚未保存 API Key";
+    apiKeyWasSaved = Boolean(settings.api_key_set);
+    apiModelInput.value =
+      settings.model || currentState.apiModel || "gpt-image-2";
+    modelInput.value = currentState.model || settings.model || "gpt-image-2";
+    settingsStatus.textContent = settings.api_key_set
+      ? "已保存 API Key"
+      : "尚未保存 API Key";
+    persistUiState();
   } catch (error) {
     settingsStatus.textContent = "读取设置失败";
     showToast(error.message);
@@ -75,7 +172,7 @@ async function saveSettings(event) {
     api_key: apiKeyInput.value.trim(),
     model: apiModelInput.value.trim() || "gpt-image-2",
   };
-  if (!payload.base_url || !payload.api_key) {
+  if (!payload.base_url || (!payload.api_key && !apiKeyWasSaved)) {
     showToast("请填写 API 地址和 API Key");
     return;
   }
@@ -90,9 +187,11 @@ async function saveSettings(event) {
       body: JSON.stringify(payload),
     }).then(readJson);
     apiKeyInput.value = "";
+    apiKeyWasSaved = Boolean(settings.api_key_set);
     apiModelInput.value = settings.model || payload.model;
     modelInput.value = settings.model || payload.model;
     settingsStatus.textContent = "已保存 API Key";
+    persistUiState();
     showToast("设置已保存");
   } catch (error) {
     showToast(error.message);
@@ -125,7 +224,9 @@ function handleReferenceChange() {
 async function urlToFile(url) {
   const response = await fetch(url);
   const blob = await response.blob();
-  return new File([blob], `reference_${Date.now()}.png`, { type: blob.type || "image/png" });
+  return new File([blob], `reference_${Date.now()}.png`, {
+    type: blob.type || "image/png",
+  });
 }
 
 async function useAsReference(url) {
@@ -219,6 +320,7 @@ async function submitGeneration(event) {
       body: data,
     }).then(readJson);
     renderImages(result.images || [], prompt);
+    persistUiState();
   } catch (error) {
     renderError(error.message);
   } finally {
@@ -235,13 +337,34 @@ function clearResults() {
 
 settingsForm.addEventListener("submit", saveSettings);
 generateForm.addEventListener("submit", submitGeneration);
+generateForm.addEventListener("input", persistUiState);
+generateForm.addEventListener("change", persistUiState);
+settingsForm.addEventListener("input", persistUiState);
 referenceInput.addEventListener("change", handleReferenceChange);
 clearReferenceBtn.addEventListener("click", clearReference);
 clearResultsBtn.addEventListener("click", clearResults);
+clearPromptBtn.addEventListener("click", () => {
+  promptInput.value = "";
+  persistUiState();
+  promptInput.focus();
+});
+resetOptionsBtn.addEventListener("click", () => {
+  applyUiState({
+    ...readUiStateFromForm(),
+    size: "1024x1024",
+    quality: "auto",
+    count: 1,
+    model: apiModelInput.value || "gpt-image-2",
+    lastPresetId: "",
+  });
+  persistUiState();
+  showToast("已恢复默认参数");
+});
 copyErrorBtn.addEventListener("click", async () => {
   await navigator.clipboard.writeText(errorText.textContent);
   showToast("错误信息已复制");
 });
 
 setPanelState("empty");
+applyUiState(window.ImageToolsPreferences.loadUiState(localStorage));
 loadSettings();

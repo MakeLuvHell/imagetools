@@ -22,15 +22,31 @@
           <form id="settingsForm" class="settings-form">
             <label>
               <span>API 地址</span>
-              <input id="apiBaseUrl" name="base_url" placeholder="https://api.example.com 或 /v1" autocomplete="off" />
+              <input
+                id="apiBaseUrl"
+                name="base_url"
+                placeholder="https://api.example.com 或 /v1"
+                autocomplete="off"
+              />
             </label>
             <label>
               <span>API Key</span>
-              <input id="apiKey" name="api_key" type="password" placeholder="留空表示不修改已保存 Key" autocomplete="off" />
+              <input
+                id="apiKey"
+                name="api_key"
+                type="password"
+                placeholder="留空表示不修改已保存 Key"
+                autocomplete="off"
+              />
             </label>
             <label>
               <span>默认模型</span>
-              <input id="apiModel" name="model" placeholder="gpt-image-2" autocomplete="off" />
+              <input
+                id="apiModel"
+                name="model"
+                placeholder="gpt-image-2"
+                autocomplete="off"
+              />
             </label>
             <button type="submit">保存设置</button>
             <small id="settingsStatus">正在读取设置...</small>
@@ -39,17 +55,52 @@
 
         <form id="generateForm" class="generate-form">
           <label class="prompt-label">
-            <span>提示词</span>
-            <textarea id="prompt" name="prompt" placeholder="描述你想生成或编辑的图片"></textarea>
+            <div class="field-head">
+              <span>提示词</span>
+              <button id="clearPromptBtn" type="button" class="text-button">
+                清空
+              </button>
+            </div>
+            <textarea
+              id="prompt"
+              name="prompt"
+              placeholder="描述你想生成或编辑的图片"
+            ></textarea>
           </label>
+
+          <section class="quick-panel" aria-label="快捷预设">
+            <div class="section-head">
+              <div>
+                <strong>快捷预设</strong>
+                <span id="lastPresetText">自动记住上次参数</span>
+              </div>
+              <button id="resetOptionsBtn" type="button" class="text-button">
+                默认
+              </button>
+            </div>
+            <div id="presetList" class="preset-list"></div>
+          </section>
 
           <div class="reference-box">
             <div class="field-head">
               <span>参考图</span>
-              <button id="clearReferenceBtn" type="button" class="text-button" hidden>清除</button>
+              <button
+                id="clearReferenceBtn"
+                type="button"
+                class="text-button"
+                hidden
+              >
+                清除
+              </button>
             </div>
             <label class="file-drop">
-              <input id="reference" name="reference" type="file" accept="image/*" hidden />
+              <input
+                id="reference"
+                name="reference"
+                type="file"
+                accept="image/*"
+                hidden
+              />
               <span id="referenceText">选择图片用于图生图</span>
             </label>
             <img id="referencePreview" alt="参考图预览" hidden />
@@ -90,7 +141,10 @@
             </label>
           </div>
 
-          <button id="generateBtn" type="submit" class="primary-action">生成图片</button>
+          <div id="optionSummary" class="option-summary"></div>
+          <button id="generateBtn" type="submit" class="primary-action">
+            生成图片
+          </button>
         </form>
       </aside>
 
@@ -100,7 +154,9 @@
             <strong>结果预览</strong>
             <span id="resultMeta">等待输入提示词</span>
           </div>
-          <button id="clearResultsBtn" type="button" class="secondary-action">清空结果</button>
+          <button id="clearResultsBtn" type="button" class="secondary-action">
+            清空结果
+          </button>
         </header>
 
         <section id="emptyState" class="empty-state">
@@ -118,14 +174,21 @@
         <section id="errorState" class="error-state" hidden>
           <strong>生成失败</strong>
           <pre id="errorText"></pre>
-          <button id="copyErrorBtn" type="button" class="secondary-action">复制错误</button>
+          <button id="copyErrorBtn" type="button" class="secondary-action">
+            复制错误
+          </button>
         </section>
 
-        <section id="resultGrid" class="result-grid" aria-live="polite"></section>
+        <section
+          id="resultGrid"
+          class="result-grid"
+          aria-live="polite"
+        ></section>
       </main>
     </div>
 
     <div id="toast" class="toast" hidden></div>
+    <script src="/static/preferences.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>
