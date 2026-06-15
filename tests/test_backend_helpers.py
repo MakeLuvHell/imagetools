@@ -1,5 +1,8 @@
 import base64
 
+import anyio
+import httpx
+
 from backend import main
 
 
@@ -78,3 +81,14 @@ def test_save_response_images_decodes_base64_items(tmp_path):
 
     assert len(paths) == 1
     assert paths[0].read_bytes() == b"image-one"
+
+
+def test_homepage_supports_head_request():
+    async def request_homepage_head():
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.head("/")
+
+    response = anyio.run(request_homepage_head)
+
+    assert response.status_code == 200

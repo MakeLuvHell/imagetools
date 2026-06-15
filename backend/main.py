@@ -232,6 +232,11 @@ def index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+@app.head("/")
+def index_head() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
 @app.get("/api/settings")
 def get_settings() -> dict[str, object]:
     return public_settings(load_settings())
