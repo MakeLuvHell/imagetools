@@ -107,28 +107,23 @@
           </div>
 
           <div class="option-grid">
-            <label>
-              <span>比例</span>
-              <select id="ratio">
-                <option value="1:1">1:1 方图</option>
-                <option value="3:2">3:2 横图</option>
-                <option value="2:3">2:3 竖图</option>
-                <option value="16:9">16:9 宽屏</option>
-                <option value="9:16">9:16 竖屏</option>
-              </select>
-            </label>
-            <label>
-              <span>尺寸</span>
-              <select id="resolution">
-                <option value="standard">标准</option>
-                <option value="medium">高清</option>
-                <option value="large">超清</option>
-              </select>
-            </label>
-            <label>
-              <span>模型</span>
-              <input id="model" name="model" value="gpt-image-2" />
-            </label>
+            <section class="choice-panel">
+              <div class="section-label">比例</div>
+              <div id="ratioChoices" class="ratio-choice-grid"></div>
+              <input id="ratio" name="ratio" type="hidden" value="1:1" />
+            </section>
+
+            <section class="choice-panel">
+              <div class="section-label">分辨率/尺寸</div>
+              <div id="resolutionChoices" class="resolution-choice-grid"></div>
+              <input
+                id="resolution"
+                name="resolution"
+                type="hidden"
+                value="standard"
+              />
+            </section>
+
             <label>
               <span
                 title="质量是接口的生成质量参数，通常影响细节、速度和成本；不是图片分辨率。"
@@ -151,6 +146,49 @@
               </select>
             </label>
           </div>
+
+          <details class="advanced-panel">
+            <summary>高级设置</summary>
+            <div class="advanced-grid">
+              <label>
+                <span>输出格式</span>
+                <select id="outputFormat" name="output_format">
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="webp">WebP</option>
+                </select>
+              </label>
+              <label>
+                <span>压缩</span>
+                <input
+                  id="outputCompression"
+                  name="output_compression"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value="100"
+                />
+              </label>
+              <label>
+                <span>背景</span>
+                <select id="background" name="background">
+                  <option value="auto">自动</option>
+                  <option value="opaque">不透明</option>
+                  <option value="transparent">透明</option>
+                </select>
+              </label>
+              <label>
+                <span>审核强度</span>
+                <select id="moderation" name="moderation">
+                  <option value="auto">自动</option>
+                  <option value="low">较低</option>
+                </select>
+              </label>
+            </div>
+            <small>
+              透明背景当前不适用于 gpt-image-2；压缩仅对 JPEG/WebP 生效。
+            </small>
+          </details>
 
           <div id="optionSummary" class="option-summary"></div>
           <button id="generateBtn" type="submit" class="primary-action">

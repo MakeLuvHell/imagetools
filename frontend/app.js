@@ -15,9 +15,14 @@ const referencePreview = document.querySelector("#referencePreview");
 const clearReferenceBtn = document.querySelector("#clearReferenceBtn");
 const ratioSelect = document.querySelector("#ratio");
 const resolutionSelect = document.querySelector("#resolution");
-const modelInput = document.querySelector("#model");
+const ratioChoices = document.querySelector("#ratioChoices");
+const resolutionChoices = document.querySelector("#resolutionChoices");
 const qualitySelect = document.querySelector("#quality");
 const countSelect = document.querySelector("#count");
+const outputFormatSelect = document.querySelector("#outputFormat");
+const outputCompressionInput = document.querySelector("#outputCompression");
+const backgroundSelect = document.querySelector("#background");
+const moderationSelect = document.querySelector("#moderation");
 const generateBtn = document.querySelector("#generateBtn");
 const clearResultsBtn = document.querySelector("#clearResultsBtn");
 const emptyState = document.querySelector("#emptyState");
@@ -51,46 +56,97 @@ function setPanelState(state) {
 }
 
 function currentModel() {
-  return modelInput.value.trim() || apiModelInput.value.trim() || "gpt-image-2";
+  return apiModelInput.value.trim() || "gpt-image-2";
+}
+
+function syncBackgroundOptions() {
+  const model = currentModel();
+  const supportsTransparent =
+    typeof window.ImageToolsPreferences.supportsTransparentBackground === "function"
+      ? window.ImageToolsPreferences.supportsTransparentBackground(model)
+      : true;
+  const transparentOption = backgroundSelect.querySelector(
+    'option[value="transparent"]',
+  );
+  const outputCompressionDisabled = outputFormatSelect.value === "png";
+  if (transparentOption) {
+    transparentOption.disabled = !supportsTransparent;
+  }
+  if (!supportsTransparent && backgroundSelect.value === "transparent") {
+    backgroundSelect.value = "auto";
+  }
+  outputCompressionInput.disabled = outputCompressionDisabled;
+  if (outputCompressionDisabled) {
+    outputCompressionInput.value = "100";
+  }
+}
+
+function enforceUiConstraints(state) {
+  const next = { ...state };
+  if (
+    next.background === "transparent" &&
+    !window.ImageToolsPreferences.supportsTransparentBackground(next.model)
+  ) {
+    next.background = "auto";
+  }
+  if (next.outputFormat === "png") {
+    next.outputCompression = 100;
+  }
+  return next;
 }
 
 function readUiStateFromForm() {
-  return window.ImageToolsPreferences.normalizeUiState({
-    prompt: promptInput.value,
-    ratio: ratioSelect.value,
-    resolution: resolutionSelect.value,
-    quality: qualitySelect.value,
-    count: countSelect.value,
-    model: currentModel(),
-    apiBaseUrl: apiBaseUrlInput.value,
-    apiModel: apiModelInput.value,
-    lastPresetId: currentState.lastPresetId,
-  });
+  return enforceUiConstraints(
+    window.ImageToolsPreferences.normalizeUiState({
+      prompt: promptInput.value,
+      ratio: ratioSelect.value,
+      resolution: resolutionSelect.value,
+      quality: qualitySelect.value,
+      count: countSelect.value,
+      model: currentModel(),
+      apiBaseUrl: apiBaseUrlInput.value,
+      apiModel: apiModelInput.value,
+      lastPresetId: currentState.lastPresetId,
+      outputFormat: outputFormatSelect.value,
+      outputCompression: outputCompressionInput.value,
+      background: backgroundSelect.value,
+      moderation: moderationSelect.value,
+    }),
+  );
 }
 
 function persistUiState() {
   currentState = readUiStateFromForm();
   window.ImageToolsPreferences.saveUiState(localStorage, currentState);
+  renderChoiceButtons();
   renderOptionSummary();
   renderPresetButtons();
+  syncBackgroundOptions();
 }
 
 function applyUiState(state) {
-  currentState = window.ImageToolsPreferences.normalizeUiState(state);
+  currentState = enforceUiConstraints(
+    window.ImageToolsPreferences.normalizeUiState(state),
+  );
   promptInput.value = currentState.prompt;
   ratioSelect.value = currentState.ratio;
   resolutionSelect.value = currentState.resolution;
   qualitySelect.value = currentState.quality;
   countSelect.value = String(currentState.count);
-  modelInput.value = currentState.model;
+  outputFormatSelect.value = currentState.outputFormat;
+  outputCompressionInput.value = String(currentState.outputCompression);
+  backgroundSelect.value = currentState.background;
+  moderationSelect.value = currentState.moderation;
   if (currentState.apiBaseUrl) {
     apiBaseUrlInput.value = currentState.apiBaseUrl;
   }
   if (currentState.apiModel) {
     apiModelInput.value = currentState.apiModel;
   }
+  renderChoiceButtons();
   renderOptionSummary();
   renderPresetButtons();
+  syncBackgroundOptions();
 }
 
 function selectedPreset() {
@@ -110,6 +166,7 @@ function renderOptionSummary() {
     state.ratio,
     formatResolution(state.ratio, state.resolution),
     state.quality === "auto" ? "质量自动" : `渲染质量 ${state.quality}`,
+    state.outputFormat.toUpperCase(),
     `${state.count} 张`,
   ].forEach((item) => {
     const chip = document.createElement("span");
@@ -132,6 +189,59 @@ function formatResolution(ratio, resolution) {
     large: "超清",
   };
   return `${labelMap[resolution] || "标准"} ${dimensions.width}x${dimensions.height}`;
+}
+
+function renderRatioButtons() {
+  ratioChoices.innerHTML = "";
+  window.ImageToolsPreferences.RATIO_OPTIONS.forEach((option) => {
+    const button = document.createElement("button");
+    const active = ratioSelect.value === option.id;
+    button.type = "button";
+    button.className = `ratio-button ${active ? "active" : ""}`;
+    button.setAttribute("aria-pressed", String(active));
+    button.innerHTML = `
+      <span class="ratio-preview" style="--preview-w:${option.preview[0]}px;--preview-h:${option.preview[1]}px"></span>
+      <strong>${option.label}</strong>
+      <small>${option.name}</small>
+    `;
+    button.addEventListener("click", () => {
+      ratioSelect.value = option.id;
+      currentState.lastPresetId = "";
+      persistUiState();
+    });
+    ratioChoices.appendChild(button);
+  });
+}
+
+function renderResolutionButtons() {
+  resolutionChoices.innerHTML = "";
+  window.ImageToolsPreferences.RESOLUTION_OPTIONS.forEach((option) => {
+    const dimensions = window.ImageToolsPreferences.resolveDimensions(
+      ratioSelect.value,
+      option.id,
+    );
+    const active = resolutionSelect.value === option.id;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `resolution-button ${active ? "active" : ""}`;
+    button.setAttribute("aria-pressed", String(active));
+    button.innerHTML = `
+      <strong>${option.label}</strong>
+      <span>${option.name}</span>
+      <small>${dimensions.width}x${dimensions.height}</small>
+    `;
+    button.addEventListener("click", () => {
+      resolutionSelect.value = option.id;
+      currentState.lastPresetId = "";
+      persistUiState();
+    });
+    resolutionChoices.appendChild(button);
+  });
+}
+
+function renderChoiceButtons() {
+  renderRatioButtons();
+  renderResolutionButtons();
 }
 
 function renderPresetButtons() {
@@ -171,7 +281,7 @@ async function loadSettings() {
     apiKeyWasSaved = Boolean(settings.api_key_set);
     apiModelInput.value =
       settings.model || currentState.apiModel || "gpt-image-2";
-    modelInput.value = currentState.model || settings.model || "gpt-image-2";
+    syncBackgroundOptions();
     settingsStatus.textContent = settings.api_key_set
       ? "已保存 API Key"
       : "尚未保存 API Key";
@@ -206,7 +316,7 @@ async function saveSettings(event) {
     apiKeyInput.value = "";
     apiKeyWasSaved = Boolean(settings.api_key_set);
     apiModelInput.value = settings.model || payload.model;
-    modelInput.value = settings.model || payload.model;
+    syncBackgroundOptions();
     settingsStatus.textContent = "已保存 API Key";
     persistUiState();
     showToast("设置已保存");
@@ -325,6 +435,10 @@ async function submitGeneration(event) {
   data.append("count", countSelect.value);
   data.append("width", dimensions.width);
   data.append("height", dimensions.height);
+  data.append("output_format", outputFormatSelect.value);
+  data.append("output_compression", outputCompressionInput.value);
+  data.append("background", backgroundSelect.value);
+  data.append("moderation", moderationSelect.value);
   if (referenceInput.files[0]) {
     data.append("reference", referenceInput.files[0]);
   }
@@ -375,8 +489,11 @@ resetOptionsBtn.addEventListener("click", () => {
     resolution: "standard",
     quality: "auto",
     count: 1,
-    model: apiModelInput.value || "gpt-image-2",
     lastPresetId: "",
+    outputFormat: "png",
+    outputCompression: 100,
+    background: "auto",
+    moderation: "auto",
   });
   persistUiState();
   showToast("已恢复默认参数");

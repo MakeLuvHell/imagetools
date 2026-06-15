@@ -39,7 +39,7 @@ Returns public settings. The API key is never returned.
 
 ```json
 {
-  "base_url": "https://api.example.com",
+  "base_url": "https://img-api.chshapi.org/v1",
   "api_key": "",
   "api_key_set": true,
   "model": "gpt-image-2"
@@ -50,7 +50,7 @@ Returns public settings. The API key is never returned.
 
 ```json
 {
-  "base_url": "https://api.example.com",
+  "base_url": "https://img-api.chshapi.org/v1",
   "api_key": "sk-...",
   "model": "gpt-image-2"
 }
@@ -58,7 +58,8 @@ Returns public settings. The API key is never returned.
 
 Rules:
 
-- `base_url` may include `/v1`; the backend normalizes it away.
+- `base_url` may include `/v1`; the backend preserves it and joins endpoint
+  paths without duplicating `/v1`.
 - Empty `api_key` keeps the previously saved key if one exists.
 - Settings are stored server-side in `data/settings.json`.
 
@@ -78,6 +79,10 @@ Fields:
 | `height` | integer | no | Output height from frontend ratio/resolution mapping. |
 | `quality` | string | no | Upstream render quality. Current values: `auto`, `low`, `medium`, `high`. |
 | `count` | integer | no | Number of images for text-to-image. Backend clamps to 1-4. |
+| `output_format` | string | no | `png`, `jpeg`, or `webp`. |
+| `output_compression` | integer | no | 0-100; sent only for `jpeg`/`webp`. |
+| `background` | string | no | `auto`, `opaque`, or `transparent`; transparent is rejected for `gpt-image-2`. |
+| `moderation` | string | no | `auto` or `low`; generations only. |
 | `reference` | file | no | If present, backend uses the edits endpoint. |
 
 Response:
@@ -101,10 +106,14 @@ reference file.
 Backend call:
 
 ```http
-POST {base_url}/v1/images/generations
+POST {base_url}/images/generations
 Content-Type: application/json
 Authorization: Bearer <api_key>
 ```
+
+If `base_url` does not end with `/v1`, the backend still accepts it and joins
+`/v1/images/generations`. If `base_url` is `https://img-api.chshapi.org/v1`,
+the final request URL is `https://img-api.chshapi.org/v1/images/generations`.
 
 Payload:
 
@@ -114,18 +123,20 @@ Payload:
   "prompt": "A clean product render...",
   "size": "1024x1024",
   "quality": "high",
-  "n": 1
+  "n": 1,
+  "output_format": "png"
 }
 ```
 
-Current backend omits `quality` when it is `auto`.
+Current backend omits `quality`, `background`, and `moderation` when they are
+`auto`. It omits `output_compression` for `png`.
 
 ### Reference Image / Image-To-Image
 
 Backend call:
 
 ```http
-POST {base_url}/v1/images/edits
+POST {base_url}/images/edits
 Content-Type: multipart/form-data
 Authorization: Bearer <api_key>
 ```
@@ -139,6 +150,9 @@ Fields:
 | `model` | Selected model. |
 | `size` | Backend builds `WIDTHxHEIGHT`. |
 | `quality` | Sent only when not `auto`. |
+| `output_format` | Selected output format. |
+| `output_compression` | Sent only for `jpeg`/`webp`. |
+| `background` | Sent only when not `auto`. |
 
 The official edits endpoint supports multiple input images and masks. The core
 version currently sends one reference image and no mask.
@@ -156,6 +170,10 @@ to image creators, while the backend should translate it to API fields.
 | 分辨率/尺寸 | `width`, `height` | `size` | Actual output dimensions. |
 | 渲染质量 | `quality` | `quality` | Not resolution. Affects rendering quality, speed, and cost. |
 | 张数 | `count` | `n` | Text-to-image only in current backend. |
+| 输出格式 | `output_format` | `output_format` | Advanced setting. |
+| 压缩 | `output_compression` | `output_compression` | Advanced; JPEG/WebP only. |
+| 背景 | `background` | `background` | Advanced; transparent disabled for `gpt-image-2`. |
+| 审核强度 | `moderation` | `moderation` | Advanced; text-to-image only. |
 | 参考图 | `reference` | `image` | Switches backend to `/v1/images/edits`. |
 
 ### Ratio
@@ -285,14 +303,14 @@ The referenced dashboard is useful for control grouping, not for API truth.
 Recommended left-panel structure:
 
 1. Prompt area with clear action and recent-state persistence.
-2. Quick presets that set ratio, size, quality, count, and model together.
+2. Quick presets that set ratio, size, quality, and count together.
 3. Reference image upload with preview and clear action.
 4. Generation controls grouped as:
    - `比例`
    - `分辨率/尺寸`
    - `渲染质量`
    - `张数`
-   - `模型`
+   - `模型` only in the saved settings area
 5. Advanced settings collapsed by default:
    - output format
    - compression
@@ -311,6 +329,8 @@ model names, accepted sizes, `quality` values, or response shape.
 Adapter rules:
 
 - Always let users configure `base_url` and `model`.
+- Preserve a provider-supplied `/v1` Base URL and join request paths without
+  creating `/v1/v1/...`.
 - Keep server-side API key storage.
 - Validate dimensions before calling upstream when targeting `gpt-image-2`.
 - Treat `b64_json` as primary but support `url` fallback.
@@ -320,11 +340,8 @@ Adapter rules:
 
 ## Next Implementation Checklist
 
-- Replace invalid `1820x1024` and `1024x1820` presets with API-valid multiples
-  of 16.
-- Add a shared size validator used by preferences, frontend submit, and backend.
-- Rename visible `尺寸` label to `分辨率/尺寸`.
-- Keep `比例` options free of dimensions.
-- Keep `渲染质量` help text visible near the quality selector.
-- Add optional `output_format` after the core flow is stable.
+- Keep frontend requests pointed at local `/api/*` endpoints, following the
+  reference project's browser-to-local-proxy pattern.
+- Keep `https://img-api.chshapi.org/v1` as a valid Base URL and show the final
+  upstream request address in errors for debugging.
 - Add multiple references and mask editing only after a clear upload UX exists.
