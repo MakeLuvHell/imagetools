@@ -47,3 +47,34 @@ def test_save_base64_accepts_data_url(tmp_path):
     assert path.read_bytes() == b"png-bytes"
     assert path.name.startswith("image_")
     assert path.suffix == ".png"
+
+
+def test_public_settings_redacts_api_key():
+    public = main.public_settings(
+        main.AppSettings(
+            base_url="https://api.example.com",
+            api_key="sk-secret",
+            model="gpt-image-2",
+        )
+    )
+
+    assert public["base_url"] == "https://api.example.com"
+    assert public["api_key_set"] is True
+    assert public["api_key"] == ""
+    assert public["model"] == "gpt-image-2"
+
+
+def test_save_response_images_decodes_base64_items(tmp_path):
+    encoded = base64.b64encode(b"image-one").decode("ascii")
+    client = main.ImageApiClient(
+        main.AppSettings(
+            base_url="https://api.example.com",
+            api_key="sk-test",
+            model="gpt-image-2",
+        )
+    )
+
+    paths = client.save_response_images({"data": [{"b64_json": encoded}]}, tmp_path)
+
+    assert len(paths) == 1
+    assert paths[0].read_bytes() == b"image-one"
