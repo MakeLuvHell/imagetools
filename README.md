@@ -54,6 +54,9 @@ API 地址可以填写 `https://api.example.com` 或 `https://api.example.com/v1
 - `/v1/images/generations`
 - `/v1/images/edits`
 
+完整的 GPT Image API 与前端字段适配说明见
+[`docs/api/gpt-image-api-frontend-adapter.md`](docs/api/gpt-image-api-frontend-adapter.md)。
+
 ## 本地文件
 
 运行时文件保存在 `data/`：
