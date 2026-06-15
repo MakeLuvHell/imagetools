@@ -109,12 +109,20 @@
           <div class="option-grid">
             <label>
               <span>比例</span>
-              <select id="size">
-                <option value="1024x1024">1:1 · 1024x1024</option>
-                <option value="1536x1024">3:2 · 1536x1024</option>
-                <option value="1024x1536">2:3 · 1024x1536</option>
-                <option value="1820x1024">16:9 · 1820x1024</option>
-                <option value="1024x1820">9:16 · 1024x1820</option>
+              <select id="ratio">
+                <option value="1:1">1:1 方图</option>
+                <option value="3:2">3:2 横图</option>
+                <option value="2:3">2:3 竖图</option>
+                <option value="16:9">16:9 宽屏</option>
+                <option value="9:16">9:16 竖屏</option>
+              </select>
+            </label>
+            <label>
+              <span>尺寸</span>
+              <select id="resolution">
+                <option value="standard">标准</option>
+                <option value="medium">高清</option>
+                <option value="large">超清</option>
               </select>
             </label>
             <label>
@@ -122,7 +130,10 @@
               <input id="model" name="model" value="gpt-image-2" />
             </label>
             <label>
-              <span>质量</span>
+              <span
+                title="质量是接口的生成质量参数，通常影响细节、速度和成本；不是图片分辨率。"
+                >渲染质量</span
+              >
               <select id="quality" name="quality">
                 <option value="auto">自动</option>
                 <option value="high">高</option>

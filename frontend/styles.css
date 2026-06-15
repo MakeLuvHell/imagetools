@@ -301,8 +301,7 @@ textarea:focus {
   gap: 10px;
 }
 
-.option-grid label:first-child,
-.option-grid label:nth-child(2) {
+.option-grid label:nth-child(3) {
   grid-column: span 2;
 }
 

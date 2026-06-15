@@ -13,7 +13,8 @@ const referenceInput = document.querySelector("#reference");
 const referenceText = document.querySelector("#referenceText");
 const referencePreview = document.querySelector("#referencePreview");
 const clearReferenceBtn = document.querySelector("#clearReferenceBtn");
-const sizeSelect = document.querySelector("#size");
+const ratioSelect = document.querySelector("#ratio");
+const resolutionSelect = document.querySelector("#resolution");
 const modelInput = document.querySelector("#model");
 const qualitySelect = document.querySelector("#quality");
 const countSelect = document.querySelector("#count");
@@ -56,7 +57,8 @@ function currentModel() {
 function readUiStateFromForm() {
   return window.ImageToolsPreferences.normalizeUiState({
     prompt: promptInput.value,
-    size: sizeSelect.value,
+    ratio: ratioSelect.value,
+    resolution: resolutionSelect.value,
     quality: qualitySelect.value,
     count: countSelect.value,
     model: currentModel(),
@@ -76,7 +78,8 @@ function persistUiState() {
 function applyUiState(state) {
   currentState = window.ImageToolsPreferences.normalizeUiState(state);
   promptInput.value = currentState.prompt;
-  sizeSelect.value = currentState.size;
+  ratioSelect.value = currentState.ratio;
+  resolutionSelect.value = currentState.resolution;
   qualitySelect.value = currentState.quality;
   countSelect.value = String(currentState.count);
   modelInput.value = currentState.model;
@@ -104,8 +107,9 @@ function renderOptionSummary() {
   optionSummary.innerHTML = "";
   [
     preset ? preset.label : "自定义",
-    state.size,
-    state.quality === "auto" ? "质量自动" : `质量 ${state.quality}`,
+    state.ratio,
+    formatResolution(state.ratio, state.resolution),
+    state.quality === "auto" ? "质量自动" : `渲染质量 ${state.quality}`,
     `${state.count} 张`,
   ].forEach((item) => {
     const chip = document.createElement("span");
@@ -115,6 +119,19 @@ function renderOptionSummary() {
   lastPresetText.textContent = preset
     ? `上次使用：${preset.label}`
     : "自动记住上次参数";
+}
+
+function formatResolution(ratio, resolution) {
+  const dimensions = window.ImageToolsPreferences.resolveDimensions(
+    ratio,
+    resolution,
+  );
+  const labelMap = {
+    standard: "标准",
+    medium: "高清",
+    large: "超清",
+  };
+  return `${labelMap[resolution] || "标准"} ${dimensions.width}x${dimensions.height}`;
 }
 
 function renderPresetButtons() {
@@ -297,14 +314,17 @@ async function submitGeneration(event) {
     return;
   }
 
-  const [width, height] = sizeSelect.value.split("x");
+  const dimensions = window.ImageToolsPreferences.resolveDimensions(
+    ratioSelect.value,
+    resolutionSelect.value,
+  );
   const data = new FormData();
   data.append("prompt", prompt);
   data.append("model", currentModel());
   data.append("quality", qualitySelect.value);
   data.append("count", countSelect.value);
-  data.append("width", width);
-  data.append("height", height);
+  data.append("width", dimensions.width);
+  data.append("height", dimensions.height);
   if (referenceInput.files[0]) {
     data.append("reference", referenceInput.files[0]);
   }
@@ -351,7 +371,8 @@ clearPromptBtn.addEventListener("click", () => {
 resetOptionsBtn.addEventListener("click", () => {
   applyUiState({
     ...readUiStateFromForm(),
-    size: "1024x1024",
+    ratio: "1:1",
+    resolution: "standard",
     quality: "auto",
     count: 1,
     model: apiModelInput.value || "gpt-image-2",
