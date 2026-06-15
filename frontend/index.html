@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Image Tools</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="control-panel" aria-label="生成控制">
+        <div class="brand">
+          <div class="brand-mark">IT</div>
+          <div>
+            <strong>Image Tools</strong>
+            <span>核心生图工具</span>
+          </div>
+        </div>
+
+        <details class="settings" open>
+          <summary>接口设置</summary>
+          <form id="settingsForm" class="settings-form">
+            <label>
+              <span>API 地址</span>
+              <input id="apiBaseUrl" name="base_url" placeholder="https://api.example.com 或 /v1" autocomplete="off" />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input id="apiKey" name="api_key" type="password" placeholder="留空表示不修改已保存 Key" autocomplete="off" />
+            </label>
+            <label>
+              <span>默认模型</span>
+              <input id="apiModel" name="model" placeholder="gpt-image-2" autocomplete="off" />
+            </label>
+            <button type="submit">保存设置</button>
+            <small id="settingsStatus">正在读取设置...</small>
+          </form>
+        </details>
+
+        <form id="generateForm" class="generate-form">
+          <label class="prompt-label">
+            <span>提示词</span>
+            <textarea id="prompt" name="prompt" placeholder="描述你想生成或编辑的图片"></textarea>
+          </label>
+
+          <div class="reference-box">
+            <div class="field-head">
+              <span>参考图</span>
+              <button id="clearReferenceBtn" type="button" class="text-button" hidden>清除</button>
+            </div>
+            <label class="file-drop">
+              <input id="reference" name="reference" type="file" accept="image/*" hidden />
+              <span id="referenceText">选择图片用于图生图</span>
+            </label>
+            <img id="referencePreview" alt="参考图预览" hidden />
+          </div>
+
+          <div class="option-grid">
+            <label>
+              <span>比例</span>
+              <select id="size">
+                <option value="1024x1024">1:1 · 1024x1024</option>
+                <option value="1536x1024">3:2 · 1536x1024</option>
+                <option value="1024x1536">2:3 · 1024x1536</option>
+                <option value="1820x1024">16:9 · 1820x1024</option>
+                <option value="1024x1820">9:16 · 1024x1820</option>
+              </select>
+            </label>
+            <label>
+              <span>模型</span>
+              <input id="model" name="model" value="gpt-image-2" />
+            </label>
+            <label>
+              <span>质量</span>
+              <select id="quality" name="quality">
+                <option value="auto">自动</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <label>
+              <span>张数</span>
+              <select id="count" name="count">
+                <option value="1">1 张</option>
+                <option value="2">2 张</option>
+                <option value="3">3 张</option>
+                <option value="4">4 张</option>
+              </select>
+            </label>
+          </div>
+
+          <button id="generateBtn" type="submit" class="primary-action">生成图片</button>
+        </form>
+      </aside>
+
+      <main class="result-panel" aria-label="生成结果">
+        <header class="result-head">
+          <div>
+            <strong>结果预览</strong>
+            <span id="resultMeta">等待输入提示词</span>
+          </div>
+          <button id="clearResultsBtn" type="button" class="secondary-action">清空结果</button>
+        </header>
+
+        <section id="emptyState" class="empty-state">
+          <div class="empty-icon">IMG</div>
+          <strong>还没有生成图片</strong>
+          <span>保存接口设置后，输入提示词即可生成。</span>
+        </section>
+
+        <section id="loadingState" class="loading-state" hidden>
+          <div class="spinner"></div>
+          <strong>正在生成</strong>
+          <span>请求时间取决于接口速度和图片数量。</span>
+        </section>
+
+        <section id="errorState" class="error-state" hidden>
+          <strong>生成失败</strong>
+          <pre id="errorText"></pre>
+          <button id="copyErrorBtn" type="button" class="secondary-action">复制错误</button>
+        </section>
+
+        <section id="resultGrid" class="result-grid" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
