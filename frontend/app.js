@@ -34,6 +34,14 @@ const resultGrid = document.querySelector("#resultGrid");
 const resultMeta = document.querySelector("#resultMeta");
 const optionSummary = document.querySelector("#optionSummary");
 const toast = document.querySelector("#toast");
+const promptEcho = document.querySelector("#promptEcho");
+const promptEchoText = document.querySelector("#promptEchoText");
+const taskTitle = document.querySelector("#taskTitle");
+const taskSubtitle = document.querySelector("#taskSubtitle");
+const sidebarModel = document.querySelector("#sidebarModel");
+const sidebarRatio = document.querySelector("#sidebarRatio");
+const sidebarCount = document.querySelector("#sidebarCount");
+const loadingSummary = document.querySelector("#loadingSummary");
 
 let toastTimer = null;
 let currentState = window.ImageToolsPreferences.defaultUiState();
@@ -53,6 +61,9 @@ function setPanelState(state) {
   loadingState.hidden = state !== "loading";
   errorState.hidden = state !== "error";
   resultGrid.hidden = state !== "results";
+  if (state === "empty") {
+    promptEcho.hidden = true;
+  }
 }
 
 function currentModel() {
@@ -122,6 +133,7 @@ function persistUiState() {
   renderOptionSummary();
   renderPresetButtons();
   syncBackgroundOptions();
+  autoResizePrompt();
 }
 
 function applyUiState(state) {
@@ -147,6 +159,7 @@ function applyUiState(state) {
   renderOptionSummary();
   renderPresetButtons();
   syncBackgroundOptions();
+  autoResizePrompt();
 }
 
 function selectedPreset() {
@@ -176,6 +189,35 @@ function renderOptionSummary() {
   lastPresetText.textContent = preset
     ? `上次使用：${preset.label}`
     : "自动记住上次参数";
+  renderTaskContext(state, preset);
+}
+
+function compactPrompt(value) {
+  const clean = value.trim().replace(/\s+/g, " ");
+  return clean.length > 24 ? `${clean.slice(0, 24)}...` : clean;
+}
+
+function renderTaskContext(state, preset = selectedPreset()) {
+  const prompt = state.prompt.trim();
+  const resolution = formatResolution(state.ratio, state.resolution);
+  taskTitle.textContent = prompt ? compactPrompt(prompt) : "等待提示词";
+  taskSubtitle.textContent = preset
+    ? `${preset.label} · ${resolution}`
+    : `自定义 · ${resolution}`;
+  sidebarModel.textContent = currentModel();
+  sidebarRatio.textContent = state.ratio;
+  sidebarCount.textContent = `${state.count} 张`;
+  loadingSummary.textContent = `${state.count} 张 · ${resolution} · ${state.outputFormat.toUpperCase()}`;
+}
+
+function renderPromptEcho(prompt) {
+  promptEchoText.textContent = prompt;
+  promptEcho.hidden = !prompt;
+}
+
+function autoResizePrompt() {
+  promptInput.style.height = "auto";
+  promptInput.style.height = `${Math.min(promptInput.scrollHeight, 220)}px`;
 }
 
 function formatResolution(ratio, resolution) {
@@ -333,7 +375,7 @@ function clearReference() {
   referencePreview.src = "";
   referencePreview.hidden = true;
   clearReferenceBtn.hidden = true;
-  referenceText.textContent = "选择图片用于图生图";
+  referenceText.textContent = "选择图片";
 }
 
 function handleReferenceChange() {
@@ -371,6 +413,7 @@ async function useAsReference(url) {
 
 function renderImages(images, prompt) {
   resultGrid.innerHTML = "";
+  renderPromptEcho(prompt);
   images.forEach((src, index) => {
     const absoluteUrl = new URL(src, location.origin).href;
     const card = document.createElement("article");
@@ -423,6 +466,8 @@ async function submitGeneration(event) {
     promptInput.focus();
     return;
   }
+  renderPromptEcho(prompt);
+  renderTaskContext(readUiStateFromForm());
 
   const dimensions = window.ImageToolsPreferences.resolveDimensions(
     ratioSelect.value,
@@ -465,7 +510,7 @@ async function submitGeneration(event) {
 
 function clearResults() {
   resultGrid.innerHTML = "";
-  resultMeta.textContent = "等待输入提示词";
+  resultMeta.textContent = "Ready";
   setPanelState("empty");
 }
 
@@ -474,6 +519,12 @@ generateForm.addEventListener("submit", submitGeneration);
 generateForm.addEventListener("input", persistUiState);
 generateForm.addEventListener("change", persistUiState);
 settingsForm.addEventListener("input", persistUiState);
+promptInput.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
+    generateForm.requestSubmit();
+  }
+});
 referenceInput.addEventListener("change", handleReferenceChange);
 clearReferenceBtn.addEventListener("click", clearReference);
 clearResultsBtn.addEventListener("click", clearResults);
