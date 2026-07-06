@@ -499,6 +499,10 @@ run = "python scripts/bundle_backend.py"
 description = "Check the Tauri Rust project"
 run = "cargo check --manifest-path src-tauri/Cargo.toml"
 
+[tasks.desktop-prereqs]
+description = "Check Linux system packages required by Tauri"
+run = "python scripts/check_tauri_linux_deps.py"
+
 [tasks.desktop-dev]
 description = "Run the Tauri desktop app in development mode"
 run = "npm run desktop:dev"
@@ -762,6 +766,12 @@ mise install
 mise run install
 ```
 
+检查 Linux 桌面系统依赖：
+
+```bash
+mise run desktop-prereqs
+```
+
 ### 启动桌面开发版
 
 ```bash
@@ -793,6 +803,7 @@ Expected: Python tests pass, Node tests pass, npm creates or updates `package-lo
 Run:
 
 ```bash
+mise run desktop-prereqs
 mise run backend-bundle
 mise run desktop-check
 mise run desktop-build

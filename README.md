@@ -80,6 +80,12 @@ sudo apt install -y \
 mise run install
 ```
 
+检查 Linux 桌面系统依赖：
+
+```bash
+mise run desktop-prereqs
+```
+
 ### 启动桌面开发版
 
 ```bash

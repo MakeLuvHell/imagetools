@@ -23,6 +23,10 @@ run = "python scripts/bundle_backend.py"
 description = "Check the Tauri Rust project"
 run = "cargo check --manifest-path src-tauri/Cargo.toml"
 
+[tasks.desktop-prereqs]
+description = "Check Linux system packages required by Tauri"
+run = "python scripts/check_tauri_linux_deps.py"
+
 [tasks.desktop-dev]
 description = "Run the Tauri desktop app in development mode"
 run = "npm run desktop:dev"
