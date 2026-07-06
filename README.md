@@ -86,6 +86,14 @@ mise run install
 mise run desktop-prereqs
 ```
 
+如果当前环境没有 sudo 或不能安装系统包，可以让项目下载本地 sysroot：
+
+```bash
+mise run desktop-sysroot
+```
+
+`desktop-check`、`desktop-dev` 和 `desktop-build` 会优先使用系统依赖；系统依赖缺失时会自动使用 `build/tauri-sysroot/`。
+
 ### 启动桌面开发版
 
 ```bash
@@ -98,7 +106,7 @@ mise run desktop-dev
 mise run desktop-build
 ```
 
-构建产物位于 `src-tauri/target/release/bundle/`。桌面版运行时数据会保存到系统应用数据目录；普通 Web 开发仍默认使用仓库内的 `data/`。
+构建产物位于 `src-tauri/target/release/bundle/`；Linux 默认生成 deb/rpm 安装包。桌面版运行时数据会保存到系统应用数据目录；普通 Web 开发仍默认使用仓库内的 `data/`。
 
 ## 使用
 

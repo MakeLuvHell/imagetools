@@ -25,3 +25,7 @@ def test_format_ubuntu_install_hint_lists_required_packages():
     assert "sudo apt install -y" in hint
     assert "pkg-config" in hint
     assert "libwebkit2gtk-4.1-dev" in hint
+
+
+def test_required_pkg_config_modules_do_not_include_libxdo():
+    assert "xdo" not in deps.REQUIRED_PKG_CONFIG_MODULES

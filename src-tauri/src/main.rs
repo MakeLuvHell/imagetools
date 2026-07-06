@@ -69,7 +69,7 @@ fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
 fn stop_backend(app_handle: &tauri::AppHandle) {
     if let Some(state) = app_handle.try_state::<BackendProcess>() {
         if let Ok(mut child) = state.0.lock() {
-            if let Some(mut child) = child.take() {
+            if let Some(child) = child.take() {
                 let _ = child.kill();
             }
         }

@@ -16,7 +16,6 @@ REQUIRED_PKG_CONFIG_MODULES = [
     "webkit2gtk-4.1",
     "ayatana-appindicator3-0.1",
     "librsvg-2.0",
-    "xdo",
 ]
 UBUNTU_PACKAGES = [
     "build-essential",

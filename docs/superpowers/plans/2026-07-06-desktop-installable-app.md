@@ -497,19 +497,23 @@ run = "python scripts/bundle_backend.py"
 
 [tasks.desktop-check]
 description = "Check the Tauri Rust project"
-run = "python scripts/check_tauri_linux_deps.py && cargo check --manifest-path src-tauri/Cargo.toml"
+run = "python scripts/run_tauri_linux_env.py cargo check --manifest-path src-tauri/Cargo.toml"
 
 [tasks.desktop-prereqs]
 description = "Check Linux system packages required by Tauri"
 run = "python scripts/check_tauri_linux_deps.py"
 
+[tasks.desktop-sysroot]
+description = "Download Tauri Linux system packages into a local build sysroot"
+run = "python scripts/bootstrap_tauri_linux_sysroot.py"
+
 [tasks.desktop-dev]
 description = "Run the Tauri desktop app in development mode"
-run = "npm run desktop:dev"
+run = "python scripts/run_tauri_linux_env.py npm run desktop:dev"
 
 [tasks.desktop-build]
 description = "Build the Tauri desktop app"
-run = "python scripts/check_tauri_linux_deps.py && npm run desktop:build"
+run = "python scripts/run_tauri_linux_env.py npm run desktop:build"
 ```
 
 Create `package.json`:
@@ -565,7 +569,7 @@ Create `src-tauri/tauri.conf.json`:
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Image Tools",
   "version": "0.1.0",
-  "identifier": "com.imagetools.app",
+  "identifier": "com.imagetools.desktop",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
@@ -579,7 +583,8 @@ Create `src-tauri/tauri.conf.json`:
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "rpm"],
+    "icon": ["icons/icon.png"],
     "externalBin": ["binaries/imagetools-backend"]
   }
 }
