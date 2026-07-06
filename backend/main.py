@@ -7,6 +7,7 @@ import os
 import shutil
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -22,10 +23,6 @@ from pydantic import BaseModel
 APP_TITLE = "Image Tools"
 ROOT_DIR = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT_DIR / "frontend"
-DATA_DIR = ROOT_DIR / "data"
-IMAGE_DIR = DATA_DIR / "images"
-UPLOAD_DIR = DATA_DIR / "uploads"
-SETTINGS_PATH = DATA_DIR / "settings.json"
 QUALITY_OPTIONS = {"auto", "low", "medium", "high"}
 OUTPUT_FORMAT_OPTIONS = {"png", "jpeg", "webp"}
 BACKGROUND_OPTIONS = {"auto", "opaque", "transparent"}
@@ -35,6 +32,34 @@ MAX_IMAGE_PIXELS = 8_294_400
 MAX_IMAGE_EDGE = 3840
 UPSTREAM_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=60.0, pool=10.0)
 CHSHAPI_IMAGE_BASE_URL = "https://img-api.chshapi.org/v1"
+
+
+@dataclass(frozen=True)
+class RuntimePaths:
+    data_dir: Path
+    image_dir: Path
+    upload_dir: Path
+    settings_path: Path
+
+
+def resolve_runtime_paths() -> RuntimePaths:
+    configured_data_dir = os.getenv("IMAGE_TOOLS_DATA_DIR", "").strip()
+    data_dir = Path(configured_data_dir).expanduser() if configured_data_dir else ROOT_DIR / "data"
+    data_dir = data_dir.resolve()
+    return RuntimePaths(
+        data_dir=data_dir,
+        image_dir=data_dir / "images",
+        upload_dir=data_dir / "uploads",
+        settings_path=data_dir / "settings.json",
+    )
+
+
+RUNTIME_PATHS = resolve_runtime_paths()
+DATA_DIR = RUNTIME_PATHS.data_dir
+IMAGE_DIR = RUNTIME_PATHS.image_dir
+UPLOAD_DIR = RUNTIME_PATHS.upload_dir
+SETTINGS_PATH = RUNTIME_PATHS.settings_path
+
 
 class ApiError(RuntimeError):
     pass
@@ -339,6 +364,11 @@ def index() -> FileResponse:
 @app.head("/")
 def index_head() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/api/health")
+def health() -> dict[str, object]:
+    return {"ok": True, "app": APP_TITLE}
 
 
 @app.get("/api/settings")

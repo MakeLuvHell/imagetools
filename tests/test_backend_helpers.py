@@ -2,6 +2,7 @@ import base64
 
 import anyio
 import httpx
+from fastapi.testclient import TestClient
 
 from backend import main
 
@@ -48,6 +49,37 @@ def test_load_settings_can_use_environment_defaults_when_file_missing(tmp_path, 
     assert settings.base_url == "https://img-api.chshapi.org/v1"
     assert settings.api_key == "sk-env"
     assert settings.model == "gpt-image-2"
+
+
+def test_runtime_paths_use_environment_data_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("IMAGE_TOOLS_DATA_DIR", str(tmp_path / "desktop-data"))
+
+    paths = main.resolve_runtime_paths()
+
+    assert paths.data_dir == tmp_path / "desktop-data"
+    assert paths.image_dir == tmp_path / "desktop-data" / "images"
+    assert paths.upload_dir == tmp_path / "desktop-data" / "uploads"
+    assert paths.settings_path == tmp_path / "desktop-data" / "settings.json"
+
+
+def test_runtime_paths_default_to_repo_data_dir(monkeypatch):
+    monkeypatch.delenv("IMAGE_TOOLS_DATA_DIR", raising=False)
+
+    paths = main.resolve_runtime_paths()
+
+    assert paths.data_dir == main.ROOT_DIR / "data"
+    assert paths.image_dir == main.ROOT_DIR / "data" / "images"
+    assert paths.upload_dir == main.ROOT_DIR / "data" / "uploads"
+    assert paths.settings_path == main.ROOT_DIR / "data" / "settings.json"
+
+
+def test_health_endpoint_returns_ok():
+    client = TestClient(main.app)
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "app": "Image Tools"}
 
 
 def test_save_and_load_settings_round_trip(tmp_path, monkeypatch):
