@@ -1,0 +1,13 @@
+{
+  "name": "imagetools",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "backend:bundle": "python scripts/bundle_backend.py",
+    "desktop:dev": "npm run backend:bundle && tauri dev",
+    "desktop:build": "npm run backend:bundle && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}
