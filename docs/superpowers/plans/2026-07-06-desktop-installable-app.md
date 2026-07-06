@@ -497,7 +497,7 @@ run = "python scripts/bundle_backend.py"
 
 [tasks.desktop-check]
 description = "Check the Tauri Rust project"
-run = "cargo check --manifest-path src-tauri/Cargo.toml"
+run = "python scripts/check_tauri_linux_deps.py && cargo check --manifest-path src-tauri/Cargo.toml"
 
 [tasks.desktop-prereqs]
 description = "Check Linux system packages required by Tauri"
@@ -509,7 +509,7 @@ run = "npm run desktop:dev"
 
 [tasks.desktop-build]
 description = "Build the Tauri desktop app"
-run = "npm run desktop:build"
+run = "python scripts/check_tauri_linux_deps.py && npm run desktop:build"
 ```
 
 Create `package.json`:
