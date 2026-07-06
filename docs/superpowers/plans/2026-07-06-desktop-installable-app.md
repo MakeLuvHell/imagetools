@@ -142,7 +142,7 @@ Run:
 ```bash
 pytest -q
 git add backend/main.py tests/test_backend_helpers.py
-git commit -m "Add desktop runtime backend hooks"
+git commit -m "feat(backend): 添加桌面运行时后端钩子"
 ```
 
 Expected: all Python tests pass before commit.
@@ -266,7 +266,7 @@ Run:
 ```bash
 pytest -q
 git add backend/desktop_entry.py tests/test_desktop_entry.py
-git commit -m "Add desktop backend entrypoint"
+git commit -m "feat(backend): 添加桌面后端启动入口"
 ```
 
 Expected: full Python test suite passes before commit.
@@ -417,7 +417,7 @@ Run:
 ```bash
 pytest -q
 git add scripts/bundle_backend.py tests/test_bundle_backend.py requirements-dev.txt
-git commit -m "Add backend sidecar bundle script"
+git commit -m "feat(build): 添加后端 sidecar 打包脚本"
 ```
 
 Expected: full Python suite passes before commit.
@@ -680,7 +680,7 @@ Run:
 
 ```bash
 git add package.json src-tauri
-git commit -m "Add Tauri desktop shell"
+git commit -m "feat(desktop): 添加 Tauri 桌面壳"
 ```
 
 Expected: Tauri files are committed after Rust checks pass, or committed with a clear note if Rust is unavailable in the environment.
@@ -767,7 +767,7 @@ Run:
 
 ```bash
 git add README.md package-lock.json
-git commit -m "Document desktop app build flow"
+git commit -m "docs(readme): 记录桌面应用构建流程"
 ```
 
 Expected: docs and npm lockfile are committed.
