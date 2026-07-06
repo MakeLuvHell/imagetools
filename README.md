@@ -38,6 +38,62 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860
 http://127.0.0.1:7860
 ```
 
+## 桌面安装版
+
+桌面版使用 Tauri 打包。Tauri 负责原生窗口和安装包，Python/FastAPI 后端会作为 sidecar 自动启动。
+
+### 桌面开发依赖
+
+推荐使用 `mise` 安装项目工具链：
+
+```bash
+mise install
+```
+
+项目 `.mise.toml` 固定了：
+
+- Python 3.12.13
+- Node.js 24.16.0
+- Rust 1.96.1
+
+还需要安装当前平台的 Tauri 系统依赖。
+
+Ubuntu 24.04 可参考 Tauri v2 的 Linux 依赖安装：
+
+```bash
+sudo apt install -y \
+  build-essential \
+  curl \
+  file \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libssl-dev \
+  libwebkit2gtk-4.1-dev \
+  libxdo-dev \
+  pkg-config \
+  wget
+```
+
+安装 Python 和 Node 依赖：
+
+```bash
+mise run install
+```
+
+### 启动桌面开发版
+
+```bash
+mise run desktop-dev
+```
+
+### 构建安装包
+
+```bash
+mise run desktop-build
+```
+
+构建产物位于 `src-tauri/target/release/bundle/`。桌面版运行时数据会保存到系统应用数据目录；普通 Web 开发仍默认使用仓库内的 `data/`。
+
 ## 使用
 
 1. 在页面左侧保存兼容 OpenAI 图片接口的 API 地址、API Key 和默认模型。
@@ -75,6 +131,14 @@ export IMAGE_TOOLS_MODEL="gpt-image-2"
 ```
 
 ## 测试
+
+推荐使用：
+
+```bash
+mise run test
+```
+
+也可以分别运行：
 
 ```bash
 pytest -q

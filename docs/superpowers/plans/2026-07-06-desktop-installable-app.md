@@ -19,6 +19,7 @@
 - Create `scripts/bundle_backend.py`: PyInstaller wrapper that emits a Tauri sidecar binary name for the current platform.
 - Create `tests/test_bundle_backend.py`: tests for platform-specific sidecar names and PyInstaller arguments.
 - Create `package.json`: desktop build scripts using Tauri CLI.
+- Create `.mise.toml`: project toolchain and task runner config.
 - Create `requirements-dev.txt`: development/build dependencies including PyInstaller.
 - Create `src-tauri/Cargo.toml`: Tauri and plugin dependencies.
 - Create `src-tauri/tauri.conf.json`: app metadata, bundle settings, sidecar declaration.
@@ -427,6 +428,7 @@ Expected: full Python suite passes before commit.
 ### Task 4: Tauri Desktop Shell
 
 **Files:**
+- Create: `.mise.toml`
 - Create: `package.json`
 - Create: `src-tauri/Cargo.toml`
 - Create: `src-tauri/tauri.conf.json`
@@ -468,6 +470,43 @@ cargo test --manifest-path src-tauri/Cargo.toml
 Expected in the current environment: this cannot run until Rust is installed. After Rust is installed and `Cargo.toml` exists, these tests should pass.
 
 - [ ] **Step 3: Add Tauri package files**
+
+Create `.mise.toml`:
+
+```toml
+[tools]
+node = "24.16.0"
+python = "3.12.13"
+rust = "1.96.1"
+
+[env]
+RUSTUP_DIST_SERVER = "https://mirrors.tuna.tsinghua.edu.cn/rustup"
+RUSTUP_UPDATE_ROOT = "https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
+
+[tasks.install]
+description = "Install Python and Node dependencies"
+run = "python -m pip install -r requirements-dev.txt && npm install"
+
+[tasks.test]
+description = "Run backend and frontend tests"
+run = "pytest -q && node --test tests/frontend_preferences.test.js"
+
+[tasks.backend-bundle]
+description = "Build the Python backend sidecar"
+run = "python scripts/bundle_backend.py"
+
+[tasks.desktop-check]
+description = "Check the Tauri Rust project"
+run = "cargo check --manifest-path src-tauri/Cargo.toml"
+
+[tasks.desktop-dev]
+description = "Run the Tauri desktop app in development mode"
+run = "npm run desktop:dev"
+
+[tasks.desktop-build]
+description = "Build the Tauri desktop app"
+run = "npm run desktop:build"
+```
 
 Create `package.json`:
 
@@ -679,7 +718,7 @@ Expected: Rust tests and checks pass. If APIs differ from the installed Tauri ve
 Run:
 
 ```bash
-git add package.json src-tauri
+git add .mise.toml package.json src-tauri
 git commit -m "feat(desktop): 添加 Tauri 桌面壳"
 ```
 
@@ -703,35 +742,36 @@ Add a desktop section after the existing web run instructions:
 
 ### 桌面开发依赖
 
-需要先安装：
-
-- Python 3.12+
-- Node.js 20+
-- Rust/Cargo
-- 当前平台的 Tauri 系统依赖
-
-安装 Python 依赖：
+推荐使用 `mise` 安装项目工具链：
 
 ```bash
-python -m pip install -r requirements-dev.txt
+mise install
 ```
 
-安装 Node 依赖：
+项目 `.mise.toml` 固定了：
+
+- Python 3.12.13
+- Node.js 24.16.0
+- Rust 1.96.1
+
+还需要安装当前平台的 Tauri 系统依赖。
+
+安装 Python 和 Node 依赖：
 
 ```bash
-npm install
+mise run install
 ```
 
 ### 启动桌面开发版
 
 ```bash
-npm run desktop:dev
+mise run desktop-dev
 ```
 
 ### 构建安装包
 
 ```bash
-npm run desktop:build
+mise run desktop-build
 ```
 
 构建产物位于 `src-tauri/target/release/bundle/`。桌面版运行时数据会保存到系统应用数据目录；普通 Web 开发仍默认使用仓库内的 `data/`。
@@ -742,9 +782,8 @@ npm run desktop:build
 Run:
 
 ```bash
-pytest -q
-node --test tests/frontend_preferences.test.js
-npm install
+mise run test
+mise run install
 ```
 
 Expected: Python tests pass, Node tests pass, npm creates or updates `package-lock.json`.
@@ -754,9 +793,9 @@ Expected: Python tests pass, Node tests pass, npm creates or updates `package-lo
 Run:
 
 ```bash
-python scripts/bundle_backend.py
-cargo check --manifest-path src-tauri/Cargo.toml
-npm run desktop:build
+mise run backend-bundle
+mise run desktop-check
+mise run desktop-build
 ```
 
 Expected: sidecar bundle is created, Rust check passes, Tauri build creates an installer bundle. If Rust or PyInstaller is missing, record the missing dependency exactly and leave the goal active.

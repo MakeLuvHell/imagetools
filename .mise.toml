@@ -1,0 +1,32 @@
+[tools]
+node = "24.16.0"
+python = "3.12.13"
+rust = "1.96.1"
+
+[env]
+RUSTUP_DIST_SERVER = "https://mirrors.tuna.tsinghua.edu.cn/rustup"
+RUSTUP_UPDATE_ROOT = "https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
+
+[tasks.install]
+description = "Install Python and Node dependencies"
+run = "python -m pip install -r requirements-dev.txt && npm install"
+
+[tasks.test]
+description = "Run backend and frontend tests"
+run = "pytest -q && node --test tests/frontend_preferences.test.js"
+
+[tasks.backend-bundle]
+description = "Build the Python backend sidecar"
+run = "python scripts/bundle_backend.py"
+
+[tasks.desktop-check]
+description = "Check the Tauri Rust project"
+run = "cargo check --manifest-path src-tauri/Cargo.toml"
+
+[tasks.desktop-dev]
+description = "Run the Tauri desktop app in development mode"
+run = "npm run desktop:dev"
+
+[tasks.desktop-build]
+description = "Build the Tauri desktop app"
+run = "npm run desktop:build"

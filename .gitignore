@@ -5,5 +5,10 @@ __pycache__/
 .venv/
 venv/
 env/
+node_modules/
+build/
 data/
+src-tauri/binaries/
+src-tauri/gen/
+src-tauri/target/
 .DS_Store
