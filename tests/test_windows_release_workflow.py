@@ -41,7 +41,16 @@ def test_windows_release_workflow_builds_on_windows_x64():
 
     assert "runs-on: windows-latest" in workflow
     assert "TAURI_TARGET_TRIPLE: x86_64-pc-windows-msvc" in workflow
-    assert "mise exec -- npm run desktop:build:windows" in workflow
+    assert "npm run desktop:build:windows" in workflow
+
+
+def test_windows_release_workflow_uses_official_rustup_dist_on_windows():
+    workflow = windows_release_workflow()
+
+    assert "RUSTUP_DIST_SERVER" in workflow
+    assert "RUSTUP_UPDATE_ROOT" in workflow
+    assert "https://static.rust-lang.org" in workflow
+    assert "mise exec -- pwsh" in workflow
 
 
 def test_windows_release_workflow_uploads_installers_to_release():
