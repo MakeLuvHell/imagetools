@@ -19,3 +19,36 @@ def test_linux_desktop_build_script_keeps_existing_entrypoint():
     script = package_scripts()["desktop:build"]
 
     assert script == "npm run backend:bundle && tauri build"
+
+
+def windows_release_workflow() -> str:
+    return Path(".github/workflows/windows-release.yml").read_text()
+
+
+def test_windows_release_workflow_is_manual_and_tag_driven():
+    workflow = windows_release_workflow()
+
+    assert "workflow_dispatch:" in workflow
+    assert "release_tag:" in workflow
+    assert "build_ref:" in workflow
+    assert "default: v0.1.0" in workflow
+    assert "default: main" in workflow
+    assert "ref: ${{ inputs.build_ref }}" in workflow
+
+
+def test_windows_release_workflow_builds_on_windows_x64():
+    workflow = windows_release_workflow()
+
+    assert "runs-on: windows-latest" in workflow
+    assert "TAURI_TARGET_TRIPLE: x86_64-pc-windows-msvc" in workflow
+    assert "mise exec -- npm run desktop:build:windows" in workflow
+
+
+def test_windows_release_workflow_uploads_installers_to_release():
+    workflow = windows_release_workflow()
+
+    assert "actions/upload-artifact@v4" in workflow
+    assert "gh release upload" in workflow
+    assert "*.exe" in workflow
+    assert "*.msi" in workflow
+    assert "--clobber" in workflow
