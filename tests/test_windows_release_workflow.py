@@ -58,6 +58,8 @@ def test_windows_release_workflow_uploads_installers_to_release():
 
     assert "actions/upload-artifact@v4" in workflow
     assert "gh release upload" in workflow
+    assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe" in workflow
+    assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi" in workflow
     assert "*.exe" in workflow
     assert "*.msi" in workflow
     assert "--clobber" in workflow
