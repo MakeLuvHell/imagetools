@@ -31,7 +31,7 @@ def pyinstaller_args(project_root: Path, output_path: Path) -> list[str]:
     entrypoint = project_root / "backend" / "desktop_entry.py"
     work_dir = project_root / "build" / "pyinstaller"
     spec_dir = project_root / "build"
-    return [
+    args = [
         "-m",
         "PyInstaller",
         "--clean",
@@ -44,8 +44,11 @@ def pyinstaller_args(project_root: Path, output_path: Path) -> list[str]:
         str(work_dir),
         "--specpath",
         str(spec_dir),
-        str(entrypoint),
     ]
+    if output_path.suffix == ".exe":
+        args.append("--noconsole")
+    args.append(str(entrypoint))
+    return args
 
 
 def pyinstaller_available() -> bool:

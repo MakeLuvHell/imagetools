@@ -23,3 +23,9 @@ def test_tauri_bundle_uses_project_icon():
 
 def test_tauri_windows_icon_file_exists():
     assert Path("src-tauri/icons/icon.ico").is_file()
+
+
+def test_tauri_windows_release_app_uses_gui_subsystem():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+
+    assert 'windows_subsystem = "windows"' in main_rs
