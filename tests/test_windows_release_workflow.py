@@ -52,3 +52,18 @@ def test_windows_release_workflow_uploads_installers_to_release():
     assert "*.exe" in workflow
     assert "*.msi" in workflow
     assert "--clobber" in workflow
+
+
+def test_release_docs_include_windows_workflow_command():
+    docs = Path("docs/releases/github-release.md").read_text()
+
+    assert "Windows x64" in docs
+    assert "windows-release.yml" in docs
+    assert "gh workflow run windows-release.yml -f release_tag=v0.1.0 -f build_ref=main" in docs
+
+
+def test_readme_mentions_windows_release_assets_are_built_by_github_actions():
+    readme = Path("README.md").read_text()
+
+    assert "Windows x64" in readme
+    assert "GitHub Actions" in readme

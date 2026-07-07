@@ -108,6 +108,8 @@ mise run desktop-build
 
 构建产物位于 `src-tauri/target/release/bundle/`；Linux 默认生成 deb/rpm 安装包。桌面版运行时数据会保存到系统应用数据目录；普通 Web 开发仍默认使用仓库内的 `data/`。
 
+Windows x64 安装包由 GitHub Actions 的 Windows runner 构建并上传到 GitHub Release；本地 Linux/WSL 构建只生成 Linux deb/rpm。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
+
 ## 使用
 
 1. 在页面左侧保存兼容 OpenAI 图片接口的 API 地址、API Key 和默认模型。
