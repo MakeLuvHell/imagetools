@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 
 from scripts import bundle_backend
@@ -25,6 +26,17 @@ def test_pyinstaller_args_target_desktop_entry(tmp_path):
     assert "--onefile" in args
     assert "--name" in args
     assert str(project_root / "backend" / "desktop_entry.py") in args
+
+
+def test_pyinstaller_args_include_runtime_backend_import_and_frontend_assets(tmp_path):
+    output_path = tmp_path / "src-tauri" / "binaries" / "imagetools-backend-x86_64-pc-windows-msvc.exe"
+
+    args = bundle_backend.pyinstaller_args(tmp_path, output_path)
+
+    assert "--hidden-import" in args
+    assert "backend.main" in args
+    assert "--add-data" in args
+    assert f"{tmp_path / 'frontend'}{os.pathsep}frontend" in args
 
 
 def test_pyinstaller_args_hide_windows_sidecar_console(tmp_path):

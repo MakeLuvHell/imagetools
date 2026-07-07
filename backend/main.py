@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import shutil
+import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -21,7 +22,15 @@ from pydantic import BaseModel
 
 
 APP_TITLE = "Image Tools"
-ROOT_DIR = Path(__file__).resolve().parents[1]
+
+
+def resolve_root_dir() -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS).resolve()
+    return Path(__file__).resolve().parents[1]
+
+
+ROOT_DIR = resolve_root_dir()
 FRONTEND_DIR = ROOT_DIR / "frontend"
 QUALITY_OPTIONS = {"auto", "low", "medium", "high"}
 OUTPUT_FORMAT_OPTIONS = {"png", "jpeg", "webp"}

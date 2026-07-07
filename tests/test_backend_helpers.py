@@ -73,6 +73,13 @@ def test_runtime_paths_default_to_repo_data_dir(monkeypatch):
     assert paths.settings_path == main.ROOT_DIR / "data" / "settings.json"
 
 
+def test_resolve_root_dir_uses_pyinstaller_temp_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(main.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(main.sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    assert main.resolve_root_dir() == tmp_path
+
+
 def test_health_endpoint_returns_ok():
     client = TestClient(main.app)
 

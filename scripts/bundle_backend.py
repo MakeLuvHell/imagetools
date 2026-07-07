@@ -29,6 +29,7 @@ def sidecar_filename(name: str, target_triple: str) -> str:
 
 def pyinstaller_args(project_root: Path, output_path: Path) -> list[str]:
     entrypoint = project_root / "backend" / "desktop_entry.py"
+    frontend_dir = project_root / "frontend"
     work_dir = project_root / "build" / "pyinstaller"
     spec_dir = project_root / "build"
     args = [
@@ -44,6 +45,10 @@ def pyinstaller_args(project_root: Path, output_path: Path) -> list[str]:
         str(work_dir),
         "--specpath",
         str(spec_dir),
+        "--hidden-import",
+        "backend.main",
+        "--add-data",
+        f"{frontend_dir}{os.pathsep}frontend",
     ]
     if output_path.suffix == ".exe":
         args.append("--noconsole")
