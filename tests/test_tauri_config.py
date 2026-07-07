@@ -15,4 +15,11 @@ def test_tauri_linux_bundle_targets_are_installers_without_appimage_download():
 
 
 def test_tauri_bundle_uses_project_icon():
-    assert tauri_config()["bundle"]["icon"] == ["icons/icon.png"]
+    icons = tauri_config()["bundle"]["icon"]
+
+    assert "icons/icon.png" in icons
+    assert "icons/icon.ico" in icons
+
+
+def test_tauri_windows_icon_file_exists():
+    assert Path("src-tauri/icons/icon.ico").is_file()
