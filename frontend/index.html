@@ -56,12 +56,98 @@
             rows="3"
             placeholder="描述你想生成或继续调整的图片"
           ></textarea>
+
+          <div class="composer-controls">
+            <label>
+              <span>Provider</span>
+              <select id="providerSelect"></select>
+            </label>
+            <label>
+              <span>模型</span>
+              <input id="modelInput" autocomplete="off" value="gpt-image-2" />
+            </label>
+            <label>
+              <span>比例</span>
+              <select id="ratioSelect">
+                <option value="1:1">1:1</option>
+                <option value="3:2">3:2</option>
+                <option value="2:3">2:3</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+              </select>
+            </label>
+            <label>
+              <span>尺寸</span>
+              <select id="resolutionSelect">
+                <option value="standard">标准</option>
+                <option value="medium">高清</option>
+                <option value="large">超清</option>
+              </select>
+            </label>
+            <label>
+              <span>质量</span>
+              <select id="qualitySelect">
+                <option value="auto">自动</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <label>
+              <span>张数</span>
+              <select id="countSelect">
+                <option value="1">1 张</option>
+                <option value="2">2 张</option>
+                <option value="3">3 张</option>
+                <option value="4">4 张</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="referencePreview" class="reference-preview" hidden>
+            <span id="referenceName"></span>
+            <button id="clearReferenceBtn" type="button" class="secondary-button">
+              清除
+            </button>
+          </div>
+
+          <details class="advanced-options">
+            <summary>高级参数</summary>
+            <div>
+              <label>
+                <span>输出格式</span>
+                <select id="outputFormatSelect">
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="webp">WebP</option>
+                </select>
+              </label>
+              <label>
+                <span>压缩</span>
+                <input id="outputCompressionInput" type="number" min="0" max="100" value="100" />
+              </label>
+              <label>
+                <span>背景</span>
+                <select id="backgroundSelect">
+                  <option value="auto">自动</option>
+                  <option value="opaque">不透明</option>
+                  <option value="transparent">透明</option>
+                </select>
+              </label>
+              <label>
+                <span>审核</span>
+                <select id="moderationSelect">
+                  <option value="auto">自动</option>
+                  <option value="low">较低</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
+          <input id="referenceInput" type="file" accept="image/*" hidden />
           <div class="composer-toolbar">
             <button id="referenceBtn" type="button" class="secondary-button" disabled>
               参考图
-            </button>
-            <button id="optionsBtn" type="button" class="secondary-button" disabled>
-              参数
             </button>
             <button id="generateBtn" type="submit" class="primary-button" disabled>
               生成

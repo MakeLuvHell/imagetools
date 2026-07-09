@@ -336,6 +336,69 @@ button:disabled {
   line-height: 1.5;
 }
 
+.composer-controls,
+.advanced-options > div {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(150px, 1fr) repeat(4, minmax(92px, 0.6fr));
+  gap: 8px;
+}
+
+.advanced-options > div {
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  padding-top: 8px;
+}
+
+.composer label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.composer label span,
+.advanced-options summary {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.composer select,
+.composer input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  outline: 0;
+  color: var(--text);
+  background: #fff;
+}
+
+.composer input {
+  padding: 0 9px;
+}
+
+.advanced-options {
+  border: 0;
+}
+
+.advanced-options summary {
+  width: max-content;
+  cursor: pointer;
+}
+
+.reference-preview {
+  min-height: 34px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: var(--surface-muted);
+  font-size: 13px;
+}
+
 .composer textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(34, 106, 95, 0.12);
@@ -373,5 +436,10 @@ button:disabled {
 
   .workspace-actions {
     display: none;
+  }
+
+  .composer-controls,
+  .advanced-options > div {
+    grid-template-columns: 1fr 1fr;
   }
 }

@@ -56,3 +56,52 @@ test("desktop workbench html exposes two-column session shell", () => {
   assert.doesNotMatch(html, /\/settings/);
   assert.doesNotMatch(html, /\/options/);
 });
+
+test("buildGenerationFields maps composer state to generate payload fields", () => {
+  const fields = workbench.buildGenerationFields(
+    {
+      sessionId: 7,
+      providerId: 3,
+      prompt: "A clean product poster",
+      model: "gpt-image-2",
+      ratio: "16:9",
+      resolution: "standard",
+      quality: "high",
+      count: 2,
+      outputFormat: "webp",
+      outputCompression: 72,
+      background: "opaque",
+      moderation: "low",
+    },
+    {
+      resolveDimensions() {
+        return { width: 1536, height: 864 };
+      },
+    },
+  );
+
+  assert.deepEqual(fields, {
+    session_id: "7",
+    provider_id: "3",
+    prompt: "A clean product poster",
+    model: "gpt-image-2",
+    width: "1536",
+    height: "864",
+    quality: "high",
+    count: "2",
+    output_format: "webp",
+    output_compression: "72",
+    background: "opaque",
+    moderation: "low",
+  });
+});
+
+test("provider selection returns active provider model fallback", () => {
+  const providers = workbench.normalizeProviders([
+    { id: 1, name: "A", default_model: "gpt-image-2" },
+    { id: 2, name: "B", default_model: "custom-model" },
+  ]);
+
+  assert.equal(workbench.selectedProvider(providers, 2).defaultModel, "custom-model");
+  assert.equal(workbench.selectedProvider(providers, 99), null);
+});

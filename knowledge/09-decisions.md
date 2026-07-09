@@ -63,3 +63,18 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** The two-column shell matches the approved product direction and creates the UI structure needed for session list, timeline, and Composer tickets without carrying terminal metaphors forward.
 
 **Consequences:** Future frontend work should extend `frontend/workbench.js` and the two-column shell instead of restoring command-like panels or slash-command labels.
+
+### 2026-07-09: Composer Builds Explicit Generation Payloads
+
+**Decision:** The desktop Composer builds `/api/generate` form fields explicitly from selected session, selected provider, model, common parameters, advanced parameters, and optional reference file.
+
+**Context:** Generation is now session-bound and provider-aware; the frontend needs a single place to map UI controls to backend form fields.
+
+**Options Considered:**
+
+- Let submit handlers assemble fields ad hoc.
+- Add a tested `buildGenerationFields` helper and use it from the Composer.
+
+**Reasoning:** A tested payload helper keeps provider/model switching and parameter mapping stable while later tickets expand timeline actions and parameter reuse.
+
+**Consequences:** Future Composer actions such as copying parameters from a run should populate the same control state consumed by `buildGenerationFields`.

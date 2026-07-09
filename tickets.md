@@ -158,6 +158,8 @@ Status: Done
 
 ## T006: Composer 与参数控制
 
+Status: Done
+
 ### What to build
 
 实现主区底部 Composer。Composer 是自然语言输入区，承载提示词、参考图、常用参数、provider/model 快切和生成动作。高级参数通过弹窗或抽屉调整，不常驻右侧。
