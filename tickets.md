@@ -4,6 +4,8 @@ Source spec: `docs/spec/2026-07-09-desktop-image-workbench.md`
 
 ## T001: SQLite 工作台数据层
 
+Status: Done
+
 ### What to build
 
 为桌面图片创作工作台建立本地 SQLite 元数据层。数据层需要覆盖 provider、会话、生成轮次和图片记录，并提供可测试的数据访问 API。图片文件仍保存在本地文件目录，SQLite 只保存路径和元数据。
