@@ -5,7 +5,8 @@
   "scripts": {
     "backend:bundle": "python scripts/bundle_backend.py",
     "desktop:dev": "npm run backend:bundle && tauri dev",
-    "desktop:build": "npm run backend:bundle && tauri build"
+    "desktop:build": "npm run backend:bundle && tauri build",
+    "desktop:build:windows": "npm run backend:bundle && tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4"

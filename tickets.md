@@ -223,6 +223,8 @@ Status: Done
 
 ## T008: Windows 桌面发布整理
 
+Status: Done
+
 ### What to build
 
 把项目文档和验证流程整理为桌面优先、Windows 优先。浏览器本地端口可以保留为开发测试入口，但不作为正式用户入口描述。

@@ -17,6 +17,19 @@
 
 ## 当前版本资产
 
+Windows x64 桌面安装包由 Windows runner 或 Windows 本机构建生成：
+
+```bash
+npm run desktop:build:windows
+```
+
+预期 Windows x64 产物目录：
+
+```text
+src-tauri/target/release/bundle/nsis/
+src-tauri/target/release/bundle/msi/
+```
+
 `v0.1.0` 的 Linux 桌面安装包由 `mise run desktop-build` 生成：
 
 ```text
