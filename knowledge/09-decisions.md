@@ -48,3 +48,18 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Backend-owned history preserves failures and provider snapshots even if the frontend reloads or a request fails after dispatch. It also gives the later timeline UI one authoritative API.
 
 **Consequences:** Future Composer and timeline work should use `session_id`, selected provider/model, and `GET /api/sessions/{id}/runs` instead of treating `/api/generate` as a stateless image-only endpoint.
+
+### 2026-07-09: Replace Terminal Shell With Desktop Workbench Shell
+
+**Decision:** The frontend shell is a two-column desktop workbench with a session sidebar and a current-session workspace, not a terminal-style interface.
+
+**Context:** The product direction was clarified as Codex Desktop-style workbench feel without command-line or slash-command UI.
+
+**Options Considered:**
+
+- Keep the old terminal-like shell and add session history inside it.
+- Replace the shell with a desktop workbench and keep Composer/generation details for later tickets.
+
+**Reasoning:** The two-column shell matches the approved product direction and creates the UI structure needed for session list, timeline, and Composer tickets without carrying terminal metaphors forward.
+
+**Consequences:** Future frontend work should extend `frontend/workbench.js` and the two-column shell instead of restoring command-like panels or slash-command labels.

@@ -7,300 +7,73 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <div class="terminal-stage">
-      <div class="terminal-window">
-        <header class="terminal-titlebar" aria-label="窗口标题">
-          <div class="window-controls" aria-hidden="true">
-            <span class="control-dot red"></span>
-            <span class="control-dot yellow"></span>
-            <span class="control-dot green"></span>
+    <div class="app-shell">
+      <aside class="session-sidebar" aria-label="会话列表">
+        <header class="sidebar-header">
+          <div>
+            <h1>Image Tools</h1>
+            <p>图片创作工作台</p>
           </div>
-          <div class="terminal-title">imagetools - codex - 119x30</div>
+          <button id="newSessionBtn" type="button" class="icon-button" title="新建会话">
+            +
+          </button>
         </header>
 
-        <main class="terminal-body" aria-label="Codex 风格图像生成界面">
-          <section class="startup-card" aria-label="启动信息">
-            <div class="startup-prompt">
-              <span class="prompt-caret">&gt;_</span>
-              <strong>OpenAI Codex Image Tools</strong>
-              <span>(v0.1.0)</span>
-            </div>
-            <div class="startup-grid">
-              <span>model:</span>
-              <strong id="sidebarModel">gpt-image-2</strong>
-              <button type="button" class="slash-command" disabled>/model</button>
-              <span>task:</span>
-              <strong id="taskTitle">等待提示词</strong>
-              <span id="taskSubtitle">未开始</span>
-              <span>params:</span>
-              <strong id="sidebarRatio">1:1</strong>
-              <span id="sidebarCount">1 张</span>
-            </div>
-          </section>
+        <div class="sidebar-search">
+          <span aria-hidden="true">⌕</span>
+          <input id="sessionFilter" placeholder="筛选会话" autocomplete="off" />
+        </div>
 
-          <p class="tip-line">
-            <strong>Tip:</strong> 使用底部输入框提交任务，或展开 <code>/settings</code>
-            保存接口配置。
-          </p>
+        <nav id="sessionList" class="session-list" aria-label="历史会话"></nav>
+      </aside>
 
-          <details class="settings command-panel" open>
-            <summary>
-              <span class="command-prefix">/settings</span>
-              <span id="settingsStatus">正在读取设置...</span>
-            </summary>
-            <form id="settingsForm" class="settings-form">
-              <label>
-                <span>API 地址</span>
-                <input
-                  id="apiBaseUrl"
-                  name="base_url"
-                  placeholder="https://api.example.com 或 /v1"
-                  autocomplete="off"
-                />
-              </label>
-              <label>
-                <span>API Key</span>
-                <input
-                  id="apiKey"
-                  name="api_key"
-                  type="password"
-                  placeholder="留空表示不修改已保存 Key"
-                  autocomplete="off"
-                />
-              </label>
-              <label>
-                <span>默认模型</span>
-                <input
-                  id="apiModel"
-                  name="model"
-                  placeholder="gpt-image-2"
-                  autocomplete="off"
-                />
-              </label>
-              <button type="submit">保存设置</button>
-            </form>
-          </details>
-
-          <section class="transcript" aria-label="运行记录">
-            <article class="history-row user-row" id="promptEcho" hidden>
-              <div class="history-marker">&rsaquo;</div>
-              <div class="user-message" id="promptEchoText"></div>
-            </article>
-
-            <section id="emptyState" class="empty-state">
-              <div class="history-marker">•</div>
-              <div>
-                <strong>Ready</strong>
-                <span>输入提示词后开始生成。</span>
-              </div>
-            </section>
-
-            <section id="loadingState" class="loading-state" hidden>
-              <div class="history-row assistant-row">
-                <div class="history-marker">•</div>
-                <div class="history-content">
-                  <strong>Running generation</strong>
-                  <span id="loadingSummary">请求接口中</span>
-                  <div class="thinking-lines" aria-hidden="true">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section id="errorState" class="error-state" hidden>
-              <div class="history-row assistant-row">
-                <div class="history-marker danger">!</div>
-                <div class="history-content">
-                  <strong>生成失败</strong>
-                  <pre id="errorText"></pre>
-                  <button id="copyErrorBtn" type="button" class="secondary-action">
-                    复制错误
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section
-              id="resultGrid"
-              class="result-grid"
-              aria-live="polite"
-            ></section>
-          </section>
-        </main>
-
-        <form id="generateForm" class="bottom-pane" aria-label="生成输入">
-          <div class="composer-box">
-            <label class="prompt-label">
-              <span class="visually-hidden">提示词</span>
-              <textarea
-                id="prompt"
-                name="prompt"
-                placeholder="Message Codex with an image prompt"
-                rows="2"
-              ></textarea>
-            </label>
-            <div class="composer-actions">
-              <button id="clearPromptBtn" type="button" class="text-button">
-                清空
-              </button>
-              <button id="generateBtn" type="submit" class="primary-action">
-                生成
-              </button>
-            </div>
+      <main class="workspace" aria-label="当前创作会话">
+        <header class="workspace-header">
+          <div>
+            <h2 id="currentSessionTitle">选择一个会话</h2>
+            <p id="currentSessionSubtitle">左侧新建或选择会话后开始创作。</p>
           </div>
-
-          <div class="command-dock">
-            <details class="reference-box dock-panel">
-              <summary>
-                <span class="command-prefix">/reference</span>
-                <span id="referenceText">选择图片</span>
-              </summary>
-              <label class="file-drop">
-                <input
-                  id="reference"
-                  name="reference"
-                  type="file"
-                  accept="image/*"
-                  hidden
-                />
-                <span>上传参考图</span>
-              </label>
-              <button
-                id="clearReferenceBtn"
-                type="button"
-                class="text-button"
-                hidden
-              >
-                清除参考图
-              </button>
-              <img id="referencePreview" alt="参考图预览" hidden />
-            </details>
-
-            <details class="options-drawer dock-panel">
-              <summary>
-                <span class="command-prefix">/options</span>
-                <span id="optionSummary" class="option-summary"></span>
-              </summary>
-
-              <div class="options-body">
-                <section class="quick-panel" aria-label="快捷预设">
-                  <div class="section-head">
-                    <div>
-                      <strong>快捷预设</strong>
-                      <span id="lastPresetText">自动记住上次参数</span>
-                    </div>
-                    <button id="resetOptionsBtn" type="button" class="text-button">
-                      默认
-                    </button>
-                  </div>
-                  <div id="presetList" class="preset-list"></div>
-                </section>
-
-                <div class="option-grid">
-                  <section class="choice-panel">
-                    <div class="section-label">比例</div>
-                    <div id="ratioChoices" class="ratio-choice-grid"></div>
-                    <input id="ratio" name="ratio" type="hidden" value="1:1" />
-                  </section>
-
-                  <section class="choice-panel">
-                    <div class="section-label">分辨率/尺寸</div>
-                    <div id="resolutionChoices" class="resolution-choice-grid"></div>
-                    <input
-                      id="resolution"
-                      name="resolution"
-                      type="hidden"
-                      value="standard"
-                    />
-                  </section>
-
-                  <label>
-                    <span
-                      title="质量是接口的生成质量参数，通常影响细节、速度和成本；不是图片分辨率。"
-                      >渲染质量</span
-                    >
-                    <select id="quality" name="quality">
-                      <option value="auto">自动</option>
-                      <option value="high">高</option>
-                      <option value="medium">中</option>
-                      <option value="low">低</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>张数</span>
-                    <select id="count" name="count">
-                      <option value="1">1 张</option>
-                      <option value="2">2 张</option>
-                      <option value="3">3 张</option>
-                      <option value="4">4 张</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
-            </details>
-
-            <details class="advanced-panel dock-panel">
-              <summary>
-                <span class="command-prefix">/advanced</span>
-                <span>输出格式与审核</span>
-              </summary>
-              <div class="advanced-grid">
-                <label>
-                  <span>输出格式</span>
-                  <select id="outputFormat" name="output_format">
-                    <option value="png">PNG</option>
-                    <option value="jpeg">JPEG</option>
-                    <option value="webp">WebP</option>
-                  </select>
-                </label>
-                <label>
-                  <span>压缩</span>
-                  <input
-                    id="outputCompression"
-                    name="output_compression"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value="100"
-                  />
-                </label>
-                <label>
-                  <span>背景</span>
-                  <select id="background" name="background">
-                    <option value="auto">自动</option>
-                    <option value="opaque">不透明</option>
-                    <option value="transparent">透明</option>
-                  </select>
-                </label>
-                <label>
-                  <span>审核强度</span>
-                  <select id="moderation" name="moderation">
-                    <option value="auto">自动</option>
-                    <option value="low">较低</option>
-                  </select>
-                </label>
-              </div>
-              <small>
-                透明背景当前不适用于 gpt-image-2；压缩仅对 JPEG/WebP 生效。
-              </small>
-            </details>
-          </div>
-
-          <footer class="status-line">
-            <span id="resultMeta">Ready</span>
-            <button id="clearResultsBtn" type="button" class="status-button">
-              clear
+          <div class="workspace-actions">
+            <button id="renameSessionBtn" type="button" class="secondary-button" disabled>
+              重命名
             </button>
-          </footer>
+            <button id="deleteSessionBtn" type="button" class="danger-button" disabled>
+              删除
+            </button>
+          </div>
+        </header>
+
+        <section id="timeline" class="timeline" aria-live="polite">
+          <div class="empty-workspace">
+            <strong>还没有打开的创作会话</strong>
+            <span>左侧会保存每个主题的生成历史和最近缩略图。</span>
+          </div>
+        </section>
+
+        <form id="composerForm" class="composer" aria-label="图片生成输入">
+          <textarea
+            id="prompt"
+            rows="3"
+            placeholder="描述你想生成或继续调整的图片"
+          ></textarea>
+          <div class="composer-toolbar">
+            <button id="referenceBtn" type="button" class="secondary-button" disabled>
+              参考图
+            </button>
+            <button id="optionsBtn" type="button" class="secondary-button" disabled>
+              参数
+            </button>
+            <button id="generateBtn" type="submit" class="primary-button" disabled>
+              生成
+            </button>
+          </div>
         </form>
-      </div>
+      </main>
     </div>
 
     <div id="toast" class="toast" hidden></div>
     <script src="/static/preferences.js"></script>
+    <script src="/static/workbench.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

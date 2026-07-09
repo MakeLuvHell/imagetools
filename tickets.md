@@ -129,6 +129,8 @@ Status: Done
 
 ## T005: 桌面工作台两栏 UI
 
+Status: Done
+
 ### What to build
 
 替换旧终端式布局，建立 Codex Desktop 风格的现代桌面工作台外壳。第一版主布局只有两栏：左侧会话/历史列表，中间当前会话时间线与底部 Composer 占位。
