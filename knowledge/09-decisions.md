@@ -78,3 +78,18 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** A tested payload helper keeps provider/model switching and parameter mapping stable while later tickets expand timeline actions and parameter reuse.
 
 **Consequences:** Future Composer actions such as copying parameters from a run should populate the same control state consumed by `buildGenerationFields`.
+
+### 2026-07-09: Timeline Actions Rehydrate Composer State
+
+**Decision:** Timeline run actions use stored run snapshots to restore Composer controls and use result image URLs as reference inputs for continued generation.
+
+**Context:** Users need to continue creative work from previous results without manually reconstructing provider, model, prompt, and parameter choices.
+
+**Options Considered:**
+
+- Show timeline results as passive history only.
+- Make timeline cards active controls that can copy parameters and set reference images.
+
+**Reasoning:** Active timeline cards match the desktop workbench model: history is part of the current creative workflow, not just an audit log.
+
+**Consequences:** Backend run snapshots must keep enough UI-facing parameter data, such as ratio and resolution, for future Composer restore actions to remain reliable.

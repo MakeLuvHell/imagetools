@@ -87,6 +87,8 @@ test("buildGenerationFields maps composer state to generate payload fields", () 
     model: "gpt-image-2",
     width: "1536",
     height: "864",
+    ratio: "16:9",
+    resolution: "standard",
     quality: "high",
     count: "2",
     output_format: "webp",
@@ -104,4 +106,29 @@ test("provider selection returns active provider model fallback", () => {
 
   assert.equal(workbench.selectedProvider(providers, 2).defaultModel, "custom-model");
   assert.equal(workbench.selectedProvider(providers, 99), null);
+});
+
+test("composerStateFromRun restores prompt provider model and parameters", () => {
+  const state = workbench.composerStateFromRun({
+    prompt: "A clean product poster",
+    provider_id: 3,
+    model: "gpt-image-2",
+    parameters: {
+      ratio: "16:9",
+      resolution: "standard",
+      quality: "high",
+      count: 2,
+      output_format: "webp",
+      output_compression: 72,
+      background: "opaque",
+      moderation: "low",
+    },
+  });
+
+  assert.equal(state.prompt, "A clean product poster");
+  assert.equal(state.providerId, 3);
+  assert.equal(state.model, "gpt-image-2");
+  assert.equal(state.ratio, "16:9");
+  assert.equal(state.resolution, "standard");
+  assert.equal(state.outputFormat, "webp");
 });

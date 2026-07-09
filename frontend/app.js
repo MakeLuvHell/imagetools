@@ -132,9 +132,141 @@ function renderTimelineRuns(runs) {
     status.className = "status-chip";
     status.textContent = run.status;
     header.append(prompt, status);
-    article.appendChild(header);
+
+    const chips = document.createElement("div");
+    chips.className = "run-chips";
+    [
+      run.provider_name,
+      run.model,
+      run.parameters?.size,
+      run.parameters?.quality,
+      `${run.parameters?.count || 1} 张`,
+    ]
+      .filter(Boolean)
+      .forEach((value) => {
+        const chip = document.createElement("span");
+        chip.textContent = value;
+        chips.appendChild(chip);
+      });
+
+    const actions = document.createElement("div");
+    actions.className = "run-actions";
+    const copyParams = document.createElement("button");
+    copyParams.type = "button";
+    copyParams.className = "secondary-button";
+    copyParams.textContent = "复制参数到输入区";
+    copyParams.addEventListener("click", () => applyRunToComposer(run));
+    actions.appendChild(copyParams);
+
+    const details = document.createElement("details");
+    details.className = "run-details";
+    const summary = document.createElement("summary");
+    summary.textContent = "详情";
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(run.parameters || {}, null, 2);
+    details.append(summary, pre);
+
+    article.append(header, chips, actions, details);
+    if (run.status === "failed") {
+      const error = document.createElement("pre");
+      error.className = "run-error";
+      error.textContent = run.error_message || "生成失败";
+      article.appendChild(error);
+    }
+    if (Array.isArray(run.images) && run.images.length) {
+      article.appendChild(renderRunImages(run));
+    }
     timeline.appendChild(article);
   });
+}
+
+function renderRunImages(run) {
+  const grid = document.createElement("div");
+  grid.className = "run-image-grid";
+  run.images.forEach((image, index) => {
+    const card = document.createElement("figure");
+    card.className = "run-image";
+    const img = document.createElement("img");
+    img.src = image.url;
+    img.alt = `生成结果 ${index + 1}`;
+
+    const actions = document.createElement("figcaption");
+    const preview = document.createElement("button");
+    preview.type = "button";
+    preview.textContent = "预览";
+    preview.addEventListener("click", () => window.open(image.url, "_blank"));
+
+    const download = document.createElement("a");
+    download.href = image.url;
+    download.download = image.filename || `image-tools-${index + 1}.png`;
+    download.textContent = "下载";
+
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "复制链接";
+    copy.addEventListener("click", () => copyImageLink(image.url));
+
+    const reference = document.createElement("button");
+    reference.type = "button";
+    reference.textContent = "设为参考图";
+    reference.addEventListener("click", () => setReferenceFromUrl(image.url));
+
+    const continueButton = document.createElement("button");
+    continueButton.type = "button";
+    continueButton.textContent = "基于此图继续";
+    continueButton.addEventListener("click", async () => {
+      applyRunToComposer(run);
+      await setReferenceFromUrl(image.url);
+      promptInput.focus();
+    });
+
+    actions.append(preview, download, copy, reference, continueButton);
+    card.append(img, actions);
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
+async function copyImageLink(url) {
+  const absoluteUrl = new URL(url, location.origin).href;
+  await navigator.clipboard.writeText(absoluteUrl);
+  showToast("图片链接已复制");
+}
+
+async function setReferenceFromUrl(url) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const file = new File([blob], `reference_${Date.now()}.png`, {
+      type: blob.type || "image/png",
+    });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    referenceInput.files = transfer.files;
+    referencePreview.hidden = false;
+    referenceName.textContent = file.name;
+    showToast("已设为参考图");
+  } catch (error) {
+    showToast(`设置参考图失败：${error.message}`);
+  }
+}
+
+function applyRunToComposer(run) {
+  const next = window.ImageToolsWorkbench.composerStateFromRun(run);
+  promptInput.value = next.prompt;
+  if (next.providerId && providers.some((provider) => provider.id === next.providerId)) {
+    providerSelect.value = String(next.providerId);
+  }
+  modelInput.value = next.model;
+  ratioSelect.value = next.ratio;
+  resolutionSelect.value = next.resolution;
+  qualitySelect.value = next.quality;
+  countSelect.value = String(next.count);
+  outputFormatSelect.value = next.outputFormat;
+  outputCompressionInput.value = String(next.outputCompression);
+  backgroundSelect.value = next.background;
+  moderationSelect.value = next.moderation;
+  showToast("已复制参数到输入区");
 }
 
 async function loadTimeline(sessionId) {

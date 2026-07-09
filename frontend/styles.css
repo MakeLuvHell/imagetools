@@ -312,6 +312,93 @@ button:disabled {
   font-size: 12px;
 }
 
+.run-chips,
+.run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.run-chips span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-muted);
+  font-size: 12px;
+}
+
+.run-details {
+  margin-top: 10px;
+}
+
+.run-details summary {
+  width: max-content;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.run-details pre,
+.run-error {
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  white-space: pre-wrap;
+}
+
+.run-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.run-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.run-image {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.run-image img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: var(--surface-muted);
+}
+
+.run-image figcaption {
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.run-image button,
+.run-image a {
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 12px;
+  text-decoration: none;
+}
+
 .composer {
   margin: 0;
   padding: 14px 18px 18px;

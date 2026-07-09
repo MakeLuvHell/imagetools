@@ -68,6 +68,8 @@ def test_generate_writes_successful_run_and_image_history(tmp_path, monkeypatch)
             "model": "gpt-image-2",
             "width": "1536",
             "height": "864",
+            "ratio": "16:9",
+            "resolution": "standard",
             "count": "2",
             "quality": "high",
             "output_format": "png",
@@ -87,6 +89,8 @@ def test_generate_writes_successful_run_and_image_history(tmp_path, monkeypatch)
     assert run["provider_name"] == "Primary"
     assert run["model"] == "gpt-image-2"
     assert run["parameters"]["size"] == "1536x864"
+    assert run["parameters"]["ratio"] == "16:9"
+    assert run["parameters"]["resolution"] == "standard"
     assert run["parameters"]["quality"] == "high"
     assert run["parameters"]["count"] == 2
     assert run["images"][0]["local_path"] == "images/result.png"

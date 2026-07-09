@@ -90,12 +90,31 @@
       model: String(composer.model || "gpt-image-2").trim() || "gpt-image-2",
       width: String(dimensions.width),
       height: String(dimensions.height),
+      ratio: String(composer.ratio || ""),
+      resolution: String(composer.resolution || ""),
       quality: String(composer.quality || "auto"),
       count: String(composer.count || 1),
       output_format: String(composer.outputFormat || "png"),
       output_compression: String(composer.outputCompression ?? 100),
       background: String(composer.background || "auto"),
       moderation: String(composer.moderation || "auto"),
+    };
+  }
+
+  function composerStateFromRun(run) {
+    const parameters = run.parameters || {};
+    return {
+      prompt: String(run.prompt || ""),
+      providerId: run.provider_id == null ? null : Number(run.provider_id),
+      model: String(run.model || "gpt-image-2"),
+      ratio: String(parameters.ratio || "1:1"),
+      resolution: String(parameters.resolution || "standard"),
+      quality: String(parameters.quality || "auto"),
+      count: Number(parameters.count || 1),
+      outputFormat: String(parameters.output_format || "png"),
+      outputCompression: Number(parameters.output_compression ?? 100),
+      background: String(parameters.background || "auto"),
+      moderation: String(parameters.moderation || "auto"),
     };
   }
 
@@ -109,6 +128,7 @@
     selectedSession,
     sessionSubtitle,
     buildGenerationFields,
+    composerStateFromRun,
   };
 
   if (typeof module !== "undefined" && module.exports) {
