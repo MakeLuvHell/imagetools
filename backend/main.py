@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.workbench_db import Provider, WorkbenchStore
+from backend.workbench_db import Provider, Session, WorkbenchStore
 
 
 APP_TITLE = "Image Tools"
@@ -81,6 +81,10 @@ class ProviderPayload(BaseModel):
     is_default: bool = False
 
 
+class SessionPayload(BaseModel):
+    title: str = ""
+
+
 def ensure_runtime_dirs() -> None:
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -130,6 +134,12 @@ def default_settings() -> AppSettings:
 
 def workbench_store() -> WorkbenchStore:
     return WorkbenchStore(DATA_DIR)
+
+
+def initialized_workbench_store() -> WorkbenchStore:
+    store = workbench_store()
+    store.initialize()
+    return store
 
 
 def read_settings_file(defaults: AppSettings) -> AppSettings:
@@ -253,6 +263,24 @@ def public_provider(provider: Provider) -> dict[str, object]:
         "created_at": provider.created_at,
         "updated_at": provider.updated_at,
     }
+
+
+def public_session(session: Session) -> dict[str, object]:
+    return {
+        "id": session.id,
+        "title": session.title,
+        "recent_thumbnail_path": session.recent_thumbnail_path,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+    }
+
+
+def default_session_title() -> str:
+    return f"新会话 {time.strftime('%Y-%m-%d %H:%M')}"
+
+
+def clean_session_title(title: str) -> str:
+    return title.strip() or default_session_title()
 
 
 def clean_provider_payload(payload: ProviderPayload, existing_key: str = "") -> ProviderPayload:
@@ -574,6 +602,44 @@ def set_default_provider(provider_id: int) -> dict[str, object]:
         is_default=True,
     )
     return public_provider(updated)
+
+
+@app.get("/api/sessions")
+def list_sessions() -> list[dict[str, object]]:
+    store = initialized_workbench_store()
+    return [public_session(session) for session in store.list_sessions()]
+
+
+@app.post("/api/sessions")
+def create_session(session: SessionPayload) -> dict[str, object]:
+    store = initialized_workbench_store()
+    created = store.create_session(title=clean_session_title(session.title))
+    return public_session(created)
+
+
+@app.get("/api/sessions/{session_id}")
+def get_session(session_id: int) -> dict[str, object]:
+    store = initialized_workbench_store()
+    session = store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return public_session(session)
+
+
+@app.patch("/api/sessions/{session_id}")
+def update_session(session_id: int, session: SessionPayload) -> dict[str, object]:
+    store = initialized_workbench_store()
+    if store.get_session(session_id) is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    updated = store.update_session(session_id, title=clean_session_title(session.title))
+    return public_session(updated)
+
+
+@app.delete("/api/sessions/{session_id}", status_code=204)
+def delete_session(session_id: int) -> Response:
+    store = initialized_workbench_store()
+    store.delete_session(session_id)
+    return Response(status_code=204)
 
 
 @app.post("/api/generate")

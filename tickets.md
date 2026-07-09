@@ -68,6 +68,8 @@ Status: Done
 
 ## T003: 会话 API
 
+Status: Done
+
 ### What to build
 
 实现创作会话 API。会话代表一个创作主题或任务，不是一次 API 请求。左侧会话列表需要依赖这些接口展示标题、最近缩略图和更新时间。
