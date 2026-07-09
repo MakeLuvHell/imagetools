@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from backend.workbench_db import Provider, Session, WorkbenchStore
+from backend.workbench_db import GenerationRun, Provider, Session, StoredImage, WorkbenchStore
 
 
 APP_TITLE = "Image Tools"
@@ -275,6 +275,37 @@ def public_session(session: Session) -> dict[str, object]:
     }
 
 
+def public_image(image: StoredImage) -> dict[str, object]:
+    return {
+        "id": image.id,
+        "local_path": image.local_path,
+        "url": f"/files/{image.local_path}",
+        "filename": image.filename,
+        "mime_type": image.mime_type,
+        "width": image.width,
+        "height": image.height,
+        "created_at": image.created_at,
+    }
+
+
+def public_generation_run(store: WorkbenchStore, run: GenerationRun) -> dict[str, object]:
+    return {
+        "id": run.id,
+        "session_id": run.session_id,
+        "status": run.status,
+        "prompt": run.prompt,
+        "parameters": run.parameters,
+        "provider_id": run.provider_id,
+        "provider_name": run.provider_name,
+        "model": run.model,
+        "reference_image_path": run.reference_image_path,
+        "error_message": run.error_message,
+        "created_at": run.created_at,
+        "completed_at": run.completed_at,
+        "images": [public_image(image) for image in store.list_images(run.id)],
+    }
+
+
 def default_session_title() -> str:
     return f"新会话 {time.strftime('%Y-%m-%d %H:%M')}"
 
@@ -301,6 +332,37 @@ def clean_provider_payload(payload: ProviderPayload, existing_key: str = "") -> 
         default_model=default_model,
         is_default=payload.is_default,
     )
+
+
+def relative_data_path(path: Path) -> str:
+    return path.relative_to(DATA_DIR).as_posix()
+
+
+def generation_parameters_snapshot(
+    *,
+    width: int,
+    height: int,
+    size: str,
+    count: int,
+    quality: str,
+    output_format: str,
+    output_compression: int,
+    background: str,
+    moderation: str,
+    kind: str,
+) -> dict[str, object]:
+    return {
+        "width": width,
+        "height": height,
+        "size": size,
+        "count": count,
+        "quality": quality,
+        "output_format": output_format,
+        "output_compression": output_compression,
+        "background": background,
+        "moderation": moderation,
+        "kind": kind,
+    }
 
 
 def normalize_option(value: str, allowed: set[str], fallback: str) -> str:
@@ -642,8 +704,18 @@ def delete_session(session_id: int) -> Response:
     return Response(status_code=204)
 
 
+@app.get("/api/sessions/{session_id}/runs")
+def list_session_runs(session_id: int) -> list[dict[str, object]]:
+    store = initialized_workbench_store()
+    if store.get_session(session_id) is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    return [public_generation_run(store, run) for run in store.list_generation_runs(session_id)]
+
+
 @app.post("/api/generate")
 async def generate(
+    session_id: int = Form(...),
+    provider_id: int | None = Form(None),
     prompt: str = Form(...),
     model: str = Form(""),
     width: int = Form(1024),
@@ -661,7 +733,14 @@ async def generate(
         raise HTTPException(status_code=400, detail="请先输入提示词。")
 
     ensure_runtime_dirs()
-    settings = load_settings()
+    store = provider_store_with_migration()
+    session = store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    selected_provider = store.get_provider(provider_id) if provider_id is not None else default_provider(store)
+    if selected_provider is None:
+        raise HTTPException(status_code=400, detail="请先配置 provider。")
+    settings = provider_to_settings(selected_provider)
     selected_model = model.strip() or settings.model
     try:
         size = validate_image_size(width, height)
@@ -678,6 +757,7 @@ async def generate(
     except ApiError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     reference_path: Path | None = None
+    reference_relative_path: str | None = None
 
     try:
         if reference and reference.filename:
@@ -685,6 +765,30 @@ async def generate(
             reference_path = UPLOAD_DIR / f"ref_{time.strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}{suffix}"
             with reference_path.open("wb") as target:
                 shutil.copyfileobj(reference.file, target)
+            reference_relative_path = relative_data_path(reference_path)
+
+        kind = "image_to_image" if reference_path else "text_to_image"
+        run = store.create_generation_run(
+            session_id=session_id,
+            status="running",
+            prompt=prompt,
+            parameters=generation_parameters_snapshot(
+                width=width,
+                height=height,
+                size=size,
+                count=image_count,
+                quality=selected_quality,
+                output_format=selected_output_format,
+                output_compression=selected_output_compression,
+                background=selected_background,
+                moderation=selected_moderation,
+                kind=kind,
+            ),
+            provider_id=selected_provider.id,
+            provider_name=selected_provider.name,
+            model=selected_model,
+            reference_image_path=reference_relative_path,
+        )
 
         client = ImageApiClient(settings)
         if reference_path:
@@ -699,7 +803,6 @@ async def generate(
                 background=selected_background,
                 output_dir=IMAGE_DIR,
             )
-            kind = "image_to_image"
         else:
             image_paths, _ = client.generate(
                 prompt=prompt,
@@ -713,7 +816,24 @@ async def generate(
                 moderation=selected_moderation,
                 output_dir=IMAGE_DIR,
             )
-            kind = "text_to_image"
+        for path in image_paths:
+            store.add_image(
+                generation_run_id=run.id,
+                local_path=relative_data_path(path),
+                filename=path.name,
+                mime_type=mimetypes.guess_type(str(path))[0] or "application/octet-stream",
+                width=width,
+                height=height,
+            )
+        store.finish_generation_run(run.id, status="succeeded", error_message=None)
+        if image_paths:
+            current_session = store.get_session(session_id)
+            if current_session is not None:
+                store.update_session(
+                    session_id,
+                    title=current_session.title,
+                    recent_thumbnail_path=relative_data_path(image_paths[0]),
+                )
         return {
             "kind": kind,
             "model": selected_model,
@@ -721,4 +841,6 @@ async def generate(
             "images": [to_public_path(path) for path in image_paths],
         }
     except ApiError as exc:
+        if "run" in locals():
+            store.finish_generation_run(run.id, status="failed", error_message=str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc

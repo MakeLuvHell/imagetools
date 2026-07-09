@@ -97,6 +97,8 @@ Status: Done
 
 ## T004: 生成历史写入
 
+Status: Done
+
 ### What to build
 
 改造图片生成流程，让每次生成都绑定到会话，并把成功和失败都写入 SQLite 历史。现有图片 API 适配、参考图上传、结果保存逻辑应继续复用。

@@ -33,3 +33,18 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Moving the active source to providers now avoids a split-brain configuration model when T004 wires generation history to provider snapshots. Syncing `/api/settings` preserves compatibility for existing callers during the frontend transition.
 
 **Consequences:** Future generation code should read the selected/default provider through the provider store rather than treating `settings.json` as authoritative.
+
+### 2026-07-09: Generation Requests Are Historical Runs
+
+**Decision:** `/api/generate` now requires a session context and writes every successful or upstream-failed generation as a `generation_runs` record with provider/model and parameter snapshots.
+
+**Context:** The desktop workbench needs a timeline where users can inspect prior prompts, parameters, results, and failures for a creative session.
+
+**Options Considered:**
+
+- Keep generation stateless and add history later in the frontend.
+- Write run records in the backend generation path as the source of truth.
+
+**Reasoning:** Backend-owned history preserves failures and provider snapshots even if the frontend reloads or a request fails after dispatch. It also gives the later timeline UI one authoritative API.
+
+**Consequences:** Future Composer and timeline work should use `session_id`, selected provider/model, and `GET /api/sessions/{id}/runs` instead of treating `/api/generate` as a stateless image-only endpoint.
