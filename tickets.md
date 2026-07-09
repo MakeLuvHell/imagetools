@@ -36,6 +36,8 @@ Status: Done
 
 ## T002: Provider 配置与旧设置迁移
 
+Status: Done
+
 ### What to build
 
 实现多 provider 配置管理，并把旧版单一 `settings.json` 迁移为默认 provider。API Key 在接口返回中必须脱敏或不返回明文；编辑 provider 时允许保留旧 key 或替换为新 key。

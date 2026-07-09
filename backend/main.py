@@ -14,10 +14,12 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from backend.workbench_db import Provider, WorkbenchStore
 
 
 APP_TITLE = "Image Tools"
@@ -71,6 +73,14 @@ class AppSettings(BaseModel):
     model: str = "gpt-image-2"
 
 
+class ProviderPayload(BaseModel):
+    name: str
+    base_url: str
+    api_key: str = ""
+    default_model: str = "gpt-image-2"
+    is_default: bool = False
+
+
 def ensure_runtime_dirs() -> None:
     IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -118,8 +128,11 @@ def default_settings() -> AppSettings:
     )
 
 
-def load_settings() -> AppSettings:
-    defaults = default_settings()
+def workbench_store() -> WorkbenchStore:
+    return WorkbenchStore(DATA_DIR)
+
+
+def read_settings_file(defaults: AppSettings) -> AppSettings:
     if not SETTINGS_PATH.exists():
         return defaults
     try:
@@ -133,6 +146,53 @@ def load_settings() -> AppSettings:
     )
 
 
+def provider_to_settings(provider: Provider) -> AppSettings:
+    return AppSettings(
+        base_url=provider.base_url,
+        api_key=provider.api_key,
+        model=provider.default_model,
+    )
+
+
+def default_provider(store: WorkbenchStore) -> Provider | None:
+    providers = store.list_providers()
+    for provider in providers:
+        if provider.is_default:
+            return provider
+    return providers[0] if providers else None
+
+
+def migrate_legacy_settings_to_provider(store: WorkbenchStore) -> None:
+    store.initialize()
+    if store.list_providers() or not SETTINGS_PATH.exists():
+        return
+    settings = read_settings_file(default_settings())
+    if not settings.base_url and not settings.api_key:
+        return
+    store.create_provider(
+        name="Default",
+        base_url=normalize_base_url(settings.base_url),
+        api_key=settings.api_key.strip(),
+        default_model=settings.model.strip() or "gpt-image-2",
+        is_default=True,
+    )
+
+
+def provider_store_with_migration() -> WorkbenchStore:
+    store = workbench_store()
+    migrate_legacy_settings_to_provider(store)
+    return store
+
+
+def load_settings() -> AppSettings:
+    defaults = default_settings()
+    store = provider_store_with_migration()
+    provider = default_provider(store)
+    if provider:
+        return provider_to_settings(provider)
+    return read_settings_file(defaults)
+
+
 def save_settings(settings: AppSettings, keep_existing_key: bool = False) -> AppSettings:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     api_key = settings.api_key.strip()
@@ -144,7 +204,32 @@ def save_settings(settings: AppSettings, keep_existing_key: bool = False) -> App
         model=settings.model.strip() or "gpt-image-2",
     )
     SETTINGS_PATH.write_text(json.dumps(clean.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
+    sync_settings_to_default_provider(clean)
     return clean
+
+
+def sync_settings_to_default_provider(settings: AppSettings) -> None:
+    if not settings.base_url.strip() and not settings.api_key.strip():
+        return
+    store = provider_store_with_migration()
+    provider = default_provider(store)
+    if provider:
+        store.update_provider(
+            provider.id,
+            name=provider.name,
+            base_url=normalize_base_url(settings.base_url),
+            api_key=settings.api_key.strip(),
+            default_model=settings.model.strip() or "gpt-image-2",
+            is_default=True,
+        )
+        return
+    store.create_provider(
+        name="Default",
+        base_url=normalize_base_url(settings.base_url),
+        api_key=settings.api_key.strip(),
+        default_model=settings.model.strip() or "gpt-image-2",
+        is_default=True,
+    )
 
 
 def public_settings(settings: AppSettings) -> dict[str, object]:
@@ -154,6 +239,40 @@ def public_settings(settings: AppSettings) -> dict[str, object]:
         "api_key_set": bool(settings.api_key),
         "model": settings.model,
     }
+
+
+def public_provider(provider: Provider) -> dict[str, object]:
+    return {
+        "id": provider.id,
+        "name": provider.name,
+        "base_url": provider.base_url,
+        "api_key": "",
+        "api_key_set": bool(provider.api_key),
+        "default_model": provider.default_model,
+        "is_default": provider.is_default,
+        "created_at": provider.created_at,
+        "updated_at": provider.updated_at,
+    }
+
+
+def clean_provider_payload(payload: ProviderPayload, existing_key: str = "") -> ProviderPayload:
+    name = payload.name.strip()
+    base_url = normalize_base_url(payload.base_url)
+    api_key = payload.api_key.strip() or existing_key
+    default_model = payload.default_model.strip() or "gpt-image-2"
+    if not name:
+        raise HTTPException(status_code=400, detail="请填写 provider 名称。")
+    if not base_url:
+        raise HTTPException(status_code=400, detail="请填写 API 地址。")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请填写 API Key。")
+    return ProviderPayload(
+        name=name,
+        base_url=base_url,
+        api_key=api_key,
+        default_model=default_model,
+        is_default=payload.is_default,
+    )
 
 
 def normalize_option(value: str, allowed: set[str], fallback: str) -> str:
@@ -384,6 +503,77 @@ def update_settings(settings: AppSettings) -> dict[str, object]:
         raise HTTPException(status_code=400, detail="请填写 API Key。")
     saved = save_settings(settings, keep_existing_key=True)
     return public_settings(saved)
+
+
+@app.get("/api/providers")
+def list_providers() -> list[dict[str, object]]:
+    store = provider_store_with_migration()
+    return [public_provider(provider) for provider in store.list_providers()]
+
+
+@app.post("/api/providers")
+def create_provider(provider: ProviderPayload) -> dict[str, object]:
+    store = provider_store_with_migration()
+    clean = clean_provider_payload(provider)
+    created = store.create_provider(
+        name=clean.name,
+        base_url=clean.base_url,
+        api_key=clean.api_key,
+        default_model=clean.default_model,
+        is_default=clean.is_default,
+    )
+    return public_provider(created)
+
+
+@app.get("/api/providers/{provider_id}")
+def get_provider(provider_id: int) -> dict[str, object]:
+    store = provider_store_with_migration()
+    provider = store.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider not found.")
+    return public_provider(provider)
+
+
+@app.patch("/api/providers/{provider_id}")
+def update_provider(provider_id: int, provider: ProviderPayload) -> dict[str, object]:
+    store = provider_store_with_migration()
+    existing = store.get_provider(provider_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Provider not found.")
+    clean = clean_provider_payload(provider, existing_key=existing.api_key)
+    updated = store.update_provider(
+        provider_id,
+        name=clean.name,
+        base_url=clean.base_url,
+        api_key=clean.api_key,
+        default_model=clean.default_model,
+        is_default=clean.is_default,
+    )
+    return public_provider(updated)
+
+
+@app.delete("/api/providers/{provider_id}", status_code=204)
+def delete_provider(provider_id: int) -> Response:
+    store = provider_store_with_migration()
+    store.delete_provider(provider_id)
+    return Response(status_code=204)
+
+
+@app.post("/api/providers/{provider_id}/default")
+def set_default_provider(provider_id: int) -> dict[str, object]:
+    store = provider_store_with_migration()
+    provider = store.get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail="Provider not found.")
+    updated = store.update_provider(
+        provider.id,
+        name=provider.name,
+        base_url=provider.base_url,
+        api_key=provider.api_key,
+        default_model=provider.default_model,
+        is_default=True,
+    )
+    return public_provider(updated)
 
 
 @app.post("/api/generate")
