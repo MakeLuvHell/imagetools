@@ -6,6 +6,10 @@ def package_scripts() -> dict[str, str]:
     return json.loads(Path("package.json").read_text())["scripts"]
 
 
+def tauri_config() -> dict:
+    return json.loads(Path("src-tauri/tauri.conf.json").read_text())
+
+
 def test_windows_desktop_build_script_builds_sidecar_and_windows_bundles():
     script = package_scripts()["desktop:build:windows"]
 
@@ -78,3 +82,19 @@ def test_readme_mentions_windows_release_assets_are_built_by_github_actions():
 
     assert "Windows x64" in readme
     assert "GitHub Actions" in readme
+
+
+def test_windows_installers_use_generated_icon_and_simplified_chinese():
+    windows = tauri_config()["bundle"]["windows"]
+
+    assert windows["nsis"]["installerIcon"] == "icons/icon.ico"
+    assert windows["nsis"]["uninstallerIcon"] == "icons/icon.ico"
+    assert windows["nsis"]["languages"] == ["SimpChinese"]
+    assert windows["nsis"]["displayLanguageSelector"] is False
+    assert windows["wix"]["language"] == "zh-CN"
+
+
+def test_user_svg_is_the_source_for_committed_tauri_icons():
+    assert Path("frontend/assets/icon.svg").is_file()
+    for icon in ("icon.ico", "icon.png", "32x32.png", "128x128.png", "128x128@2x.png"):
+        assert Path("src-tauri/icons", icon).is_file()
