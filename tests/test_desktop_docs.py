@@ -27,5 +27,5 @@ def test_release_docs_mention_windows_x64_installer_path():
 
     assert "Windows x64" in text
     assert "desktop:build:windows" in text
-    assert "src-tauri/target/release/bundle/nsis" in text
-    assert "src-tauri/target/release/bundle/msi" in text
+    assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis" in text
+    assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi" in text
