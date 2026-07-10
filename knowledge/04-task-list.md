@@ -10,17 +10,29 @@
 
 | ID | Area | Task | Output | Depends On | Status |
 | --- | --- | --- | --- | --- | --- |
-| T001 | TBD | TBD | TBD | TBD | Pending |
+| UI001 | State | Model new-task drafts and optimistic runs | Tested pure workbench state | None | In Progress |
+| UI002 | Shell | Bundle icons and build the Windows shell | Offline assets and themed shell | None | Pending |
+| UI003 | Sessions | Render sidebar, new tasks, and session dialogs | Accessible session workflow | UI001, UI002 | Pending |
+| UI004 | Providers | Add Provider management dialog | Complete Provider CRUD UI | UI003 | Pending |
+| UI005 | Composer | Build layered Composer and parameter menus | Draft-aware generation Composer | UI002-UI004 | Pending |
+| UI006 | Timeline | Render and reconcile task states | Persistent chronological task stream | UI001, UI003, UI005 | Pending |
+| UI007 | Testing | Add Playwright accessibility and visual checks | Isolated deterministic UI suite | UI002-UI006 | Pending |
+| UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | Pending |
 
 ## Recommended Order
 
-1. TBD
+1. UI001 and UI002 establish state and shell foundations.
+2. UI003 and UI004 complete navigation and Provider management.
+3. UI005 and UI006 deliver the Composer-to-task-stream workflow.
+4. UI007 and UI008 complete visual and release verification.
 
 ## Blockers
 
-- TBD
+- UI003-UI008 remain blocked by the dependencies listed above.
+- Final Windows pixel fidelity requires WebView2 verification on Windows hardware or CI.
 
 ## Verification Checklist
 
-- TBD
-
+- Run each ticket's focused test before advancing it.
+- Run the full Python, Node, Playwright, and Rust suite in UI008.
+- Keep normal per-ticket Git commits; do not squash.
