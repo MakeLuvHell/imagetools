@@ -56,6 +56,9 @@ const sessionTitleField = document.querySelector("#sessionTitleField");
 const sessionTitleInput = document.querySelector("#sessionTitleInput");
 const sessionDialogCancel = document.querySelector("#sessionDialogCancel");
 const sessionDialogSubmit = document.querySelector("#sessionDialogSubmit");
+const imagePreviewDialog = document.querySelector("#imagePreviewDialog");
+const imagePreviewClose = document.querySelector("#imagePreviewClose");
+const imagePreview = document.querySelector("#imagePreview");
 const toast = document.querySelector("#toast");
 
 let toastTimer = null;
@@ -64,6 +67,7 @@ let providers = [];
 let referenceSource = null;
 let sessionDialogMode = null;
 let editingProviderId = null;
+const runsBySession = {};
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -222,114 +226,56 @@ function renderEmptyTimeline(message, detail) {
 }
 
 function renderTimelineRuns(runs) {
-  timeline.innerHTML = "";
   if (!runs.length) {
-    renderEmptyTimeline("这个会话还没有生成记录", "底部 Composer 会在下一步接入生成。");
+    renderEmptyTimeline("这个会话还没有生成记录", "从 Composer 开始新的生成。");
     return;
   }
-  runs.forEach((run) => {
-    const article = document.createElement("article");
-    article.className = "timeline-run";
-    const header = document.createElement("header");
-    const prompt = document.createElement("strong");
-    prompt.textContent = run.prompt || "无提示词";
-    const status = document.createElement("span");
-    status.className = "status-chip";
-    status.textContent = run.status;
-    header.append(prompt, status);
-
-    const chips = document.createElement("div");
-    chips.className = "run-chips";
-    [
-      run.provider_name,
-      run.model,
-      run.parameters?.size,
-      run.parameters?.quality,
-      `${run.parameters?.count || 1} 张`,
-    ]
-      .filter(Boolean)
-      .forEach((value) => {
-        const chip = document.createElement("span");
-        chip.textContent = value;
-        chips.appendChild(chip);
-      });
-
-    const actions = document.createElement("div");
-    actions.className = "run-actions";
-    const copyParams = document.createElement("button");
-    copyParams.type = "button";
-    copyParams.className = "secondary-button";
-    copyParams.textContent = "复制参数到输入区";
-    copyParams.addEventListener("click", () => applyRunToComposer(run));
-    actions.appendChild(copyParams);
-
-    const details = document.createElement("details");
-    details.className = "run-details";
-    const summary = document.createElement("summary");
-    summary.textContent = "详情";
-    const pre = document.createElement("pre");
-    pre.textContent = JSON.stringify(run.parameters || {}, null, 2);
-    details.append(summary, pre);
-
-    article.append(header, chips, actions, details);
-    if (run.status === "failed") {
-      const error = document.createElement("pre");
-      error.className = "run-error";
-      error.textContent = run.error_message || "生成失败";
-      article.appendChild(error);
-    }
-    if (Array.isArray(run.images) && run.images.length) {
-      article.appendChild(renderRunImages(run));
-    }
-    timeline.appendChild(article);
-  });
-}
-
-function renderRunImages(run) {
-  const grid = document.createElement("div");
-  grid.className = "run-image-grid";
-  run.images.forEach((image, index) => {
-    const card = document.createElement("figure");
-    card.className = "run-image";
-    const img = document.createElement("img");
-    img.src = image.url;
-    img.alt = `生成结果 ${index + 1}`;
-
-    const actions = document.createElement("figcaption");
-    const preview = document.createElement("button");
-    preview.type = "button";
-    preview.textContent = "预览";
-    preview.addEventListener("click", () => window.open(image.url, "_blank"));
-
-    const download = document.createElement("a");
-    download.href = image.url;
-    download.download = image.filename || `image-tools-${index + 1}.png`;
-    download.textContent = "下载";
-
-    const copy = document.createElement("button");
-    copy.type = "button";
-    copy.textContent = "复制链接";
-    copy.addEventListener("click", () => copyImageLink(image.url));
-
-    const reference = document.createElement("button");
-    reference.type = "button";
-    reference.textContent = "设为参考图";
-    reference.addEventListener("click", () => setReferenceFromUrl(image.url));
-
-    const continueButton = document.createElement("button");
-    continueButton.type = "button";
-    continueButton.textContent = "基于此图继续";
-    continueButton.addEventListener("click", async () => {
+  window.ImageToolsUi.renderTaskRuns(timeline, runs, {
+    onPreview: openImagePreview,
+    onDownload: downloadImage,
+    onCopyLink: (image) => copyImageLink(image.url),
+    onSetReference: (image) => setReferenceFromUrl(image.url),
+    onContinue: async (image, run) => {
       applyRunToComposer(run);
       await setReferenceFromUrl(image.url);
       promptInput.focus();
-    });
-
-    actions.append(preview, download, copy, reference, continueButton);
-    card.append(img, actions);
-    grid.appendChild(card);
+    },
+    onRetry: (run) => {
+      if (run.optimistic && run.submissionId) {
+        state = window.ImageToolsWorkbench.removePendingRun(
+          state,
+          state.selectedSessionId,
+          run.submissionId,
+        );
+      }
+      applyRunToComposer(run);
+      composerForm.requestSubmit();
+    },
+    onCopyError: (run) => navigator.clipboard.writeText(run.error_message || "生成失败"),
+    onCopyParameters: applyRunToComposer,
   });
-  return grid;
+}
+
+function openImagePreview(image) {
+  imagePreview.src = image.url;
+  window.ImageToolsUi.openDialog(imagePreviewDialog, document.activeElement);
+}
+
+function closeImagePreview() {
+  window.ImageToolsUi.closeDialog(imagePreviewDialog);
+  imagePreview.removeAttribute("src");
+}
+
+function cancelImagePreview(event) {
+  event.preventDefault();
+  closeImagePreview();
+}
+
+function downloadImage(image) {
+  const link = document.createElement("a");
+  link.href = image.url;
+  link.download = image.filename || "image-tools-result.png";
+  link.click();
 }
 
 async function copyImageLink(url) {
@@ -384,11 +330,19 @@ async function loadTimeline(sessionId) {
   }
   try {
     const runs = await fetch(`/api/sessions/${sessionId}/runs`).then(readJson);
+    runsBySession[sessionId] = runs;
     if (sessionId === state.selectedSessionId) {
-      renderTimelineRuns(runs);
+      renderTimelineRuns([
+        ...runs,
+        ...window.ImageToolsWorkbench.pendingRunsForSession(state, sessionId),
+      ]);
     }
+    return runs;
   } catch (error) {
-    renderEmptyTimeline("读取时间线失败", error.message);
+    if (sessionId === state.selectedSessionId) {
+      renderEmptyTimeline("读取时间线失败", error.message);
+    }
+    return [];
   }
 }
 
@@ -396,6 +350,9 @@ function renderCurrentSession() {
   const session = window.ImageToolsWorkbench.selectedSession(state);
   const hasSession = Boolean(session);
   const hasProvider = providers.length > 0;
+  const hasInFlight = window.ImageToolsWorkbench
+    .pendingRunsForSession(state, state.selectedSessionId)
+    .some((run) => run.status === "running");
   window.ImageToolsUi.renderTaskHeader(
     currentSessionTitle,
     currentSessionSubtitle,
@@ -405,7 +362,7 @@ function renderCurrentSession() {
   renameSessionBtn.disabled = !hasSession;
   deleteSessionBtn.disabled = !hasSession;
   referenceBtn.disabled = false;
-  generateBtn.disabled = !hasProvider;
+  generateBtn.disabled = !hasProvider || hasInFlight;
   promptInput.disabled = false;
 }
 
@@ -680,6 +637,13 @@ async function deleteSession() {
 
 async function handleComposerSubmit(event) {
   event.preventDefault();
+  if (
+    window.ImageToolsWorkbench
+      .pendingRunsForSession(state, state.selectedSessionId)
+      .some((run) => run.status === "running")
+  ) {
+    return;
+  }
   const provider = window.ImageToolsWorkbench.selectedProvider(
     providers,
     providerSelect.value,
@@ -695,10 +659,41 @@ async function handleComposerSubmit(event) {
     return;
   }
 
-  generateBtn.disabled = true;
-  generateBtn.setAttribute("aria-label", "生成中");
+  const wasNewTask = state.selectedSessionId == null;
+  let sessionId = null;
+  let submissionId = null;
+  let pendingRun = null;
+  let previousServerCount = 0;
+  let requestError = null;
   try {
-    const sessionId = await ensureSessionForSubmit(prompt);
+    sessionId = await ensureSessionForSubmit(prompt);
+    previousServerCount = (runsBySession[sessionId] || []).length;
+    submissionId = globalThis.crypto?.randomUUID?.() || `pending-${Date.now()}`;
+    pendingRun = window.ImageToolsWorkbench.createOptimisticRun(
+      {
+        sessionId,
+        providerId: provider.id,
+        providerName: provider.name,
+        prompt,
+        model: modelInput.value || provider.defaultModel,
+        ratio: ratioSelect.value,
+        resolution: resolutionSelect.value,
+        quality: qualitySelect.value,
+        count: countSelect.value,
+      },
+      submissionId,
+    );
+    state = window.ImageToolsWorkbench.addPendingRun(
+      state,
+      sessionId,
+      pendingRun,
+    );
+    renderCurrentSession();
+    renderTimelineRuns([
+      ...(runsBySession[sessionId] || []),
+      ...window.ImageToolsWorkbench.pendingRunsForSession(state, sessionId),
+    ]);
+    generateBtn.setAttribute("aria-label", "生成中");
     const fields = window.ImageToolsWorkbench.buildGenerationFields(
       {
         sessionId,
@@ -723,15 +718,60 @@ async function handleComposerSubmit(event) {
     }
     await fetch("/api/generate", { method: "POST", body: formData }).then(readJson);
     showToast("生成完成");
-    await loadTimeline(sessionId);
-    await loadSessions();
   } catch (error) {
+    requestError = error.message;
     showToast(error.message);
-    if (state.selectedSessionId) {
-      await loadTimeline(state.selectedSessionId);
-    }
   } finally {
-    generateBtn.disabled = providers.length === 0;
+    if (sessionId && pendingRun) {
+      const serverRuns = await fetch(`/api/sessions/${sessionId}/runs`)
+        .then(readJson)
+        .catch(() => runsBySession[sessionId] || []);
+      runsBySession[sessionId] = serverRuns;
+      const reconciled = window.ImageToolsWorkbench.reconcileSubmission(
+        serverRuns,
+        pendingRun,
+        previousServerCount,
+        requestError,
+      );
+      const persisted = serverRuns.length > previousServerCount;
+      const localError =
+        requestError || "无法确认生成状态，请刷新后重试";
+      state = persisted
+        ? window.ImageToolsWorkbench.removePendingRun(state, sessionId, submissionId)
+        : window.ImageToolsWorkbench.failPendingRun(
+            state,
+            sessionId,
+            submissionId,
+            localError,
+          );
+      if (persisted) {
+        localStorage.removeItem(
+          window.ImageToolsWorkbench.draftStorageKey(sessionId),
+        );
+        if (wasNewTask) {
+          localStorage.removeItem(window.ImageToolsWorkbench.draftStorageKey(null));
+        }
+        promptInput.value = "";
+        referenceInput.value = "";
+        referenceSource = null;
+        referencePreview.hidden = true;
+        referenceName.textContent = "";
+        syncReferenceState();
+        resizePrompt();
+      }
+      if (state.selectedSessionId === sessionId) {
+        renderTimelineRuns(
+          persisted
+            ? reconciled
+            : [
+                ...serverRuns,
+                ...window.ImageToolsWorkbench.pendingRunsForSession(state, sessionId),
+              ],
+        );
+      }
+      await loadSessions();
+    }
+    renderCurrentSession();
     generateBtn.setAttribute("aria-label", "开始生成");
   }
 }
@@ -872,6 +912,8 @@ providerDialog.addEventListener("cancel", handleDialogCancel);
 addProviderBtn.addEventListener("click", startNewProvider);
 providerCancelBtn.addEventListener("click", startNewProvider);
 providerForm.addEventListener("submit", handleProviderSubmit);
+imagePreviewClose.addEventListener("click", closeImagePreview);
+imagePreviewDialog.addEventListener("cancel", cancelImagePreview);
 taskMenuBtn.addEventListener("click", toggleTaskMenu);
 renameSessionBtn.addEventListener("click", openRenameDialog);
 deleteSessionBtn.addEventListener("click", openDeleteDialog);

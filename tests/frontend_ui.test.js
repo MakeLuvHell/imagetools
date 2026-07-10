@@ -69,6 +69,36 @@ test("renderProviderList exposes actions without rendering API keys", () => {
   assert.deepEqual(actions, [["edit", 2]]);
 });
 
+test("renderTaskRuns keeps success and failure in one chronological stream", () => {
+  assert.ok(ui, "frontend/ui.js must exist");
+  const dom = new JSDOM('<section id="timeline"></section>');
+  ui.renderTaskRuns(
+    dom.window.document.querySelector("#timeline"),
+    [
+      {
+        id: 1,
+        status: "succeeded",
+        prompt: "夏季海报",
+        parameters: { count: 2 },
+        images: [{ url: "/files/images/1.png" }],
+      },
+      {
+        id: 2,
+        status: "failed",
+        prompt: "提高对比度",
+        parameters: {},
+        error_message: "上游超时",
+        images: [],
+      },
+    ],
+    {},
+  );
+
+  assert.equal(dom.window.document.querySelectorAll(".task-run").length, 2);
+  assert.equal(dom.window.document.querySelectorAll(".result-image").length, 1);
+  assert.match(dom.window.document.querySelector(".run-error").textContent, /上游超时/);
+});
+
 test("dialog helpers focus the first input and restore the opener", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM(`

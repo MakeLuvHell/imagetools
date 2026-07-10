@@ -107,6 +107,131 @@
     refreshIcons();
   }
 
+  function actionButton(document, icon, label, callback) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "icon-button";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.innerHTML = `<i data-lucide="${icon}"></i>`;
+    if (callback) button.addEventListener("click", callback);
+    return button;
+  }
+
+  function renderTaskRuns(container, runs, callbacks = {}) {
+    const document = container.ownerDocument;
+    container.replaceChildren();
+    for (const run of runs) {
+      const article = document.createElement("article");
+      article.className = "task-run";
+      article.dataset.runId = String(run.id);
+
+      const prompt = document.createElement("div");
+      prompt.className = "user-prompt";
+      prompt.textContent = run.prompt || "无提示词";
+      const response = document.createElement("div");
+      response.className = `run-response status-${run.status}`;
+
+      const meta = document.createElement("div");
+      meta.className = "run-meta";
+      const status = document.createElement("span");
+      status.textContent =
+        run.status === "running"
+          ? "生成中"
+          : run.status === "succeeded"
+            ? "已完成"
+            : "生成失败";
+      const summary = document.createElement("span");
+      summary.textContent = [run.provider_name, run.model].filter(Boolean).join(" · ");
+      meta.append(status, summary);
+      response.appendChild(meta);
+
+      if (run.status === "running") {
+        const progress = document.createElement("div");
+        progress.className = "run-progress";
+        progress.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>正在生成图片</span>';
+        response.appendChild(progress);
+        const skeletons = document.createElement("div");
+        skeletons.className = "result-grid skeleton-grid";
+        const count = Math.max(1, Number(run.parameters?.count || 1));
+        for (let index = 0; index < count; index += 1) {
+          const skeleton = document.createElement("div");
+          skeleton.className = "result-skeleton";
+          skeletons.appendChild(skeleton);
+        }
+        response.appendChild(skeletons);
+      }
+
+      if (run.status === "succeeded" && run.images?.length) {
+        const grid = document.createElement("div");
+        grid.className = `result-grid result-count-${Math.min(run.images.length, 4)}`;
+        for (const image of run.images) {
+          const figure = document.createElement("figure");
+          figure.className = "result-image";
+          const preview = document.createElement("button");
+          preview.type = "button";
+          preview.className = "result-preview";
+          preview.setAttribute("aria-label", "预览图片");
+          const element = document.createElement("img");
+          element.src = image.url;
+          element.alt = "生成结果";
+          preview.appendChild(element);
+          preview.addEventListener("click", () => callbacks.onPreview?.(image, run));
+          const actions = document.createElement("figcaption");
+          actions.append(
+            actionButton(document, "download", "下载", () => callbacks.onDownload?.(image, run)),
+            actionButton(document, "copy", "复制链接", () => callbacks.onCopyLink?.(image, run)),
+            actionButton(document, "image-plus", "设为参考图", () => callbacks.onSetReference?.(image, run)),
+          );
+          const continueButton = document.createElement("button");
+          continueButton.type = "button";
+          continueButton.className = "continue-button";
+          continueButton.textContent = "基于结果继续";
+          continueButton.addEventListener("click", () => callbacks.onContinue?.(image, run));
+          actions.appendChild(continueButton);
+          figure.append(preview, actions);
+          grid.appendChild(figure);
+        }
+        response.appendChild(grid);
+      }
+
+      if (run.status === "failed") {
+        const error = document.createElement("p");
+        error.className = "run-error";
+        error.textContent = run.error_message || "生成失败";
+        const actions = document.createElement("div");
+        actions.className = "run-failure-actions";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "重试";
+        retry.addEventListener("click", () => callbacks.onRetry?.(run));
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.textContent = "复制错误";
+        copy.addEventListener("click", () => callbacks.onCopyError?.(run));
+        actions.append(retry, copy);
+        response.append(error, actions);
+      }
+
+      const parameters = document.createElement("button");
+      parameters.type = "button";
+      parameters.className = "copy-parameters-button";
+      parameters.textContent = "复制参数";
+      parameters.addEventListener("click", () => callbacks.onCopyParameters?.(run));
+      const details = document.createElement("details");
+      details.className = "run-details";
+      const detailsSummary = document.createElement("summary");
+      detailsSummary.textContent = "详情";
+      const detailContent = document.createElement("pre");
+      detailContent.textContent = JSON.stringify(run.parameters || {}, null, 2);
+      details.append(detailsSummary, detailContent);
+      response.append(parameters, details);
+      article.append(prompt, response);
+      container.appendChild(article);
+    }
+    refreshIcons();
+  }
+
   function renderTaskHeader(titleElement, subtitleElement, session) {
     titleElement.textContent = session ? session.title : "新任务";
     subtitleElement.textContent = session ? "图片创作会话" : "图片创作";
@@ -155,6 +280,7 @@
     renderSessionList,
     renderNewTask,
     renderProviderList,
+    renderTaskRuns,
     renderTaskHeader,
     openDialog,
     closeDialog,

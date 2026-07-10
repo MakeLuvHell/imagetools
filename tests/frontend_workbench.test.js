@@ -138,6 +138,7 @@ test("createOptimisticRun snapshots the visible composer state", () => {
   const run = workbench.createOptimisticRun(
     {
       sessionId: 7,
+      providerId: 3,
       prompt: "  产品海报  ",
       providerName: "OpenAI",
       model: "gpt-image-2",
@@ -157,6 +158,7 @@ test("createOptimisticRun snapshots the visible composer state", () => {
     status: "running",
     prompt: "产品海报",
     provider_name: "OpenAI",
+    provider_id: 3,
     model: "gpt-image-2",
     parameters: {
       ratio: "3:2",
@@ -191,6 +193,34 @@ test("normalizeComposerForReference forces one result only while attached", () =
   assert.deepEqual(
     workbench.normalizeComposerForReference({ count: 1 }, false),
     { count: 1, hasReference: false },
+  );
+});
+
+test("reconcileSubmission keeps a local failure when no server run was created", () => {
+  const pending = workbench.createOptimisticRun(
+    { prompt: "海报", count: 1 },
+    "local-1",
+  );
+  const runs = workbench.reconcileSubmission(
+    [],
+    pending,
+    0,
+    "网络连接失败",
+  );
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].status, "failed");
+  assert.equal(runs[0].error_message, "网络连接失败");
+});
+
+test("reconcileSubmission removes optimistic state after persistence", () => {
+  const pending = workbench.createOptimisticRun(
+    { prompt: "海报", count: 1 },
+    "local-1",
+  );
+  const persisted = [{ id: 4, status: "failed", prompt: "海报" }];
+  assert.deepEqual(
+    workbench.reconcileSubmission(persisted, pending, 0, "请求失败"),
+    persisted,
   );
 });
 

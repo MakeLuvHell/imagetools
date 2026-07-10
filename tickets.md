@@ -360,7 +360,7 @@ Build the layered Composer with growing prompt input, references, Provider/model
 
 ## UI006: Render The Task Stream And Reconcile Generation Status
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -383,7 +383,7 @@ Render chronological prompt/run rows, stable image grids, result actions and pre
 
 ## UI007: Add Playwright Accessibility And Visual Verification
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 

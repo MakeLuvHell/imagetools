@@ -19,6 +19,7 @@ test("shell exposes Codex Windows task regions without permanent parameter colum
     "parameterMenu",
     "providerDialog",
     "sessionDialog",
+    "imagePreviewDialog",
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }

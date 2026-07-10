@@ -222,6 +222,8 @@
       status: "running",
       prompt: String(composer.prompt || "").trim(),
       provider_name: composer.providerName,
+      provider_id:
+        composer.providerId == null ? null : Number(composer.providerId),
       model: composer.model,
       parameters: {
         ratio: composer.ratio,
@@ -231,6 +233,24 @@
       },
       images: [],
     };
+  }
+
+  function reconcileSubmission(
+    serverRuns,
+    pendingRun,
+    previousServerCount,
+    errorMessage,
+  ) {
+    if (serverRuns.length > previousServerCount) return serverRuns;
+    if (!errorMessage) return serverRuns;
+    return [
+      ...serverRuns,
+      {
+        ...pendingRun,
+        status: "failed",
+        error_message: String(errorMessage),
+      },
+    ];
   }
 
   function selectedSession(state) {
@@ -318,6 +338,7 @@
     failPendingRun,
     removePendingRun,
     createOptimisticRun,
+    reconcileSubmission,
     buildGenerationFields,
     composerStateFromRun,
   };

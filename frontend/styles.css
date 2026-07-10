@@ -426,6 +426,163 @@ summary:focus-visible {
   background: transparent;
 }
 
+.task-run {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.user-prompt {
+  max-width: min(78%, 560px);
+  margin-left: auto;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-subtle);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.run-response {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.run-meta {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.run-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.result-count-1 {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 560px;
+}
+
+.result-image {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.result-preview {
+  width: 100%;
+  padding: 0;
+  display: block;
+  border: 0;
+  background: transparent;
+}
+
+.result-preview img,
+.result-skeleton {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  object-fit: contain;
+}
+
+.result-skeleton {
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  animation: skeleton-pulse 1.3s ease-in-out infinite alternate;
+}
+
+@keyframes skeleton-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+
+.result-image figcaption {
+  min-height: 38px;
+  padding: 4px 5px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.continue-button,
+.copy-parameters-button,
+.run-failure-actions button {
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+
+.continue-button {
+  margin-left: auto;
+}
+
+.continue-button:hover,
+.copy-parameters-button:hover,
+.run-failure-actions button:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.copy-parameters-button {
+  width: max-content;
+}
+
+.run-failure-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.run-response .run-error {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 .timeline-run header {
   display: flex;
   align-items: center;
@@ -769,6 +926,33 @@ summary:focus-visible {
 
 .app-dialog::backdrop {
   background: rgb(0 0 0 / 30%);
+}
+
+.image-preview-dialog {
+  width: min(1080px, calc(100vw - 64px));
+  height: min(780px, calc(100vh - 64px));
+  padding: 42px 16px 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.image-preview-dialog::backdrop {
+  background: rgb(0 0 0 / 64%);
+}
+
+.image-preview-dialog .icon-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.image-preview-dialog img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 
 .app-dialog h2 {

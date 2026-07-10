@@ -53,6 +53,14 @@ class FailingImageApiClient:
         raise main.ApiError("upstream failed")
 
 
+class UnexpectedImageApiClient:
+    def __init__(self, settings):
+        self.settings = settings
+
+    def generate(self, **kwargs):
+        raise RuntimeError("disk failed")
+
+
 def test_generate_writes_successful_run_and_image_history(tmp_path, monkeypatch):
     configure_runtime(tmp_path, monkeypatch)
     monkeypatch.setattr(main, "ImageApiClient", SuccessfulImageApiClient)
@@ -121,6 +129,30 @@ def test_generate_writes_failed_run_when_upstream_fails(tmp_path, monkeypatch):
     assert runs[0]["status"] == "failed"
     assert "upstream failed" in runs[0]["error_message"]
     assert runs[0]["images"] == []
+
+
+def test_generate_marks_run_failed_when_an_unexpected_error_occurs(tmp_path, monkeypatch):
+    configure_runtime(tmp_path, monkeypatch)
+    monkeypatch.setattr(main, "ImageApiClient", UnexpectedImageApiClient)
+    client = TestClient(main.app, raise_server_exceptions=False)
+    provider, session = create_provider_and_session(client)
+
+    response = client.post(
+        "/api/generate",
+        data={
+            "session_id": str(session["id"]),
+            "provider_id": str(provider["id"]),
+            "prompt": "A clean product poster",
+            "width": "1536",
+            "height": "864",
+        },
+    )
+
+    assert response.status_code == 500
+    runs = client.get(f"/api/sessions/{session['id']}/runs").json()
+    assert len(runs) == 1
+    assert runs[0]["status"] == "failed"
+    assert "disk failed" in runs[0]["error_message"]
 
 
 def test_generate_with_reference_uses_edit_path_and_records_reference(tmp_path, monkeypatch):

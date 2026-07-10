@@ -865,3 +865,7 @@ async def generate(
         if "run" in locals():
             store.finish_generation_run(run.id, status="failed", error_message=str(exc))
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        if "run" in locals():
+            store.finish_generation_run(run.id, status="failed", error_message=str(exc))
+        raise
