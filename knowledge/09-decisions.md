@@ -109,3 +109,19 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** High fidelity requires more than palette changes. The Windows shell proportions, restrained sidebar, unframed task canvas, task lifecycle, and layered Composer must operate together. Keeping Image Tools branding and excluding unavailable Codex features avoids impersonation and fake navigation.
 
 **Consequences:** Frontend work should follow `docs/spec/2026-07-10-codex-windows-ui.md`, remove permanent parameter forms and browser-native dialogs, preserve the existing backend/data contracts, and verify both Windows themes at desktop viewport sizes.
+
+### 2026-07-11: Commit Generated Icons And Use Native Chinese Installer Locales
+
+**Decision:** Treat `frontend/assets/icon.svg` as the canonical application artwork, generate and commit the complete Tauri icon set, configure NSIS with `SimpChinese`, and configure WiX/MSI with `zh-CN`.
+
+**Context:** Windows release assets need consistent Image Tools branding and Simplified Chinese installation prompts in both supported installer formats.
+
+**Options Considered:**
+
+- Generate icons during every CI build.
+- Commit Tauri-generated platform icons from one canonical SVG.
+- Replace only the existing ICO and PNG files manually.
+
+**Reasoning:** Committed generated assets keep local and GitHub Actions builds deterministic while preserving the SVG as the editable source. NSIS and WiX use different native locale identifiers, so each bundler must be configured explicitly.
+
+**Consequences:** Artwork changes must start from `frontend/assets/icon.svg` and rerun `npx tauri icon`. Windows release verification must check both NSIS and MSI because one localized installer does not prove the other is localized.

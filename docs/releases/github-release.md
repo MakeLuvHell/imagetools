@@ -1,413 +1,108 @@
 # GitHub Release 发布步骤
 
-本文记录 Image Tools 桌面安装版的 GitHub Release 流程。当前项目版本来自 `package.json` 和 `src-tauri/tauri.conf.json`，首个桌面安装包版本为 `0.1.0`，对应 tag 为 `v0.1.0`。
-
-官方参考：
-
-- GitHub Releases 文档：https://docs.github.com/repositories/releasing-projects-on-github/managing-releases-in-a-repository
-- GitHub CLI `gh release create` 文档：https://cli.github.com/manual/gh_release_create
+本文记录 Image Tools Windows x64 安装包的发布流程。当前待发布版本为 `0.2.1`，对应不可变 tag `v0.2.1`。
 
 ## 发布原则
 
-- Release 应该从最终要交付的代码创建，推荐从 `main` 发布。
-- tag 名使用 `vX.Y.Z`，例如 `v0.1.0`。
-- Release asset 上传桌面安装包，不上传 `build/`、`target/` 或 sidecar 中间产物目录。
-- GitHub token、API token、个人访问令牌不要写入仓库文件。
-- 如果 release 已存在，不要直接覆盖；先确认是否要删除重发、追加资产，还是发布 `v0.1.1`。
+- `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 的版本必须一致。
+- Release 从同名 tag 构建，`release_tag` 和 `build_ref` 均填写该 tag。
+- 已发布 tag 不移动、不覆盖；后续修改使用新的补丁版本。
+- Windows 安装包暂未签名，系统可能显示未知发布者或 SmartScreen 提示。
 
-## 当前版本资产
-
-Windows x64 桌面安装包由 Windows runner 或 Windows 本机构建生成：
+## 发布前验证
 
 ```bash
-npm run desktop:build:windows
+npm run frontend:vendor
+cmp src-tauri/icons/icon.png frontend/assets/app-icon.png
+pytest -q
+node --test tests/*.test.js
+cargo check --manifest-path src-tauri/Cargo.toml
+git status --short
 ```
 
-预期 Windows x64 产物目录：
+Windows 安装器配置应满足：
 
-```text
-src-tauri/target/release/bundle/nsis/
-src-tauri/target/release/bundle/msi/
-```
+- NSIS `.exe` 使用 `SimpChinese`。
+- WiX/MSI `.msi` 使用 `zh-CN`。
+- 应用、安装器和卸载器使用 `src-tauri/icons/icon.ico`。
 
-`v0.1.0` 的 Linux 桌面安装包由 `mise run desktop-build` 生成：
+## 创建 Tag 和 Release
 
-```text
-src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb
-src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm
-```
-
-注意路径中有空格，命令里必须加引号。
-
-## Windows x64 安装包
-
-Windows x64 安装包不在 Linux/WSL 本机构建。Tauri 官方 Windows installer 文档说明，Windows `.msi` 需要在 Windows 机器上构建；因此项目使用 GitHub Actions 的 `windows-latest` runner 生成 Windows x64 安装包。
-
-触发现有 release 的 Windows x64 构建：
+确认所有验证通过并推送 `main` 后创建 tag：
 
 ```bash
-gh workflow run windows-release.yml -f release_tag=v0.1.0 -f build_ref=main
+git tag -a v0.2.1 -m "Image Tools v0.2.1"
+git push origin main
+git push origin v0.2.1
 ```
 
-如果本机没有 `gh`，在 GitHub 网页打开：
+在 GitHub 创建 `v0.2.1` Release，说明使用 `docs/releases/v0.2.1.md`：
+
+```text
+https://github.com/MakeLuvHell/imagetools/releases/new?tag=v0.2.1
+```
+
+使用 GitHub CLI 时可执行：
+
+```bash
+gh release create v0.2.1 \
+  --repo MakeLuvHell/imagetools \
+  --title "Image Tools v0.2.1" \
+  --notes-file docs/releases/v0.2.1.md
+```
+
+## 构建 Windows 安装包
+
+工作流位于 `.github/workflows/windows-release.yml`，必须在 Windows runner 上构建 x64 NSIS 和 MSI 安装包。
+
+GitHub CLI 触发命令：
+
+```bash
+gh workflow run windows-release.yml -f release_tag=v0.2.1 -f build_ref=v0.2.1
+```
+
+没有安装 `gh` 时打开：
 
 ```text
 https://github.com/MakeLuvHell/imagetools/actions/workflows/windows-release.yml
 ```
 
-点击 `Run workflow`，`release_tag` 填 `v0.1.0`，`build_ref` 填 `main`。
+点击 `Run workflow`，两个输入均填写 `v0.2.1`。构建成功后，工作流会把以下文件上传到 Release：
 
-构建成功后，workflow 会把 Windows 安装包上传到：
+- Windows x64 NSIS `.exe`
+- Windows x64 MSI `.msi`
+
+本地 Windows 机器也可执行：
+
+```bash
+npm run desktop:build:windows
+```
+
+产物位于：
 
 ```text
-https://github.com/MakeLuvHell/imagetools/releases/tag/v0.1.0
+src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/
+src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/
 ```
 
-预期 Windows asset 类型：
+## 发布后检查
 
-- NSIS `.exe`
-- MSI `.msi`
-
-当前没有配置代码签名证书，Windows 安装时可能显示未知发布者或 SmartScreen 提示。
-
-注意：本次是给已经存在的 `v0.1.0` release 补 Windows x64 资产。`v0.1.0` tag 保持不变，Windows 安装包从 `main` 构建；`main` 与 `v0.1.0` 的应用版本同为 `0.1.0`，新增差异只用于 CI、脚本和文档。
-
-## 前置检查
-
-在发布前确认当前分支干净：
-
-```bash
-git status --short --branch
-```
-
-确认所有 feature 分支提交都符合提交规范：
-
-```bash
-git log --reverse --format='%s' main..HEAD
-```
-
-提交标题应满足：
+打开 Release 页面：
 
 ```text
-type(scope): 中文描述
+https://github.com/MakeLuvHell/imagetools/releases/tag/v0.2.1
 ```
 
-确认版本号一致：
+确认：
+
+- tag 和标题均为 `v0.2.1`。
+- `.exe` 和 `.msi` 两种资产都存在。
+- 两种安装界面均显示简体中文。
+- 应用、安装器、卸载器和开始菜单快捷方式显示新图标。
+
+也可使用命令检查：
 
 ```bash
-node -p "require('./package.json').version"
-python - <<'PY'
-import json
-from pathlib import Path
-print(json.loads(Path("src-tauri/tauri.conf.json").read_text())["version"])
-PY
-```
-
-确认远端当前状态：
-
-```bash
-git remote -v
-git ls-remote --heads origin main feature/installable-app
-git ls-remote --tags origin 'v0.1.0'
-```
-
-如果 `refs/tags/v0.1.0` 已经存在，先停止，检查已有 release：
-
-```bash
-gh release view v0.1.0 --repo MakeLuvHell/imagetools
-```
-
-如果本机没有 `gh`，在 GitHub 网页的 Releases 页面检查：
-
-```text
-https://github.com/MakeLuvHell/imagetools/releases
-```
-
-## 构建验证
-
-发布前重新跑完整验证：
-
-```bash
-mise run test
-mise run backend-bundle
-mise run desktop-check
-mise run desktop-build
-```
-
-确认产物存在：
-
-```bash
-find src-tauri/target/release/bundle -maxdepth 3 -type f \( -name '*.deb' -o -name '*.rpm' \) -print | sort
-```
-
-预期至少包含：
-
-```text
-src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb
-src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm
-```
-
-## 推荐流程：先合并到 main，再从 main 发布
-
-推送 feature 分支：
-
-```bash
-git push -u origin feature/installable-app
-```
-
-创建 PR：
-
-```bash
-gh pr create \
-  --repo MakeLuvHell/imagetools \
-  --base main \
-  --head feature/installable-app \
-  --title "feat(desktop): 添加桌面安装版" \
-  --body "添加 Tauri 桌面壳、后端 sidecar 打包、mise 构建任务和 Linux deb/rpm 安装包流程。"
-```
-
-如果本机没有 `gh`，用网页创建 PR：
-
-```text
-https://github.com/MakeLuvHell/imagetools/compare/main...feature/installable-app?expand=1
-```
-
-PR 合并后，更新本地 `main`：
-
-```bash
-git checkout main
-git pull --ff-only origin main
-```
-
-在 `main` 上创建带注释 tag：
-
-```bash
-git tag -a v0.1.0 -m "Image Tools v0.1.0"
-git push origin v0.1.0
-```
-
-## 备选流程：直接从当前 feature 分支发布
-
-只有在明确接受 release tag 指向 feature 分支时才用此流程。
-
-```bash
-git push -u origin feature/installable-app
-git tag -a v0.1.0 -m "Image Tools v0.1.0"
-git push origin v0.1.0
-```
-
-这种方式会让 `v0.1.0` 指向 `feature/installable-app` 当前提交，而不是 `main`。如果之后再合并 main，历史会多一步，需要团队接受。
-
-## 准备 Release Notes
-
-可使用以下内容作为 `v0.1.0` release notes：
-
-```markdown
-## Image Tools v0.1.0
-
-首个桌面安装版。
-
-### 新增
-
-- 添加 Tauri 桌面壳，启动后自动拉起 FastAPI 后端 sidecar。
-- 添加 PyInstaller 后端 sidecar 打包流程。
-- 添加 `mise` 工具链与桌面构建任务。
-- 添加 Linux 本地 sysroot 兜底流程，支持无 sudo 环境构建。
-- Linux 默认生成 deb/rpm 安装包。
-
-### 验证
-
-- `mise run test`
-- `mise run backend-bundle`
-- `mise run desktop-check`
-- `mise run desktop-build`
-
-### 安装包
-
-- `Image Tools_0.1.0_amd64.deb`
-- `Image Tools-0.1.0-1.x86_64.rpm`
-```
-
-如果要写入临时文件给 `gh release create` 使用：
-
-```bash
-cat > /tmp/imagetools-v0.1.0-release-notes.md <<'EOF'
-## Image Tools v0.1.0
-
-首个桌面安装版。
-
-### 新增
-
-- 添加 Tauri 桌面壳，启动后自动拉起 FastAPI 后端 sidecar。
-- 添加 PyInstaller 后端 sidecar 打包流程。
-- 添加 `mise` 工具链与桌面构建任务。
-- 添加 Linux 本地 sysroot 兜底流程，支持无 sudo 环境构建。
-- Linux 默认生成 deb/rpm 安装包。
-
-### 验证
-
-- `mise run test`
-- `mise run backend-bundle`
-- `mise run desktop-check`
-- `mise run desktop-build`
-
-### 安装包
-
-- `Image Tools_0.1.0_amd64.deb`
-- `Image Tools-0.1.0-1.x86_64.rpm`
-EOF
-```
-
-## 使用 GitHub CLI 创建 Release
-
-前置条件：
-
-- 已安装 `gh`。
-- 已登录 GitHub：`gh auth login`。
-- 当前用户对 `MakeLuvHell/imagetools` 有 release 权限。
-- `v0.1.0` tag 已经推送到 GitHub。
-
-创建 release 并上传资产：
-
-```bash
-gh release create v0.1.0 \
-  "src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb" \
-  "src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm" \
-  --repo MakeLuvHell/imagetools \
-  --title "Image Tools v0.1.0" \
-  --notes-file /tmp/imagetools-v0.1.0-release-notes.md
-```
-
-如果要先创建草稿 release：
-
-```bash
-gh release create v0.1.0 \
-  "src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb" \
-  "src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm" \
-  --repo MakeLuvHell/imagetools \
-  --title "Image Tools v0.1.0" \
-  --notes-file /tmp/imagetools-v0.1.0-release-notes.md \
-  --draft
-```
-
-## 使用 GitHub 网页创建 Release
-
-如果本机没有 `gh`，用网页操作：
-
-1. 打开：
-
-   ```text
-   https://github.com/MakeLuvHell/imagetools/releases/new?tag=v0.1.0
-   ```
-
-2. `Choose a tag` 选择或输入 `v0.1.0`。
-3. `Target` 选择 tag 对应的提交。推荐选择已经合并后的 `main`。
-4. `Release title` 填：
-
-   ```text
-   Image Tools v0.1.0
-   ```
-
-5. `Describe this release` 粘贴上面的 release notes。
-6. 上传两个安装包：
-
-   ```text
-   src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb
-   src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm
-   ```
-
-7. 如果要先检查，点击 `Save draft`；如果确认发布，点击 `Publish release`。
-
-## 发布后验证
-
-用 GitHub CLI 验证：
-
-```bash
-gh release view v0.1.0 --repo MakeLuvHell/imagetools --web
-gh release view v0.1.0 --repo MakeLuvHell/imagetools
-```
-
-用 API 验证：
-
-```bash
-curl --fail --silent https://api.github.com/repos/MakeLuvHell/imagetools/releases/tags/v0.1.0
-```
-
-检查页面：
-
-```text
-https://github.com/MakeLuvHell/imagetools/releases/tag/v0.1.0
-```
-
-确认 release 页面包含：
-
-- tag：`v0.1.0`
-- title：`Image Tools v0.1.0`
-- asset：`Image Tools_0.1.0_amd64.deb`
-- asset：`Image Tools-0.1.0-1.x86_64.rpm`
-
-## 常见问题
-
-### 本机没有 `gh`
-
-安装 GitHub CLI，或直接使用 GitHub 网页创建 release。当前仓库不依赖 `gh` 才能构建安装包；`gh` 只用于自动创建 release。
-
-### 没有 GitHub 登录权限
-
-先运行：
-
-```bash
-gh auth login
-```
-
-或在 shell 中设置有权限的 token：
-
-```bash
-export GH_TOKEN="..."
-```
-
-不要把 token 写进仓库文件。
-
-### tag 已存在但 release 不存在
-
-可以直接基于已有 tag 创建 release：
-
-```bash
-gh release create v0.1.0 \
-  "src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb" \
-  "src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm" \
-  --repo MakeLuvHell/imagetools \
-  --title "Image Tools v0.1.0" \
-  --notes-file /tmp/imagetools-v0.1.0-release-notes.md
-```
-
-### release 已存在但资产缺失
-
-上传缺失资产：
-
-```bash
-gh release upload v0.1.0 \
-  "src-tauri/target/release/bundle/deb/Image Tools_0.1.0_amd64.deb" \
-  "src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm" \
-  --repo MakeLuvHell/imagetools
-```
-
-如果资产同名已存在，先确认是否允许覆盖。允许覆盖时加：
-
-```bash
---clobber
-```
-
-### 要撤销本地 tag
-
-只撤销本地 tag：
-
-```bash
-git tag -d v0.1.0
-```
-
-删除远端 tag 属于破坏性操作，发布后不要随意执行。确实要删时，先确认没有用户依赖该 release。
-
-```bash
-git push origin :refs/tags/v0.1.0
+gh release view v0.2.1 --repo MakeLuvHell/imagetools
+curl --fail --silent https://api.github.com/repos/MakeLuvHell/imagetools/releases/tags/v0.2.1
 ```

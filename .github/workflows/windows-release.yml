@@ -6,11 +6,11 @@ on:
       release_tag:
         description: Release tag to upload Windows x64 assets to
         required: true
-        default: v0.1.0
+        default: v0.2.1
       build_ref:
         description: Git ref to build from
         required: true
-        default: main
+        default: v0.2.1
 
 permissions:
   contents: write
