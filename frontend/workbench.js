@@ -1,4 +1,24 @@
 (function initWorkbench(globalScope) {
+  const RESOLUTION_LABELS = {
+    standard: "标准",
+    medium: "高清",
+    large: "超清",
+  };
+  const DRAFT_FIELDS = [
+    "prompt",
+    "providerId",
+    "model",
+    "ratio",
+    "resolution",
+    "quality",
+    "count",
+    "outputFormat",
+    "outputCompression",
+    "background",
+    "moderation",
+    "referenceSource",
+  ];
+
   function normalizeSessions(sessions = []) {
     return sessions.map((session) => ({
       id: Number(session.id),
@@ -31,6 +51,8 @@
     return {
       sessions: [],
       selectedSessionId: null,
+      view: "new-task",
+      pendingRunsBySession: {},
     };
   }
 
@@ -40,10 +62,10 @@
       (session) => session.id === state.selectedSessionId,
     );
     return {
+      ...state,
       sessions: normalized,
-      selectedSessionId: selectedStillExists
-        ? state.selectedSessionId
-        : normalized[0]?.id || null,
+      selectedSessionId: selectedStillExists ? state.selectedSessionId : null,
+      view: selectedStillExists ? "session" : "new-task",
     };
   }
 
@@ -53,6 +75,129 @@
     return {
       ...state,
       selectedSessionId: exists ? numericId : state.selectedSessionId,
+      view: exists ? "session" : state.view,
+    };
+  }
+
+  function selectNewTask(state) {
+    return {
+      ...state,
+      selectedSessionId: null,
+      view: "new-task",
+    };
+  }
+
+  function deriveSessionTitle(prompt, maxLength = 36) {
+    const firstLine = String(prompt || "").split(/\r?\n/, 1)[0];
+    const normalized = firstLine.replace(/\s+/g, " ").trim() || "新任务";
+    return Array.from(normalized).slice(0, maxLength).join("");
+  }
+
+  function draftStorageKey(sessionId) {
+    return sessionId == null
+      ? "imagetools:draft:new"
+      : `imagetools:draft:session:${Number(sessionId)}`;
+  }
+
+  function parseDraft(raw) {
+    try {
+      const value = JSON.parse(raw);
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return null;
+      }
+      return Object.fromEntries(
+        DRAFT_FIELDS.filter((key) => value[key] !== undefined).map((key) => [
+          key,
+          value[key],
+        ]),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  function parameterSummary(composer) {
+    const resolution = RESOLUTION_LABELS[composer.resolution] || "标准";
+    return `${composer.ratio || "1:1"} · ${resolution} · ${Number(composer.count || 1)} 张`;
+  }
+
+  function pendingRunsForSession(state, sessionId) {
+    return Object.values(state.pendingRunsBySession?.[Number(sessionId)] || {});
+  }
+
+  function addPendingRun(state, sessionId, run) {
+    const numericSessionId = Number(sessionId);
+    const submissionId = String(run.submissionId);
+    const sessionRuns = state.pendingRunsBySession?.[numericSessionId] || {};
+    return {
+      ...state,
+      pendingRunsBySession: {
+        ...state.pendingRunsBySession,
+        [numericSessionId]: {
+          ...sessionRuns,
+          [submissionId]: { ...run },
+        },
+      },
+    };
+  }
+
+  function failPendingRun(state, sessionId, submissionId, error) {
+    const numericSessionId = Number(sessionId);
+    const sessionRuns = state.pendingRunsBySession?.[numericSessionId];
+    const run = sessionRuns?.[submissionId];
+    if (!run) {
+      return state;
+    }
+    return {
+      ...state,
+      pendingRunsBySession: {
+        ...state.pendingRunsBySession,
+        [numericSessionId]: {
+          ...sessionRuns,
+          [submissionId]: {
+            ...run,
+            status: "failed",
+            error: String(error || "生成失败"),
+          },
+        },
+      },
+    };
+  }
+
+  function removePendingRun(state, sessionId, submissionId) {
+    const numericSessionId = Number(sessionId);
+    const sessionRuns = state.pendingRunsBySession?.[numericSessionId];
+    if (!sessionRuns?.[submissionId]) {
+      return state;
+    }
+    const nextSessionRuns = { ...sessionRuns };
+    delete nextSessionRuns[submissionId];
+    const pendingRunsBySession = { ...state.pendingRunsBySession };
+    if (Object.keys(nextSessionRuns).length) {
+      pendingRunsBySession[numericSessionId] = nextSessionRuns;
+    } else {
+      delete pendingRunsBySession[numericSessionId];
+    }
+    return { ...state, pendingRunsBySession };
+  }
+
+  function createOptimisticRun(composer, temporaryId) {
+    return {
+      id: temporaryId,
+      submissionId: temporaryId,
+      sessionId: Number(composer.sessionId),
+      optimistic: true,
+      status: "running",
+      prompt: String(composer.prompt || "").trim(),
+      provider_name: composer.providerName,
+      model: composer.model,
+      parameters: {
+        ratio: composer.ratio,
+        resolution: composer.resolution,
+        quality: composer.quality,
+        count: Number(composer.count || 1),
+      },
+      images: [],
     };
   }
 
@@ -124,9 +269,19 @@
     normalizeProviders,
     applySessionList,
     selectSession,
+    selectNewTask,
     selectedProvider,
     selectedSession,
     sessionSubtitle,
+    deriveSessionTitle,
+    draftStorageKey,
+    parseDraft,
+    parameterSummary,
+    pendingRunsForSession,
+    addPendingRun,
+    failPendingRun,
+    removePendingRun,
+    createOptimisticRun,
     buildGenerationFields,
     composerStateFromRun,
   };

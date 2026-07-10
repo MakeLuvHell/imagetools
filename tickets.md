@@ -260,7 +260,7 @@ Source: `docs/spec/2026-07-10-codex-windows-ui.md` and `docs/superpowers/plans/2
 
 ## UI001: Model New-Task Drafts And Optimistic Runs
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -280,7 +280,7 @@ Add pure state for an unpersisted new-task draft, automatic titles, serializable
 
 ## UI002: Bundle Icons And Build The Windows Shell
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 

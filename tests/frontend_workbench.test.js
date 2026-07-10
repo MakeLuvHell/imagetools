@@ -5,7 +5,15 @@ const test = require("node:test");
 
 const workbench = require("../frontend/workbench.js");
 
-test("applySessionList selects the newest session when no selection exists", () => {
+test("workbench starts on an unpersisted new-task draft", () => {
+  const state = workbench.defaultWorkbenchState();
+
+  assert.equal(state.selectedSessionId, null);
+  assert.equal(state.view, "new-task");
+  assert.deepEqual(state.pendingRunsBySession, {});
+});
+
+test("applySessionList keeps the new-task draft when no selection exists", () => {
   const state = workbench.defaultWorkbenchState();
 
   const next = workbench.applySessionList(state, [
@@ -13,8 +21,9 @@ test("applySessionList selects the newest session when no selection exists", () 
     { id: 1, title: "产品海报", updated_at: "2026-07-09T01:00:00Z" },
   ]);
 
-  assert.equal(next.selectedSessionId, 2);
-  assert.equal(workbench.selectedSession(next).title, "头像探索");
+  assert.equal(next.selectedSessionId, null);
+  assert.equal(next.view, "new-task");
+  assert.equal(workbench.selectedSession(next), null);
 });
 
 test("selectSession ignores ids that are not in the loaded list", () => {
@@ -24,7 +33,8 @@ test("selectSession ignores ids that are not in the loaded list", () => {
 
   const next = workbench.selectSession(state, 99);
 
-  assert.equal(next.selectedSessionId, 1);
+  assert.equal(next.selectedSessionId, null);
+  assert.equal(next.view, "new-task");
 });
 
 test("applySessionList preserves current selection when it still exists", () => {
@@ -42,6 +52,120 @@ test("applySessionList preserves current selection when it still exists", () => 
   ]);
 
   assert.equal(next.selectedSessionId, 2);
+  assert.equal(next.view, "session");
+});
+
+test("selectNewTask clears an explicit session selection", () => {
+  const sessions = [{ id: 1, title: "产品海报" }];
+  const selected = workbench.selectSession(
+    workbench.applySessionList(workbench.defaultWorkbenchState(), sessions),
+    1,
+  );
+
+  const next = workbench.selectNewTask(selected);
+
+  assert.equal(next.selectedSessionId, null);
+  assert.equal(next.view, "new-task");
+});
+
+test("deriveSessionTitle normalizes the first line and limits it to 36 characters", () => {
+  assert.equal(
+    workbench.deriveSessionTitle("  夏季   饮品海报\n第二行  "),
+    "夏季 饮品海报",
+  );
+  assert.equal([...workbench.deriveSessionTitle("图".repeat(50))].length, 36);
+  assert.equal(workbench.deriveSessionTitle("  \n第二行"), "新任务");
+});
+
+test("draftStorageKey isolates new-task and persisted-session drafts", () => {
+  assert.equal(workbench.draftStorageKey(null), "imagetools:draft:new");
+  assert.equal(workbench.draftStorageKey(7), "imagetools:draft:session:7");
+});
+
+test("pending runs stay isolated by session and submission id", () => {
+  let state = workbench.defaultWorkbenchState();
+  state = workbench.addPendingRun(state, 3, {
+    submissionId: "a",
+    status: "running",
+  });
+  state = workbench.addPendingRun(state, 4, {
+    submissionId: "b",
+    status: "running",
+  });
+
+  assert.equal(workbench.pendingRunsForSession(state, 3)[0].submissionId, "a");
+  assert.equal(workbench.pendingRunsForSession(state, 4)[0].submissionId, "b");
+
+  state = workbench.failPendingRun(state, 3, "a", "网络不可用");
+  assert.equal(workbench.pendingRunsForSession(state, 3)[0].status, "failed");
+  assert.equal(workbench.pendingRunsForSession(state, 3)[0].error, "网络不可用");
+  assert.equal(workbench.pendingRunsForSession(state, 4)[0].status, "running");
+
+  state = workbench.removePendingRun(state, 3, "a");
+  assert.deepEqual(workbench.pendingRunsForSession(state, 3), []);
+  assert.equal(workbench.pendingRunsForSession(state, 4)[0].submissionId, "b");
+});
+
+test("parseDraft rejects corrupt storage and keeps only serializable fields", () => {
+  assert.equal(workbench.parseDraft("not-json"), null);
+  assert.deepEqual(
+    workbench.parseDraft(
+      JSON.stringify({
+        prompt: "海报",
+        apiKey: "secret",
+        referenceSource: { kind: "result", url: "/files/images/1.png" },
+      }),
+    ),
+    {
+      prompt: "海报",
+      referenceSource: { kind: "result", url: "/files/images/1.png" },
+    },
+  );
+});
+
+test("parameterSummary uses localized resolution and count labels", () => {
+  assert.equal(
+    workbench.parameterSummary({
+      ratio: "16:9",
+      resolution: "medium",
+      count: 2,
+    }),
+    "16:9 · 高清 · 2 张",
+  );
+});
+
+test("createOptimisticRun snapshots the visible composer state", () => {
+  const run = workbench.createOptimisticRun(
+    {
+      sessionId: 7,
+      prompt: "  产品海报  ",
+      providerName: "OpenAI",
+      model: "gpt-image-2",
+      ratio: "3:2",
+      resolution: "large",
+      quality: "high",
+      count: 2,
+    },
+    "pending-1",
+  );
+
+  assert.deepEqual(run, {
+    id: "pending-1",
+    submissionId: "pending-1",
+    sessionId: 7,
+    optimistic: true,
+    status: "running",
+    prompt: "产品海报",
+    provider_name: "OpenAI",
+    model: "gpt-image-2",
+    parameters: {
+      ratio: "3:2",
+      resolution: "large",
+      quality: "high",
+      count: 2,
+    },
+    images: [],
+  });
 });
 
 test("desktop workbench html exposes two-column session shell", () => {
