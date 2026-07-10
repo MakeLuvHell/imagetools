@@ -50,3 +50,12 @@ def test_desktop_dev_uses_dev_overlay_without_bundling_sidecar():
     assert "tauri dev" in command
     assert "tauri.dev.conf.json" in command
     assert "backend:bundle" not in command
+
+
+def test_tauri_rust_selects_source_backend_only_for_debug_builds():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+
+    assert "const DEV_BACKEND_PORT: u16 = 7860;" in main_rs
+    assert "#[cfg(debug_assertions)]" in main_rs
+    assert "#[cfg(not(debug_assertions))]" in main_rs
+    assert "prepare_backend(app)" in main_rs

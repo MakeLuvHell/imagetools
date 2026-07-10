@@ -2,17 +2,25 @@
 
 use std::{
     io::{Read, Write},
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     sync::Mutex,
     time::{Duration, Instant},
 };
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_shell::process::CommandChild;
+#[cfg(not(debug_assertions))]
+use tauri_plugin_shell::ShellExt;
 use url::Url;
 
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
+const DEV_BACKEND_PORT: u16 = 7860;
+
+#[cfg(not(debug_assertions))]
+use std::net::TcpListener;
+
+#[cfg(not(debug_assertions))]
 fn find_available_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
@@ -52,6 +60,7 @@ fn wait_for_backend(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     Err("backend did not become ready before timeout".into())
 }
 
+#[cfg(not(debug_assertions))]
 fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
     let port = find_available_port()?;
     let data_dir = app.path().app_data_dir()?;
@@ -68,6 +77,17 @@ fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
     Ok(port)
 }
 
+#[cfg(debug_assertions)]
+fn prepare_backend(_app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
+    wait_for_backend(DEV_BACKEND_PORT)?;
+    Ok(DEV_BACKEND_PORT)
+}
+
+#[cfg(not(debug_assertions))]
+fn prepare_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
+    start_backend(app)
+}
+
 fn stop_backend(app_handle: &tauri::AppHandle) {
     if let Some(state) = app_handle.try_state::<BackendProcess>() {
         if let Ok(mut child) = state.0.lock() {
@@ -82,7 +102,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let port = start_backend(app)?;
+            let port = prepare_backend(app)?;
             let url = Url::parse(&format!("http://127.0.0.1:{port}/"))?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("Image Tools")
