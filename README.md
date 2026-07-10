@@ -40,7 +40,7 @@ http://127.0.0.1:7860
 
 ## 桌面安装版
 
-桌面版使用 Tauri 打包。Tauri 负责原生窗口和安装包，Python/FastAPI 后端会作为 sidecar 自动启动。
+桌面版使用 Tauri 打包。Tauri 负责原生窗口和安装包；在已安装/发布构建中，Python/FastAPI 后端会作为 sidecar 自动启动。开发模式使用源码后端，见下文。
 
 ### 桌面开发依赖
 
@@ -99,6 +99,8 @@ mise run desktop-sysroot
 ```bash
 mise run desktop-dev
 ```
+
+`desktop-dev` 固定使用 `127.0.0.1:7860`。启动前请停止占用该端口的 Web/Uvicorn 服务；否则 Tauri 的 Uvicorn 启动钩子可能失败，应用可能继续连接已有的旧后端进程，导致修改无法自动重载。
 
 该命令会启动 Tauri 原生窗口，并自动运行源码版 Uvicorn：监听
 `127.0.0.1:7860` 且启用 `--reload`。修改 Python 后端后 Uvicorn 会自动重载；修改
