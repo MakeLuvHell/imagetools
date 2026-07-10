@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "npm run frontend:vendor",
+    "frontend:vendor": "node scripts/sync_frontend_vendor.js",
     "backend:bundle": "python scripts/bundle_backend.py",
     "desktop:dev": "node scripts/run_desktop_dev.js",
     "desktop:build": "npm run backend:bundle && tauri build",
     "desktop:build:windows": "npm run backend:bundle && tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4"
+    "@tauri-apps/cli": "^2.11.4",
+    "jsdom": "29.1.1",
+    "lucide": "1.24.0"
   }
 }

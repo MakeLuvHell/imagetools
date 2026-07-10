@@ -8,158 +8,256 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="session-sidebar" aria-label="会话列表">
-        <header class="sidebar-header">
-          <div>
-            <h1>Image Tools</h1>
-            <p>图片创作工作台</p>
-          </div>
-          <button id="newSessionBtn" type="button" class="icon-button" title="新建会话">
-            +
+      <aside class="session-sidebar" aria-label="创作会话">
+        <header class="sidebar-brand">
+          <img src="/static/assets/app-icon.png" alt="" />
+          <h1>Image Tools <span>Work</span></h1>
+          <button
+            id="searchToggle"
+            type="button"
+            class="icon-button"
+            aria-label="搜索会话"
+            title="搜索会话"
+          >
+            <i data-lucide="search"></i>
           </button>
         </header>
 
-        <div class="sidebar-search">
-          <span aria-hidden="true">⌕</span>
-          <input id="sessionFilter" placeholder="筛选会话" autocomplete="off" />
+        <nav class="primary-nav" aria-label="工作区">
+          <button id="newSessionBtn" type="button">
+            <i data-lucide="square-pen"></i>
+            <span>新建任务</span>
+          </button>
+          <button id="providersBtn" type="button">
+            <i data-lucide="panels-top-left"></i>
+            <span>Providers</span>
+          </button>
+        </nav>
+
+        <div id="searchPanel" class="search-panel" hidden>
+          <i data-lucide="search" aria-hidden="true"></i>
+          <input
+            id="sessionFilter"
+            type="search"
+            placeholder="搜索会话"
+            autocomplete="off"
+          />
         </div>
 
+        <div class="sidebar-section-label">会话</div>
         <nav id="sessionList" class="session-list" aria-label="历史会话"></nav>
+
+        <footer class="workspace-account">
+          <span>本地工作区</span>
+          <button type="button" class="icon-button" aria-label="设置" title="设置">
+            <i data-lucide="settings"></i>
+          </button>
+        </footer>
       </aside>
 
       <main class="workspace" aria-label="当前创作会话">
-        <header class="workspace-header">
-          <div>
-            <h2 id="currentSessionTitle">选择一个会话</h2>
-            <p id="currentSessionSubtitle">左侧新建或选择会话后开始创作。</p>
+        <header id="taskHeader" class="task-header">
+          <div class="task-heading">
+            <h2 id="currentSessionTitle">新任务</h2>
+            <p id="currentSessionSubtitle">图片创作</p>
           </div>
           <div class="workspace-actions">
-            <button id="renameSessionBtn" type="button" class="secondary-button" disabled>
-              重命名
+            <button
+              id="renameSessionBtn"
+              type="button"
+              class="icon-button"
+              aria-label="重命名会话"
+              title="重命名会话"
+              disabled
+            >
+              <i data-lucide="pencil"></i>
             </button>
-            <button id="deleteSessionBtn" type="button" class="danger-button" disabled>
-              删除
+            <button
+              id="deleteSessionBtn"
+              type="button"
+              class="icon-button danger-icon"
+              aria-label="删除会话"
+              title="删除会话"
+              disabled
+            >
+              <i data-lucide="trash-2"></i>
             </button>
           </div>
         </header>
 
         <section id="timeline" class="timeline" aria-live="polite">
           <div class="empty-workspace">
-            <strong>还没有打开的创作会话</strong>
-            <span>左侧会保存每个主题的生成历史和最近缩略图。</span>
+            <img src="/static/assets/app-icon.png" alt="" />
+            <strong>今天想创作什么？</strong>
           </div>
         </section>
 
         <form id="composerForm" class="composer" aria-label="图片生成输入">
+          <div class="composer-context">
+            <div id="referencePreview" class="reference-preview" hidden>
+              <i data-lucide="image" aria-hidden="true"></i>
+              <span id="referenceName"></span>
+              <button
+                id="clearReferenceBtn"
+                type="button"
+                class="icon-button"
+                aria-label="移除参考图"
+                title="移除参考图"
+              >
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+            <label class="context-field provider-field">
+              <span class="sr-only">Provider</span>
+              <select id="providerSelect" aria-label="Provider"></select>
+            </label>
+            <label class="context-field model-field">
+              <span class="sr-only">模型</span>
+              <input
+                id="modelInput"
+                aria-label="模型"
+                autocomplete="off"
+                value="gpt-image-2"
+              />
+            </label>
+          </div>
+
           <textarea
             id="prompt"
-            rows="3"
-            placeholder="描述你想生成或继续调整的图片"
+            rows="2"
+            placeholder="描述你想创作的图片"
           ></textarea>
-
-          <div class="composer-controls">
-            <label>
-              <span>Provider</span>
-              <select id="providerSelect"></select>
-            </label>
-            <label>
-              <span>模型</span>
-              <input id="modelInput" autocomplete="off" value="gpt-image-2" />
-            </label>
-            <label>
-              <span>比例</span>
-              <select id="ratioSelect">
-                <option value="1:1">1:1</option>
-                <option value="3:2">3:2</option>
-                <option value="2:3">2:3</option>
-                <option value="16:9">16:9</option>
-                <option value="9:16">9:16</option>
-              </select>
-            </label>
-            <label>
-              <span>尺寸</span>
-              <select id="resolutionSelect">
-                <option value="standard">标准</option>
-                <option value="medium">高清</option>
-                <option value="large">超清</option>
-              </select>
-            </label>
-            <label>
-              <span>质量</span>
-              <select id="qualitySelect">
-                <option value="auto">自动</option>
-                <option value="high">高</option>
-                <option value="medium">中</option>
-                <option value="low">低</option>
-              </select>
-            </label>
-            <label>
-              <span>张数</span>
-              <select id="countSelect">
-                <option value="1">1 张</option>
-                <option value="2">2 张</option>
-                <option value="3">3 张</option>
-                <option value="4">4 张</option>
-              </select>
-            </label>
-          </div>
-
-          <div id="referencePreview" class="reference-preview" hidden>
-            <span id="referenceName"></span>
-            <button id="clearReferenceBtn" type="button" class="secondary-button">
-              清除
-            </button>
-          </div>
-
-          <details class="advanced-options">
-            <summary>高级参数</summary>
-            <div>
-              <label>
-                <span>输出格式</span>
-                <select id="outputFormatSelect">
-                  <option value="png">PNG</option>
-                  <option value="jpeg">JPEG</option>
-                  <option value="webp">WebP</option>
-                </select>
-              </label>
-              <label>
-                <span>压缩</span>
-                <input id="outputCompressionInput" type="number" min="0" max="100" value="100" />
-              </label>
-              <label>
-                <span>背景</span>
-                <select id="backgroundSelect">
-                  <option value="auto">自动</option>
-                  <option value="opaque">不透明</option>
-                  <option value="transparent">透明</option>
-                </select>
-              </label>
-              <label>
-                <span>审核</span>
-                <select id="moderationSelect">
-                  <option value="auto">自动</option>
-                  <option value="low">较低</option>
-                </select>
-              </label>
-            </div>
-          </details>
 
           <input id="referenceInput" type="file" accept="image/*" hidden />
           <div class="composer-toolbar">
-            <button id="referenceBtn" type="button" class="secondary-button" disabled>
-              参考图
-            </button>
-            <button id="generateBtn" type="submit" class="primary-button" disabled>
-              生成
+            <div class="composer-tools">
+              <button
+                id="referenceBtn"
+                type="button"
+                class="icon-button"
+                aria-label="添加参考图"
+                title="添加参考图"
+                disabled
+              >
+                <i data-lucide="plus"></i>
+              </button>
+              <button
+                id="parameterMenuBtn"
+                type="button"
+                class="parameter-summary"
+                aria-haspopup="menu"
+                aria-expanded="false"
+              >
+                1:1 · 标准 · 1 张
+                <i data-lucide="chevron-down"></i>
+              </button>
+            </div>
+            <button
+              id="generateBtn"
+              type="submit"
+              class="send-button"
+              aria-label="开始生成"
+              title="开始生成"
+              disabled
+            >
+              <i data-lucide="arrow-up"></i>
             </button>
           </div>
         </form>
       </main>
     </div>
 
-    <div id="toast" class="toast" hidden></div>
+    <div id="parameterMenu" class="popover parameter-menu" role="menu" hidden>
+      <div class="parameter-grid">
+        <label>
+          <span>比例</span>
+          <select id="ratioSelect">
+            <option value="1:1">1:1</option>
+            <option value="3:2">3:2</option>
+            <option value="2:3">2:3</option>
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+          </select>
+        </label>
+        <label>
+          <span>尺寸</span>
+          <select id="resolutionSelect">
+            <option value="standard">标准</option>
+            <option value="medium">高清</option>
+            <option value="large">超清</option>
+          </select>
+        </label>
+        <label>
+          <span>质量</span>
+          <select id="qualitySelect">
+            <option value="auto">自动</option>
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+        </label>
+        <label>
+          <span>张数</span>
+          <select id="countSelect">
+            <option value="1">1 张</option>
+            <option value="2">2 张</option>
+            <option value="3">3 张</option>
+            <option value="4">4 张</option>
+          </select>
+        </label>
+      </div>
+      <details class="advanced-options">
+        <summary>高级参数</summary>
+        <div class="parameter-grid advanced-grid">
+          <label>
+            <span>输出格式</span>
+            <select id="outputFormatSelect">
+              <option value="png">PNG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WebP</option>
+            </select>
+          </label>
+          <label>
+            <span>压缩</span>
+            <input
+              id="outputCompressionInput"
+              type="number"
+              min="0"
+              max="100"
+              value="100"
+            />
+          </label>
+          <label>
+            <span>背景</span>
+            <select id="backgroundSelect">
+              <option value="auto">自动</option>
+              <option value="opaque">不透明</option>
+              <option value="transparent">透明</option>
+            </select>
+          </label>
+          <label>
+            <span>审核</span>
+            <select id="moderationSelect">
+              <option value="auto">自动</option>
+              <option value="low">较低</option>
+            </select>
+          </label>
+        </div>
+      </details>
+    </div>
+
+    <dialog id="providerDialog" class="app-dialog" aria-labelledby="providerDialogTitle">
+      <h2 id="providerDialogTitle">Providers</h2>
+    </dialog>
+    <dialog id="sessionDialog" class="app-dialog" aria-labelledby="sessionDialogTitle">
+      <h2 id="sessionDialogTitle">会话</h2>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+
     <script src="/static/preferences.js"></script>
     <script src="/static/workbench.js"></script>
+    <script src="/static/vendor/lucide.min.js"></script>
+    <script src="/static/icons.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

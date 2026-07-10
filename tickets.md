@@ -280,7 +280,7 @@ Add pure state for an unpersisted new-task draft, automatic titles, serializable
 
 ## UI002: Bundle Icons And Build The Windows Shell
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -299,7 +299,7 @@ Bundle pinned Lucide and app-brand assets locally, then build the native-titleba
 
 ## UI003: Render Sidebar, New Tasks, And Session Dialogs
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 
