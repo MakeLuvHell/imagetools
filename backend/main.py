@@ -377,7 +377,11 @@ def index_head() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict[str, object]:
-    return {"ok": True, "app": APP_TITLE}
+    response: dict[str, object] = {"ok": True, "app": APP_TITLE}
+    desktop_dev_token = os.getenv("IMAGE_TOOLS_DESKTOP_DEV_TOKEN", "").strip()
+    if desktop_dev_token:
+        response["desktop_dev_token"] = desktop_dev_token
+    return response
 
 
 @app.get("/api/settings")

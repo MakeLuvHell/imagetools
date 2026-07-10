@@ -1,7 +1,7 @@
 {
   "build": {
     "beforeDevCommand": {
-      "script": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860 --reload",
+      "script": "python scripts/run_desktop_dev_backend.py",
       "cwd": "..",
       "wait": false
     }

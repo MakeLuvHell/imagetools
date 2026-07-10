@@ -2,6 +2,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 from scripts import bootstrap_tauri_linux_sysroot as bootstrap
 from scripts import run_tauri_linux_env as runner
 
@@ -111,6 +113,20 @@ def test_sysroot_env_points_pkg_config_to_local_sysroot(tmp_path):
 
 def test_sysroot_path_uses_build_directory():
     assert runner.sysroot_path(Path("/repo")) == Path("/repo/build/tauri-sysroot")
+
+
+def test_command_env_rejects_sysroot_that_remains_incomplete_after_bootstrap(tmp_path, monkeypatch):
+    sysroot = tmp_path / "build" / "tauri-sysroot"
+    unresolved_target = sysroot / "usr" / "lib" / "x86_64-linux-gnu" / "libgtk-3.so.0"
+    monkeypatch.setattr(runner.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(runner, "system_dependencies_available", lambda: False)
+    monkeypatch.setattr(runner, "sysroot_path", lambda _project_root: sysroot)
+    monkeypatch.setattr(runner, "sysroot_dependencies_available", lambda _sysroot: False)
+    monkeypatch.setattr(runner.bootstrap, "bootstrap", lambda _project_root: sysroot)
+    monkeypatch.setattr(runner.bootstrap, "broken_library_symlink_targets", lambda _sysroot: [unresolved_target])
+
+    with pytest.raises(RuntimeError, match="libgtk-3.so.0"):
+        runner.command_env(tmp_path)
 
 
 def test_run_tauri_linux_env_script_can_run_without_args():

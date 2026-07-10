@@ -37,9 +37,7 @@ def test_tauri_dev_uses_reloadable_source_backend():
 
     assert command["cwd"] == ".."
     assert command["wait"] is False
-    assert "uvicorn backend.main:app" in command["script"]
-    assert "--port 7860" in command["script"]
-    assert "--reload" in command["script"]
+    assert command["script"] == "python scripts/run_desktop_dev_backend.py"
     assert config["bundle"]["externalBin"] == []
 
 
@@ -47,9 +45,15 @@ def test_desktop_dev_uses_dev_overlay_without_bundling_sidecar():
     package = json.loads(Path("package.json").read_text())
     command = package["scripts"]["desktop:dev"]
 
-    assert "tauri dev" in command
-    assert "tauri.dev.conf.json" in command
+    assert command == "node scripts/run_desktop_dev.js"
     assert "backend:bundle" not in command
+
+
+def test_desktop_dev_rejects_release_profile_that_needs_a_sidecar():
+    script = Path("scripts/run_desktop_dev.js").read_text()
+
+    assert "--release" in script
+    assert "not supported" in script
 
 
 def test_tauri_rust_selects_source_backend_only_for_debug_builds():
@@ -59,3 +63,11 @@ def test_tauri_rust_selects_source_backend_only_for_debug_builds():
     assert "#[cfg(debug_assertions)]" in main_rs
     assert "#[cfg(not(debug_assertions))]" in main_rs
     assert "prepare_backend(app)" in main_rs
+
+
+def test_tauri_debug_backend_requires_the_launcher_token():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+
+    assert "DEV_BACKEND_TOKEN_PATH" in main_rs
+    assert "read_dev_backend_token" in main_rs
+    assert "wait_for_dev_backend" in main_rs

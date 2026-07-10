@@ -89,6 +89,16 @@ def test_health_endpoint_returns_ok():
     assert response.json() == {"ok": True, "app": "Image Tools"}
 
 
+def test_health_endpoint_exposes_desktop_dev_token(monkeypatch):
+    monkeypatch.setenv("IMAGE_TOOLS_DESKTOP_DEV_TOKEN", "launch-token")
+    client = TestClient(main.app)
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["desktop_dev_token"] == "launch-token"
+
+
 def test_save_and_load_settings_round_trip(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "DATA_DIR", tmp_path)
     monkeypatch.setattr(main, "SETTINGS_PATH", tmp_path / "settings.json")

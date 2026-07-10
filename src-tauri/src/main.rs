@@ -18,6 +18,9 @@ struct BackendProcess(Mutex<Option<CommandChild>>);
 #[cfg(debug_assertions)]
 const DEV_BACKEND_PORT: u16 = 7860;
 
+#[cfg(debug_assertions)]
+const DEV_BACKEND_TOKEN_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../build/desktop-dev-backend.json");
+
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
 
@@ -33,6 +36,7 @@ fn health_response_is_ok(response: &str) -> bool {
     response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200")
 }
 
+#[cfg(not(debug_assertions))]
 fn request_health(port: u16) -> bool {
     let address = format!("127.0.0.1:{port}");
     let Ok(mut stream) = TcpStream::connect(address) else {
@@ -50,6 +54,38 @@ fn request_health(port: u16) -> bool {
     health_response_is_ok(&response)
 }
 
+#[cfg(debug_assertions)]
+fn health_dev_token(response: &str) -> Option<String> {
+    if !health_response_is_ok(response) {
+        return None;
+    }
+    let (_, body) = response.split_once("\r\n\r\n")?;
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()?
+        .get("desktop_dev_token")?
+        .as_str()
+        .map(ToOwned::to_owned)
+}
+
+#[cfg(debug_assertions)]
+fn request_dev_backend_token(port: u16) -> Option<String> {
+    let address = format!("127.0.0.1:{port}");
+    let Ok(mut stream) = TcpStream::connect(address) else {
+        return None;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+    let request = "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    if stream.write_all(request.as_bytes()).is_err() {
+        return None;
+    }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return None;
+    }
+    health_dev_token(&response)
+}
+
+#[cfg(not(debug_assertions))]
 fn wait_for_backend(port: u16) -> Result<(), Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(20);
     while Instant::now() < deadline {
@@ -79,8 +115,33 @@ fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
 }
 
 #[cfg(debug_assertions)]
+fn read_dev_backend_token() -> Result<String, Box<dyn std::error::Error>> {
+    let payload = std::fs::read_to_string(DEV_BACKEND_TOKEN_PATH)?;
+    let parsed_payload = serde_json::from_str::<serde_json::Value>(&payload)?;
+    let token = parsed_payload
+        .get("token")
+        .and_then(serde_json::Value::as_str)
+        .filter(|token| !token.is_empty())
+        .ok_or("desktop development backend token is missing")?;
+    Ok(token.to_owned())
+}
+
+#[cfg(debug_assertions)]
+fn wait_for_dev_backend() -> Result<(), Box<dyn std::error::Error>> {
+    let expected_token = read_dev_backend_token()?;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline {
+        if request_dev_backend_token(DEV_BACKEND_PORT).as_deref() == Some(expected_token.as_str()) {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    Err("desktop development backend did not match this launch before timeout".into())
+}
+
+#[cfg(debug_assertions)]
 fn prepare_backend(_app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
-    wait_for_backend(DEV_BACKEND_PORT)?;
+    wait_for_dev_backend()?;
     Ok(DEV_BACKEND_PORT)
 }
 
@@ -125,6 +186,8 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::health_response_is_ok;
+    #[cfg(debug_assertions)]
+    use super::health_dev_token;
 
     #[test]
     fn accepts_http_11_health_success() {
@@ -134,5 +197,14 @@ mod tests {
     #[test]
     fn rejects_health_failure_status() {
         assert!(!health_response_is_ok("HTTP/1.1 503 Service Unavailable\r\n\r\n"));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn extracts_desktop_dev_token_from_health_response() {
+        assert_eq!(
+            health_dev_token("HTTP/1.1 200 OK\r\n\r\n{\"desktop_dev_token\":\"launch-token\"}"),
+            Some("launch-token".to_string())
+        );
     }
 }

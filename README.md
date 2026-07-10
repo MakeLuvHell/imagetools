@@ -100,7 +100,10 @@ mise run desktop-sysroot
 mise run desktop-dev
 ```
 
-`desktop-dev` 固定使用 `127.0.0.1:7860`。启动前请停止占用该端口的 Web/Uvicorn 服务；否则 Tauri 的 Uvicorn 启动钩子可能失败，应用可能继续连接已有的旧后端进程，导致修改无法自动重载。
+`desktop-dev` 固定使用 `127.0.0.1:7860`，并由启动器独占该端口。端口已被 Web/Uvicorn
+服务占用时，启动会立即失败；启动器会为本次运行生成校验令牌，桌面端不会连接遗留后端。
+`desktop:dev -- --release` 不受支持，因为发布模式需要打包后的 PyInstaller sidecar；请使用
+`mise run desktop-build` 构建发布版。
 
 该命令会启动 Tauri 原生窗口，并自动运行源码版 Uvicorn：监听
 `127.0.0.1:7860` 且启用 `--reload`。修改 Python 后端后 Uvicorn 会自动重载；修改
