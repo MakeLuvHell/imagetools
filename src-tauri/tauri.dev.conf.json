@@ -1,0 +1,12 @@
+{
+  "build": {
+    "beforeDevCommand": {
+      "script": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860 --reload",
+      "cwd": "..",
+      "wait": false
+    }
+  },
+  "bundle": {
+    "externalBin": []
+  }
+}

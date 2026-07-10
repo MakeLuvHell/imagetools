@@ -29,3 +29,24 @@ def test_tauri_windows_release_app_uses_gui_subsystem():
     main_rs = Path("src-tauri/src/main.rs").read_text()
 
     assert 'windows_subsystem = "windows"' in main_rs
+
+
+def test_tauri_dev_uses_reloadable_source_backend():
+    config = json.loads(Path("src-tauri/tauri.dev.conf.json").read_text())
+    command = config["build"]["beforeDevCommand"]
+
+    assert command["cwd"] == ".."
+    assert command["wait"] is False
+    assert "uvicorn backend.main:app" in command["script"]
+    assert "--port 7860" in command["script"]
+    assert "--reload" in command["script"]
+    assert config["bundle"]["externalBin"] == []
+
+
+def test_desktop_dev_uses_dev_overlay_without_bundling_sidecar():
+    package = json.loads(Path("package.json").read_text())
+    command = package["scripts"]["desktop:dev"]
+
+    assert "tauri dev" in command
+    assert "tauri.dev.conf.json" in command
+    assert "backend:bundle" not in command
