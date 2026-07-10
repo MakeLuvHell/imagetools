@@ -272,6 +272,44 @@
           <i data-lucide="x"></i>
         </button>
       </header>
+      <div class="provider-dialog-grid">
+        <section class="provider-list-pane">
+          <div class="provider-pane-heading">
+            <span>已保存</span>
+            <button id="addProviderBtn" type="button" class="icon-button" aria-label="新增 Provider" title="新增 Provider">
+              <i data-lucide="plus"></i>
+            </button>
+          </div>
+          <div id="providerList" class="provider-list"></div>
+        </section>
+        <form id="providerForm" class="provider-form">
+          <h3 id="providerEditorTitle">新增 Provider</h3>
+          <label>
+            <span>名称</span>
+            <input id="providerName" required autocomplete="off" />
+          </label>
+          <label>
+            <span>Base URL</span>
+            <input id="providerBaseUrl" required type="url" autocomplete="url" />
+          </label>
+          <label>
+            <span>API Key</span>
+            <input id="providerApiKey" type="password" autocomplete="new-password" placeholder="输入 API Key" />
+          </label>
+          <label>
+            <span>默认模型</span>
+            <input id="providerDefaultModel" required value="gpt-image-2" autocomplete="off" />
+          </label>
+          <label class="checkbox-field">
+            <input id="providerIsDefault" type="checkbox" />
+            <span>设为默认 Provider</span>
+          </label>
+          <footer>
+            <button id="providerCancelBtn" type="button" class="dialog-button">取消</button>
+            <button id="providerSaveBtn" type="submit" class="dialog-button primary">保存</button>
+          </footer>
+        </form>
+      </div>
     </dialog>
     <dialog id="sessionDialog" class="app-dialog" aria-labelledby="sessionDialogTitle">
       <form id="sessionDialogForm">

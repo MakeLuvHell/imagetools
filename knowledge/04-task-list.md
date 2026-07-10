@@ -13,8 +13,8 @@
 | UI001 | State | Model new-task drafts and optimistic runs | Tested pure workbench state | None | Done |
 | UI002 | Shell | Bundle icons and build the Windows shell | Offline assets and themed shell | None | Done |
 | UI003 | Sessions | Render sidebar, new tasks, and session dialogs | Accessible session workflow | UI001, UI002 | Done |
-| UI004 | Providers | Add Provider management dialog | Complete Provider CRUD UI | UI003 | In Progress |
-| UI005 | Composer | Build layered Composer and parameter menus | Draft-aware generation Composer | UI002-UI004 | Pending |
+| UI004 | Providers | Add Provider management dialog | Complete Provider CRUD UI | UI003 | Done |
+| UI005 | Composer | Build layered Composer and parameter menus | Draft-aware generation Composer | UI002-UI004 | In Progress |
 | UI006 | Timeline | Render and reconcile task states | Persistent chronological task stream | UI001, UI003, UI005 | Pending |
 | UI007 | Testing | Add Playwright accessibility and visual checks | Isolated deterministic UI suite | UI002-UI006 | Pending |
 | UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | Pending |

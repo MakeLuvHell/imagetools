@@ -319,7 +319,7 @@ Add DOM renderers and orchestration for session selection, filtering, draft-firs
 
 ## UI004: Add Provider Management In An App Dialog
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -338,7 +338,7 @@ Implement complete Provider CRUD in an app dialog, including selection/default s
 
 ## UI005: Build The Layered Composer And Parameter Menus
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 

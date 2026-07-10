@@ -47,6 +47,26 @@
     return providers.find((provider) => provider.id === numericId) || null;
   }
 
+  function preferredProvider(providers, providerId) {
+    return (
+      selectedProvider(providers, providerId) ||
+      providers.find((provider) => provider.isDefault) ||
+      providers[0] ||
+      null
+    );
+  }
+
+  function buildProviderPayload(provider) {
+    return {
+      name: String(provider.name || "").trim(),
+      base_url: String(provider.baseUrl || "").trim(),
+      api_key: String(provider.apiKey || ""),
+      default_model:
+        String(provider.defaultModel || "gpt-image-2").trim() || "gpt-image-2",
+      is_default: Boolean(provider.isDefault),
+    };
+  }
+
   function defaultWorkbenchState() {
     return {
       sessions: [],
@@ -271,6 +291,8 @@
     selectSession,
     selectNewTask,
     selectedProvider,
+    preferredProvider,
+    buildProviderPayload,
     selectedSession,
     sessionSubtitle,
     deriveSessionTitle,

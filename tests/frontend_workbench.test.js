@@ -232,6 +232,41 @@ test("provider selection returns active provider model fallback", () => {
   assert.equal(workbench.selectedProvider(providers, 99), null);
 });
 
+test("buildProviderPayload is complete and preserves an empty key", () => {
+  assert.deepEqual(
+    workbench.buildProviderPayload({
+      name: "Primary",
+      baseUrl: "https://api.example/v1",
+      apiKey: "",
+      defaultModel: "gpt-image-2",
+      isDefault: true,
+    }),
+    {
+      name: "Primary",
+      base_url: "https://api.example/v1",
+      api_key: "",
+      default_model: "gpt-image-2",
+      is_default: true,
+    },
+  );
+});
+
+test("preferredProvider preserves selection then falls back to default or first", () => {
+  const providers = workbench.normalizeProviders([
+    { id: 1, name: "A", default_model: "a", is_default: true },
+    { id: 2, name: "B", default_model: "b", is_default: false },
+  ]);
+  assert.equal(workbench.preferredProvider(providers, 2).id, 2);
+  assert.equal(workbench.preferredProvider(providers.slice(0, 1), 2).id, 1);
+
+  const switched = providers.map((provider) => ({
+    ...provider,
+    isDefault: provider.id === 2,
+  }));
+  assert.equal(workbench.preferredProvider(switched, 99).id, 2);
+  assert.equal(workbench.preferredProvider([], 1), null);
+});
+
 test("composerStateFromRun restores prompt provider model and parameters", () => {
   const state = workbench.composerStateFromRun({
     prompt: "A clean product poster",

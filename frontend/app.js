@@ -35,6 +35,17 @@ const parameterMenuBtn = document.querySelector("#parameterMenuBtn");
 const parameterSummaryText = document.querySelector("#parameterSummaryText");
 const providerDialog = document.querySelector("#providerDialog");
 const providerDialogClose = document.querySelector("#providerDialogClose");
+const providerList = document.querySelector("#providerList");
+const addProviderBtn = document.querySelector("#addProviderBtn");
+const providerForm = document.querySelector("#providerForm");
+const providerEditorTitle = document.querySelector("#providerEditorTitle");
+const providerName = document.querySelector("#providerName");
+const providerBaseUrl = document.querySelector("#providerBaseUrl");
+const providerApiKey = document.querySelector("#providerApiKey");
+const providerDefaultModel = document.querySelector("#providerDefaultModel");
+const providerIsDefault = document.querySelector("#providerIsDefault");
+const providerCancelBtn = document.querySelector("#providerCancelBtn");
+const providerSaveBtn = document.querySelector("#providerSaveBtn");
 const sessionDialog = document.querySelector("#sessionDialog");
 const sessionDialogForm = document.querySelector("#sessionDialogForm");
 const sessionDialogTitle = document.querySelector("#sessionDialogTitle");
@@ -50,6 +61,7 @@ let state = window.ImageToolsWorkbench.defaultWorkbenchState();
 let providers = [];
 let referenceSource = null;
 let sessionDialogMode = null;
+let editingProviderId = null;
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -376,6 +388,7 @@ async function loadSessions() {
 }
 
 function renderProviders() {
+  const previousId = Number(providerSelect.value);
   providerSelect.innerHTML = "";
   if (!providers.length) {
     const option = document.createElement("option");
@@ -383,6 +396,7 @@ function renderProviders() {
     option.textContent = "未配置 Provider";
     providerSelect.appendChild(option);
     modelInput.value = "gpt-image-2";
+    renderProviderManager();
     renderCurrentSession();
     return;
   }
@@ -392,10 +406,13 @@ function renderProviders() {
     option.textContent = provider.name;
     providerSelect.appendChild(option);
   });
-  const selected =
-    providers.find((provider) => provider.isDefault) || providers[0];
+  const selected = window.ImageToolsWorkbench.preferredProvider(
+    providers,
+    previousId,
+  );
   providerSelect.value = String(selected.id);
   modelInput.value = selected.defaultModel;
+  renderProviderManager();
   restoreActiveDraft();
   renderCurrentSession();
 }
@@ -408,6 +425,104 @@ async function loadProviders() {
     renderProviders();
   } catch (error) {
     showToast(error.message);
+  }
+}
+
+function renderProviderManager() {
+  window.ImageToolsUi.renderProviderList(
+    providerList,
+    providers,
+    Number(providerSelect.value),
+    handleProviderAction,
+  );
+  if (!providers.length) {
+    const empty = document.createElement("p");
+    empty.className = "provider-empty";
+    empty.textContent = "尚未配置 Provider";
+    providerList.appendChild(empty);
+  }
+}
+
+function startNewProvider() {
+  editingProviderId = null;
+  providerEditorTitle.textContent = "新增 Provider";
+  providerForm.reset();
+  providerDefaultModel.value = "gpt-image-2";
+  providerApiKey.value = "";
+  providerApiKey.placeholder = "输入 API Key";
+  providerName.focus();
+}
+
+function editProvider(providerId) {
+  const provider = providers.find((item) => item.id === Number(providerId));
+  if (!provider) return;
+  editingProviderId = provider.id;
+  providerEditorTitle.textContent = `编辑 ${provider.name}`;
+  providerName.value = provider.name;
+  providerBaseUrl.value = provider.baseUrl;
+  providerApiKey.value = "";
+  providerApiKey.placeholder = provider.apiKeySet
+    ? "已保存，留空则保持不变"
+    : "输入 API Key";
+  providerDefaultModel.value = provider.defaultModel;
+  providerIsDefault.checked = provider.isDefault;
+  providerName.focus();
+}
+
+async function mutateProvider(url, options) {
+  providerSaveBtn.disabled = true;
+  try {
+    await fetch(url, options).then(readJson);
+    await loadProviders();
+    return true;
+  } catch (error) {
+    showToast(error.message);
+    return false;
+  } finally {
+    providerSaveBtn.disabled = false;
+  }
+}
+
+async function handleProviderAction(action, providerId) {
+  if (action === "edit") {
+    editProvider(providerId);
+    return;
+  }
+  if (action === "default") {
+    await mutateProvider(`/api/providers/${providerId}/default`, {
+      method: "POST",
+    });
+    return;
+  }
+  if (action === "delete") {
+    const deleted = await mutateProvider(`/api/providers/${providerId}`, {
+      method: "DELETE",
+    });
+    if (deleted && editingProviderId === Number(providerId)) startNewProvider();
+  }
+}
+
+async function handleProviderSubmit(event) {
+  event.preventDefault();
+  const payload = window.ImageToolsWorkbench.buildProviderPayload({
+    name: providerName.value,
+    baseUrl: providerBaseUrl.value,
+    apiKey: providerApiKey.value,
+    defaultModel: providerDefaultModel.value,
+    isDefault: providerIsDefault.checked,
+  });
+  const method = editingProviderId == null ? "POST" : "PATCH";
+  const url =
+    editingProviderId == null
+      ? "/api/providers"
+      : `/api/providers/${editingProviderId}`;
+  if (await mutateProvider(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })) {
+    const saved = providers.find((provider) => provider.name === payload.name);
+    if (saved) editProvider(saved.id);
   }
 }
 
@@ -608,6 +723,8 @@ function toggleSearch() {
 
 function openProviderDialog(opener) {
   window.ImageToolsUi.openDialog(providerDialog, opener);
+  renderProviderManager();
+  startNewProvider();
 }
 
 function closeProviderDialog() {
@@ -676,6 +793,9 @@ providersBtn.addEventListener("click", () => openProviderDialog(providersBtn));
 settingsBtn.addEventListener("click", () => openProviderDialog(settingsBtn));
 providerDialogClose.addEventListener("click", closeProviderDialog);
 providerDialog.addEventListener("cancel", handleDialogCancel);
+addProviderBtn.addEventListener("click", startNewProvider);
+providerCancelBtn.addEventListener("click", startNewProvider);
+providerForm.addEventListener("submit", handleProviderSubmit);
 taskMenuBtn.addEventListener("click", toggleTaskMenu);
 renameSessionBtn.addEventListener("click", openRenameDialog);
 deleteSessionBtn.addEventListener("click", openDeleteDialog);

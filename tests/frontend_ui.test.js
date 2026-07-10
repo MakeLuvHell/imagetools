@@ -41,6 +41,34 @@ test("renderNewTask creates an unframed creation empty state", () => {
   assert.equal(timeline.querySelector(".empty-workspace img").alt, "");
 });
 
+test("renderProviderList exposes actions without rendering API keys", () => {
+  assert.ok(ui, "frontend/ui.js must exist");
+  const dom = new JSDOM('<div id="providers"></div>');
+  const actions = [];
+  ui.renderProviderList(
+    dom.window.document.querySelector("#providers"),
+    [
+      {
+        id: 2,
+        name: "Default",
+        defaultModel: "gpt-image-2",
+        apiKeySet: true,
+        isDefault: true,
+      },
+    ],
+    2,
+    (action, id) => actions.push([action, id]),
+  );
+
+  const row = dom.window.document.querySelector("[data-provider-id='2']");
+  assert.match(row.textContent, /Default/);
+  assert.match(row.textContent, /gpt-image-2/);
+  assert.match(row.textContent, /已配置密钥/);
+  assert.doesNotMatch(row.textContent, /sk-/);
+  row.querySelector("[data-action='edit']").click();
+  assert.deepEqual(actions, [["edit", 2]]);
+});
+
 test("dialog helpers focus the first input and restore the opener", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM(`
