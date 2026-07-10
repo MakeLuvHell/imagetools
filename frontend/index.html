@@ -150,7 +150,8 @@
                 class="icon-button"
                 aria-label="添加参考图"
                 title="添加参考图"
-                disabled
+                aria-haspopup="menu"
+                aria-expanded="false"
               >
                 <i data-lucide="plus"></i>
               </button>
@@ -219,7 +220,7 @@
           </select>
         </label>
       </div>
-      <details class="advanced-options">
+      <details id="advancedParamsPanel" class="advanced-options">
         <summary>高级参数</summary>
         <div class="parameter-grid advanced-grid">
           <label>
@@ -257,6 +258,13 @@
           </label>
         </div>
       </details>
+    </div>
+
+    <div id="referenceMenu" class="popover reference-menu" role="menu" hidden>
+      <button id="uploadReferenceBtn" type="button" role="menuitem">
+        <i data-lucide="upload"></i>
+        <span>上传参考图</span>
+      </button>
     </div>
 
     <dialog id="providerDialog" class="app-dialog" aria-labelledby="providerDialogTitle">

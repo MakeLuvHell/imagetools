@@ -15,6 +15,8 @@ const timeline = document.querySelector("#timeline");
 const composerForm = document.querySelector("#composerForm");
 const promptInput = document.querySelector("#prompt");
 const referenceBtn = document.querySelector("#referenceBtn");
+const referenceMenu = document.querySelector("#referenceMenu");
+const uploadReferenceBtn = document.querySelector("#uploadReferenceBtn");
 const referenceInput = document.querySelector("#referenceInput");
 const referencePreview = document.querySelector("#referencePreview");
 const referenceName = document.querySelector("#referenceName");
@@ -154,6 +156,41 @@ function restoreActiveDraft() {
   referenceInput.value = "";
   referencePreview.hidden = !referenceSource;
   referenceName.textContent = referenceSource ? "历史结果图" : "";
+  syncReferenceState();
+  syncTransparentBackground();
+  resizePrompt();
+}
+
+function resizePrompt() {
+  promptInput.style.height = "auto";
+  promptInput.style.height = `${Math.min(promptInput.scrollHeight, 144)}px`;
+  promptInput.style.overflowY = promptInput.scrollHeight > 144 ? "auto" : "hidden";
+}
+
+function syncReferenceState() {
+  const hasReference = Boolean(referenceSource || referenceInput.files[0]);
+  const next = window.ImageToolsWorkbench.normalizeComposerForReference(
+    { count: Number(countSelect.value || 1) },
+    hasReference,
+  );
+  countSelect.value = String(next.count);
+  countSelect.disabled = hasReference;
+  parameterSummaryText.textContent = window.ImageToolsWorkbench.parameterSummary(
+    currentDraft(),
+  );
+}
+
+function syncTransparentBackground() {
+  const transparentOption = backgroundSelect.querySelector(
+    'option[value="transparent"]',
+  );
+  const supported =
+    window.ImageToolsPreferences.supportsTransparentBackground(modelInput.value) &&
+    outputFormatSelect.value !== "jpeg";
+  transparentOption.disabled = !supported;
+  if (!supported && backgroundSelect.value === "transparent") {
+    backgroundSelect.value = "auto";
+  }
 }
 
 function renderSessions() {
@@ -314,6 +351,7 @@ async function setReferenceFromUrl(url) {
     referenceSource = { kind: "result", url };
     referencePreview.hidden = false;
     referenceName.textContent = file.name;
+    syncReferenceState();
     saveActiveDraft();
     showToast("已设为参考图");
   } catch (error) {
@@ -746,6 +784,11 @@ function handleEscape(event) {
     parameterMenuBtn.setAttribute("aria-expanded", "false");
     parameterMenuBtn.focus();
   }
+  if (!referenceMenu.hidden) {
+    referenceMenu.hidden = true;
+    referenceBtn.setAttribute("aria-expanded", "false");
+    referenceBtn.focus();
+  }
 }
 
 function toggleTaskMenu() {
@@ -759,10 +802,43 @@ function toggleTaskMenu() {
 
 function toggleParameterMenu() {
   const opening = parameterMenu.hidden;
+  closeTaskMenu();
+  closeReferenceMenu();
   parameterMenu.hidden = !opening;
   parameterMenuBtn.setAttribute("aria-expanded", String(opening));
   if (opening) {
     ratioSelect.focus();
+  }
+}
+
+function closeReferenceMenu() {
+  referenceMenu.hidden = true;
+  referenceBtn.setAttribute("aria-expanded", "false");
+}
+
+function toggleReferenceMenu() {
+  const opening = referenceMenu.hidden;
+  closeTaskMenu();
+  parameterMenu.hidden = true;
+  parameterMenuBtn.setAttribute("aria-expanded", "false");
+  referenceMenu.hidden = !opening;
+  referenceBtn.setAttribute("aria-expanded", String(opening));
+  if (opening) uploadReferenceBtn.focus();
+}
+
+function handlePromptKeydown(event) {
+  if (!window.ImageToolsWorkbench.shouldSubmitComposer(event)) return;
+  event.preventDefault();
+  composerForm.requestSubmit();
+}
+
+function handleOutsideClick(event) {
+  if (!parameterMenu.hidden && !parameterMenu.contains(event.target) && !parameterMenuBtn.contains(event.target)) {
+    parameterMenu.hidden = true;
+    parameterMenuBtn.setAttribute("aria-expanded", "false");
+  }
+  if (!referenceMenu.hidden && !referenceMenu.contains(event.target) && !referenceBtn.contains(event.target)) {
+    closeReferenceMenu();
   }
 }
 
@@ -804,9 +880,12 @@ sessionDialogCancel.addEventListener("click", closeSessionDialog);
 sessionDialog.addEventListener("cancel", handleDialogCancel);
 parameterMenuBtn.addEventListener("click", toggleParameterMenu);
 document.addEventListener("keydown", handleEscape);
+document.addEventListener("pointerdown", handleOutsideClick);
 sessionFilter.addEventListener("input", renderSessions);
 composerForm.addEventListener("submit", handleComposerSubmit);
 composerForm.addEventListener("input", saveDraftFromInput);
+promptInput.addEventListener("input", resizePrompt);
+promptInput.addEventListener("keydown", handlePromptKeydown);
 parameterMenu.addEventListener("input", saveDraftFromInput);
 parameterMenu.addEventListener("change", saveDraftFromInput);
 providerSelect.addEventListener("change", () => {
@@ -816,15 +895,21 @@ providerSelect.addEventListener("change", () => {
   );
   if (provider) {
     modelInput.value = provider.defaultModel;
+    syncTransparentBackground();
     saveActiveDraft();
   }
 });
-referenceBtn.addEventListener("click", () => referenceInput.click());
+referenceBtn.addEventListener("click", toggleReferenceMenu);
+uploadReferenceBtn.addEventListener("click", () => {
+  closeReferenceMenu();
+  referenceInput.click();
+});
 referenceInput.addEventListener("change", () => {
   const file = referenceInput.files[0];
   referenceSource = null;
   referencePreview.hidden = !file;
   referenceName.textContent = file ? file.name : "";
+  syncReferenceState();
   saveActiveDraft();
 });
 clearReferenceBtn.addEventListener("click", () => {
@@ -832,8 +917,11 @@ clearReferenceBtn.addEventListener("click", () => {
   referenceSource = null;
   referencePreview.hidden = true;
   referenceName.textContent = "";
+  syncReferenceState();
   saveActiveDraft();
 });
+modelInput.addEventListener("input", syncTransparentBackground);
+outputFormatSelect.addEventListener("change", syncTransparentBackground);
 
 render();
 restoreActiveDraft();

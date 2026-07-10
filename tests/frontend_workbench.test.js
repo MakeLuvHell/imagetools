@@ -168,6 +168,32 @@ test("createOptimisticRun snapshots the visible composer state", () => {
   });
 });
 
+test("shouldSubmitComposer respects newlines and IME composition", () => {
+  assert.equal(
+    workbench.shouldSubmitComposer({ key: "Enter", shiftKey: false, isComposing: false }),
+    true,
+  );
+  assert.equal(
+    workbench.shouldSubmitComposer({ key: "Enter", shiftKey: true, isComposing: false }),
+    false,
+  );
+  assert.equal(
+    workbench.shouldSubmitComposer({ key: "Enter", shiftKey: false, isComposing: true }),
+    false,
+  );
+});
+
+test("normalizeComposerForReference forces one result only while attached", () => {
+  assert.deepEqual(
+    workbench.normalizeComposerForReference({ count: 4 }, true),
+    { count: 1, hasReference: true },
+  );
+  assert.deepEqual(
+    workbench.normalizeComposerForReference({ count: 1 }, false),
+    { count: 1, hasReference: false },
+  );
+});
+
 test("desktop workbench html exposes two-column session shell", () => {
   const html = fs.readFileSync(
     path.join(__dirname, "..", "frontend", "index.html"),

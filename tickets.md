@@ -338,7 +338,7 @@ Implement complete Provider CRUD in an app dialog, including selection/default s
 
 ## UI005: Build The Layered Composer And Parameter Menus
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -360,7 +360,7 @@ Build the layered Composer with growing prompt input, references, Provider/model
 
 ## UI006: Render The Task Stream And Reconcile Generation Status
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 

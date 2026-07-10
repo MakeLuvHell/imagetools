@@ -87,3 +87,13 @@ test("shell follows system themes and keeps Windows desktop geometry", () => {
   assert.match(styles, /@media\s*\(prefers-color-scheme:\s*dark\)/);
   assert.match(styles, /@media\s*\(max-width:\s*1040px\)/);
 });
+
+test("Composer keeps controls in context and popover layers", () => {
+  assert.match(html, /class="composer-context"/);
+  assert.match(html, /id="referenceMenu"/);
+  assert.match(html, /id="parameterMenu"/);
+  assert.match(html, /id="advancedParamsPanel"/);
+  assert.match(html, /id="referenceInput"/);
+  assert.match(html, /id="providerSelect"/);
+  assert.doesNotMatch(html, /class="composer-controls"/);
+});

@@ -141,6 +141,18 @@
     return `${composer.ratio || "1:1"} · ${resolution} · ${Number(composer.count || 1)} 张`;
   }
 
+  function shouldSubmitComposer(event) {
+    return event.key === "Enter" && !event.shiftKey && !event.isComposing;
+  }
+
+  function normalizeComposerForReference(composer, hasReference) {
+    return {
+      ...composer,
+      count: hasReference ? 1 : Number(composer.count || 1),
+      hasReference: Boolean(hasReference),
+    };
+  }
+
   function pendingRunsForSession(state, sessionId) {
     return Object.values(state.pendingRunsBySession?.[Number(sessionId)] || {});
   }
@@ -299,6 +311,8 @@
     draftStorageKey,
     parseDraft,
     parameterSummary,
+    shouldSubmitComposer,
+    normalizeComposerForReference,
     pendingRunsForSession,
     addPendingRun,
     failPendingRun,
