@@ -47,6 +47,8 @@ def system_dependencies_available() -> bool:
 
 
 def sysroot_dependencies_available(sysroot: Path) -> bool:
+    if bootstrap.broken_library_symlink_targets(sysroot):
+        return False
     env = sysroot_env(sysroot)
     path = env["PATH"]
     if shutil.which("pkg-config", path=path) is None:

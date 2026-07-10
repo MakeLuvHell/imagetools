@@ -32,6 +32,23 @@ def test_parse_apt_print_uris_rejects_empty_package_list():
         raise AssertionError("Expected missing apt URIs to raise ValueError")
 
 
+def test_download_packages_falls_back_when_apt_uri_resolution_fails(tmp_path, monkeypatch):
+    def fail_apt_package_uris(_packages):
+        raise subprocess.CalledProcessError(100, ["apt-get", "--print-uris"])
+
+    downloaded = []
+    monkeypatch.setattr(bootstrap, "apt_package_uris", fail_apt_package_uris)
+    monkeypatch.setattr(
+        bootstrap,
+        "download_seed_package",
+        lambda package, deb_dir: downloaded.append((package, deb_dir)),
+    )
+
+    bootstrap.download_packages(["libgtk-3-0t64"], tmp_path)
+
+    assert downloaded == [("libgtk-3-0t64", tmp_path)]
+
+
 def test_package_name_from_dpkg_owner_strips_arch_suffix():
     package = bootstrap.package_name_from_dpkg_owner(
         "libgtk-3-0t64:amd64: /usr/lib/x86_64-linux-gnu/libgtk-3.so.0"
@@ -69,6 +86,17 @@ def test_runtime_packages_for_broken_symlinks_uses_dpkg_owners(tmp_path):
     packages = bootstrap.runtime_packages_for_broken_symlinks(sysroot, owner=fake_dpkg_owner)
 
     assert packages == {"libgtk-3-0t64"}
+
+
+def test_sysroot_dependencies_reject_broken_library_links(tmp_path, monkeypatch):
+    lib_dir = tmp_path / "usr" / "lib" / "x86_64-linux-gnu"
+    lib_dir.mkdir(parents=True)
+    (lib_dir / "libgtk-3.so").symlink_to("libgtk-3.so.0")
+    monkeypatch.setattr(runner, "sysroot_env", lambda _: {"PATH": "/usr/bin"})
+    monkeypatch.setattr(runner.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/pkg-config")
+    monkeypatch.setattr(runner.deps, "missing_pkg_config_modules", lambda **_kwargs: [])
+
+    assert not runner.sysroot_dependencies_available(tmp_path)
 
 
 def test_sysroot_env_points_pkg_config_to_local_sysroot(tmp_path):
