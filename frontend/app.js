@@ -67,6 +67,7 @@ let providers = [];
 let referenceSource = null;
 let sessionDialogMode = null;
 let editingProviderId = null;
+let newTaskSubmissionLocked = false;
 const runsBySession = {};
 
 function showToast(message) {
@@ -651,6 +652,7 @@ async function handleComposerSubmit(event) {
   const prompt = promptInput.value.trim();
   if (!provider) {
     showToast("请先配置 Provider");
+    openProviderDialog(providersBtn);
     return;
   }
   if (!prompt) {
@@ -658,6 +660,10 @@ async function handleComposerSubmit(event) {
     promptInput.focus();
     return;
   }
+
+  const locksNewTask = state.selectedSessionId == null;
+  if (locksNewTask && newTaskSubmissionLocked) return;
+  if (locksNewTask) newTaskSubmissionLocked = true;
 
   const wasNewTask = state.selectedSessionId == null;
   let sessionId = null;
@@ -773,6 +779,7 @@ async function handleComposerSubmit(event) {
     }
     renderCurrentSession();
     generateBtn.setAttribute("aria-label", "开始生成");
+    if (locksNewTask) newTaskSubmissionLocked = false;
   }
 }
 
@@ -849,6 +856,24 @@ function toggleParameterMenu() {
   if (opening) {
     ratioSelect.focus();
   }
+}
+
+function handleMenuKeydown(event) {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+  const items = [
+    ...event.currentTarget.querySelectorAll(
+      "button:not(:disabled), select:not(:disabled), input:not(:disabled)",
+    ),
+  ].filter((element) => !element.closest("[hidden]"));
+  if (!items.length) return;
+  const current = Math.max(0, items.indexOf(document.activeElement));
+  let next = current;
+  if (event.key === "ArrowDown") next = (current + 1) % items.length;
+  if (event.key === "ArrowUp") next = (current - 1 + items.length) % items.length;
+  if (event.key === "Home") next = 0;
+  if (event.key === "End") next = items.length - 1;
+  event.preventDefault();
+  items[next].focus();
 }
 
 function closeReferenceMenu() {
@@ -930,6 +955,9 @@ promptInput.addEventListener("input", resizePrompt);
 promptInput.addEventListener("keydown", handlePromptKeydown);
 parameterMenu.addEventListener("input", saveDraftFromInput);
 parameterMenu.addEventListener("change", saveDraftFromInput);
+parameterMenu.addEventListener("keydown", handleMenuKeydown);
+referenceMenu.addEventListener("keydown", handleMenuKeydown);
+taskMenu.addEventListener("keydown", handleMenuKeydown);
 providerSelect.addEventListener("change", () => {
   const provider = window.ImageToolsWorkbench.selectedProvider(
     providers,

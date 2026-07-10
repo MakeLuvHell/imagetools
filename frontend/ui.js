@@ -39,7 +39,7 @@
     const image = document.createElement("img");
     image.src = "/static/assets/app-icon.png";
     image.alt = "";
-    const title = document.createElement("strong");
+    const title = document.createElement("h2");
     title.textContent = "今天想创作什么？";
     empty.append(image, title);
     timeline.replaceChildren(empty);

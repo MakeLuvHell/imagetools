@@ -13,3 +13,5 @@ src-tauri/gen/
 src-tauri/target/
 .DS_Store
 .superpowers/
+test-results/
+playwright-report/

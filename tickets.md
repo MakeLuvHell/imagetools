@@ -383,7 +383,7 @@ Render chronological prompt/run rows, stable image grids, result actions and pre
 
 ## UI007: Add Playwright Accessibility And Visual Verification
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -406,7 +406,7 @@ Add isolated deterministic Playwright tests for keyboard interaction, focus, res
 
 ## UI008: Finalize Documentation And Release-Grade Verification
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 

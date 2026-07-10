@@ -15,6 +15,10 @@ run = "python -m pip install -r requirements-dev.txt && npm install"
 description = "Run backend and frontend tests"
 run = "pytest -q && node --test tests/*.test.js"
 
+[tasks.ui-test]
+description = "Run isolated Playwright UI tests"
+run = "npm run test:ui"
+
 [tasks.backend-bundle]
 description = "Build the Python backend sidecar"
 run = "python scripts/bundle_backend.py"

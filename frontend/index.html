@@ -101,7 +101,7 @@
         <section id="timeline" class="timeline" aria-live="polite">
           <div class="empty-workspace">
             <img src="/static/assets/app-icon.png" alt="" />
-            <strong>今天想创作什么？</strong>
+            <h2>今天想创作什么？</h2>
           </div>
         </section>
 
@@ -161,6 +161,7 @@
                 class="parameter-summary"
                 aria-haspopup="menu"
                 aria-expanded="false"
+                aria-label="图片参数"
               >
                 <span id="parameterSummaryText">1:1 · 标准 · 1 张</span>
                 <i data-lucide="chevron-down"></i>
@@ -181,7 +182,7 @@
       </main>
     </div>
 
-    <div id="parameterMenu" class="popover parameter-menu" role="menu" hidden>
+    <div id="parameterMenu" class="popover parameter-menu" role="menu" aria-label="图片参数" hidden>
       <div class="parameter-grid">
         <label>
           <span>比例</span>

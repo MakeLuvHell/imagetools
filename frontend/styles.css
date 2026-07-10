@@ -407,7 +407,9 @@ summary:focus-visible {
   filter: grayscale(1);
 }
 
-.empty-workspace strong {
+.empty-workspace strong,
+.empty-workspace h2 {
+  margin: 0;
   font-size: 25px;
   font-weight: 500;
   line-height: 1.25;
@@ -1182,6 +1184,20 @@ summary:focus-visible {
   border-color: var(--danger);
   color: #ffffff;
   background: var(--danger);
+}
+
+.app-dialog .provider-form > .checkbox-field {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 7px;
+}
+
+.app-dialog .provider-form > .checkbox-field input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
 }
 
 .toast {

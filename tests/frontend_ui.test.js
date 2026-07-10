@@ -37,7 +37,7 @@ test("renderNewTask creates an unframed creation empty state", () => {
 
   ui.renderNewTask(timeline);
 
-  assert.equal(timeline.querySelector("strong").textContent, "今天想创作什么？");
+  assert.equal(timeline.querySelector("h2").textContent, "今天想创作什么？");
   assert.equal(timeline.querySelector(".empty-workspace img").alt, "");
 });
 
