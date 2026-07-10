@@ -15,6 +15,7 @@ use url::Url;
 
 struct BackendProcess(Mutex<Option<CommandChild>>);
 
+#[cfg(debug_assertions)]
 const DEV_BACKEND_PORT: u16 = 7860;
 
 #[cfg(not(debug_assertions))]
