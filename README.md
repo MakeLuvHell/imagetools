@@ -100,6 +100,12 @@ mise run desktop-sysroot
 mise run desktop-dev
 ```
 
+该命令会启动 Tauri 原生窗口，并自动运行源码版 Uvicorn：监听
+`127.0.0.1:7860` 且启用 `--reload`。修改 Python 后端后 Uvicorn 会自动重载；修改
+`frontend/` 下的 HTML、CSS 或 JavaScript 后，需要刷新原生窗口。Rust 代码由
+Tauri watcher 监视并自动触发开发构建。开发模式使用源码后端，不会生成 PyInstaller
+sidecar；发布构建仍会先打包并使用 PyInstaller sidecar。
+
 ### 构建安装包
 
 ```bash
