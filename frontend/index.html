@@ -49,7 +49,7 @@
 
         <footer class="workspace-account">
           <span>本地工作区</span>
-          <button type="button" class="icon-button" aria-label="设置" title="设置">
+          <button id="settingsBtn" type="button" class="icon-button" aria-label="设置" title="设置">
             <i data-lucide="settings"></i>
           </button>
         </footer>
@@ -63,25 +63,38 @@
           </div>
           <div class="workspace-actions">
             <button
-              id="renameSessionBtn"
+              id="taskMenuBtn"
               type="button"
               class="icon-button"
-              aria-label="重命名会话"
-              title="重命名会话"
+              aria-label="会话操作"
+              title="会话操作"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              disabled
+            >
+              <i data-lucide="ellipsis"></i>
+            </button>
+            <div id="taskMenu" class="task-menu" role="menu" hidden>
+            <button
+              id="renameSessionBtn"
+              type="button"
+              role="menuitem"
               disabled
             >
               <i data-lucide="pencil"></i>
+              <span>重命名</span>
             </button>
             <button
               id="deleteSessionBtn"
               type="button"
-              class="icon-button danger-icon"
-              aria-label="删除会话"
-              title="删除会话"
+              class="danger-menu-item"
+              role="menuitem"
               disabled
             >
               <i data-lucide="trash-2"></i>
+              <span>删除</span>
             </button>
+            </div>
           </div>
         </header>
 
@@ -148,7 +161,7 @@
                 aria-haspopup="menu"
                 aria-expanded="false"
               >
-                1:1 · 标准 · 1 张
+                <span id="parameterSummaryText">1:1 · 标准 · 1 张</span>
                 <i data-lucide="chevron-down"></i>
               </button>
             </div>
@@ -247,10 +260,36 @@
     </div>
 
     <dialog id="providerDialog" class="app-dialog" aria-labelledby="providerDialogTitle">
-      <h2 id="providerDialogTitle">Providers</h2>
+      <header>
+        <h2 id="providerDialogTitle">Providers</h2>
+        <button
+          id="providerDialogClose"
+          type="button"
+          class="icon-button"
+          aria-label="关闭"
+          title="关闭"
+        >
+          <i data-lucide="x"></i>
+        </button>
+      </header>
     </dialog>
     <dialog id="sessionDialog" class="app-dialog" aria-labelledby="sessionDialogTitle">
-      <h2 id="sessionDialogTitle">会话</h2>
+      <form id="sessionDialogForm">
+        <h2 id="sessionDialogTitle">会话</h2>
+        <p id="sessionDialogMessage" hidden></p>
+        <label id="sessionTitleField">
+          <span>名称</span>
+          <input id="sessionTitleInput" autocomplete="off" />
+        </label>
+        <footer>
+          <button id="sessionDialogCancel" type="button" class="dialog-button">
+            取消
+          </button>
+          <button id="sessionDialogSubmit" type="submit" class="dialog-button primary">
+            保存
+          </button>
+        </footer>
+      </form>
     </dialog>
     <div id="toast" class="toast" role="status" hidden></div>
 
@@ -258,6 +297,7 @@
     <script src="/static/workbench.js"></script>
     <script src="/static/vendor/lucide.min.js"></script>
     <script src="/static/icons.js"></script>
+    <script src="/static/ui.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

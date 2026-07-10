@@ -299,7 +299,7 @@ Bundle pinned Lucide and app-brand assets locally, then build the native-titleba
 
 ## UI003: Render Sidebar, New Tasks, And Session Dialogs
 
-Status: In Progress
+Status: Done
 
 ### What to build
 
@@ -319,7 +319,7 @@ Add DOM renderers and orchestration for session selection, filtering, draft-firs
 
 ## UI004: Add Provider Management In An App Dialog
 
-Status: Pending
+Status: In Progress
 
 ### What to build
 
