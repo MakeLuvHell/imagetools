@@ -19,6 +19,17 @@
     "active": true,
     "targets": ["deb", "rpm"],
     "icon": ["icons/icon.png", "icons/icon.ico"],
-    "externalBin": ["binaries/imagetools-backend"]
+    "externalBin": ["binaries/imagetools-backend"],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "languages": ["SimpChinese"],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "zh-CN"
+      }
+    }
   }
 }
