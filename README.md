@@ -5,7 +5,8 @@ Windows 桌面图片创作工作台，用于通过兼容 OpenAI 图片接口进�
 ## 当前能力
 
 - Windows-first Tauri 桌面应用，启动后自动拉起本地 FastAPI sidecar。
-- 左侧会话/历史列表，中间当前会话时间线和底部 Composer。
+- Codex Desktop Windows 风格的克制侧栏、无框任务流和底部双层 Composer，并跟随系统明暗主题。
+- 新任务先保存在本地草稿中，第一次有效提交才自动创建会话。
 - 多 provider 配置：名称、Base URL、API Key、默认模型。
 - 每次生成写入本地历史：提示词、参数、provider/model 快照、参考图、结果图或错误。
 - 图片文件保存在本地目录，元数据保存在 SQLite。
@@ -57,6 +58,8 @@ mise run desktop-sysroot
 ```
 
 `desktop-check`、`desktop-dev` 和 `desktop-build` 会优先使用系统依赖；系统依赖缺失时会自动使用 `build/tauri-sysroot/`。
+
+Playwright 首次运行会下载 Chromium。无 sudo 的 Linux 环境会自动把 Chromium 所需的 NSS/NSPR 库下载到 `build/playwright-sysroot/`，不会修改系统目录。
 
 ## 运行桌面开发版
 
@@ -120,6 +123,7 @@ Windows x64 安装包由 GitHub Actions 的 Windows runner 构建并上传到 Gi
 
 ```bash
 mise run test
+mise run ui-test
 ```
 
 分别运行：
@@ -127,6 +131,7 @@ mise run test
 ```bash
 pytest -q
 node --test tests/*.test.js
+npm run test:ui
 ```
 
 桌面相关验证：
@@ -136,6 +141,10 @@ mise run backend-bundle
 mise run desktop-check
 mise run desktop-build
 ```
+
+Playwright 会在隔离数据目录中使用固定 API fixture，并验证 `1280x860`、`960x640` 的浅色/深色布局。更新预期截图时运行 `npm run test:ui:update`，并在提交前人工检查生成的 PNG。
+
+Linux Chromium 和 WebKitGTK 结果用于自动布局与桌面行为回归。Windows WebView2 在两种窗口尺寸、两种系统主题下的四张实机截图才是最终像素级视觉验收依据。
 
 ## 图片接口说明
 

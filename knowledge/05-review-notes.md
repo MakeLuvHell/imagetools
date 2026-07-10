@@ -70,8 +70,8 @@
 
 ### Required Changes
 
-- TBD
+- Keep Windows WebView2 screenshot comparison as a release-time platform calibration step.
 
 ## Accepted Risks
 
-- TBD
+- Local Web/Chromium screenshots validate the implemented UI; Windows font and WebView rendering differences may still require release-time calibration.

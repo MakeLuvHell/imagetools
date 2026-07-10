@@ -2,7 +2,7 @@
 
 This document defines how the web UI should map user-facing image generation
 controls to the local backend and to OpenAI-compatible GPT Image API requests.
-Use it as the contract before expanding the dashboard-style frontend.
+Use it as the contract for the layered Composer and generation task stream.
 
 Sources of truth:
 
@@ -73,10 +73,14 @@ Fields:
 
 | Field | Type | Required | Current meaning |
 | --- | --- | --- | --- |
+| `session_id` | integer | yes | Persisted creative session receiving the generation run. |
+| `provider_id` | integer | no | Selected Provider; falls back to the default Provider. |
 | `prompt` | string | yes | User prompt. |
 | `model` | string | no | Overrides saved default model. |
 | `width` | integer | no | Output width from frontend ratio/resolution mapping. |
 | `height` | integer | no | Output height from frontend ratio/resolution mapping. |
+| `ratio` | string | no | UI ratio snapshot stored with generation history. |
+| `resolution` | string | no | UI resolution tier snapshot stored with generation history. |
 | `quality` | string | no | Upstream render quality. Current values: `auto`, `low`, `medium`, `high`. |
 | `count` | integer | no | Number of images for text-to-image. Backend clamps to 1-4. |
 | `output_format` | string | no | `png`, `jpeg`, or `webp`. |
@@ -296,30 +300,19 @@ Frontend display rules:
 - Do not auto-retry user-correctable image errors, especially moderation or
   invalid-size errors.
 
-## UI Direction From The Reference Page
+## Layered Composer Mapping
 
-The referenced dashboard is useful for control grouping, not for API truth.
+The desktop UI does not expose a permanent parameter form. Controls are grouped by task context:
 
-Recommended left-panel structure:
+1. The top Composer row shows an optional reference plus the selected Provider and model.
+2. The middle auto-growing text area owns the prompt and Enter/Shift+Enter behavior.
+3. The bottom toolbar contains reference upload, a compact ratio/resolution/count summary, and submit.
+4. The Parameters popover contains ratio, resolution, quality, and count.
+5. Its Advanced section contains output format, compression, background, and moderation.
 
-1. Prompt area with clear action and recent-state persistence.
-2. Quick presets that set ratio, size, quality, and count together.
-3. Reference image upload with preview and clear action.
-4. Generation controls grouped as:
-   - `比例`
-   - `分辨率/尺寸`
-   - `渲染质量`
-   - `张数`
-   - `模型` only in the saved settings area
-5. Advanced settings collapsed by default:
-   - output format
-   - compression
-   - background
-   - moderation
-   - mask / multi-reference later
+Selecting a reference switches the backend to the edits endpoint and forces one result. Unsupported transparent-background combinations reset to `auto`. Serializable Composer fields use per-session localStorage drafts; uploaded file bytes and API keys never enter draft storage.
 
-The result panel should stay focused on generated images, metadata, download,
-copy link, and "use as reference" actions.
+Each submit is inserted optimistically into the chronological task stream. The frontend refreshes `GET /api/sessions/{id}/runs` after completion and only clears the submitted draft after a new durable run is confirmed. Results remain focused on preview, download, copy link, use as reference, retry, and parameter reuse.
 
 ## Compatibility Notes
 

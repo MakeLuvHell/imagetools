@@ -17,7 +17,7 @@
 | UI005 | Composer | Build layered Composer and parameter menus | Draft-aware generation Composer | UI002-UI004 | Done |
 | UI006 | Timeline | Render and reconcile task states | Persistent chronological task stream | UI001, UI003, UI005 | Done |
 | UI007 | Testing | Add Playwright accessibility and visual checks | Isolated deterministic UI suite | UI002-UI006 | Done |
-| UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | In Progress |
+| UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | Done |
 
 ## Recommended Order
 
@@ -28,8 +28,8 @@
 
 ## Blockers
 
-- UI003-UI008 remain blocked by the dependencies listed above.
-- Final Windows pixel fidelity requires WebView2 verification on Windows hardware or CI.
+- No implementation blockers remain.
+- Final Windows pixel calibration still requires WebView2 screenshots on Windows hardware or CI.
 
 ## Verification Checklist
 

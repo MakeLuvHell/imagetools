@@ -24,6 +24,7 @@ Use this file to feed project experience back into the knowledge base.
 
 - `tests/test_generation_history.py` covers successful, upstream-failed, unexpected-failed, and reference-image generation history.
 - Playwright uses isolated API mocks, rejects external origins, waits for fonts, and verifies light/dark layouts at `1280x860` and `960x640`.
+- The Web entry on port `7860` is sufficient for local UI inspection and hot-reload checks; Tauri is only required for native shell/platform smoke testing.
 
 ## Reusable Snippets Or Commands
 
