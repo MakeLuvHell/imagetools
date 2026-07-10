@@ -28,6 +28,18 @@ _Avoid_: Model, global settings
 An image used as input for image editing or continued generation. It can come from upload or from a previous generated result.
 _Avoid_: Generated result unless it is actively selected as input
 
+**Codex Windows 视觉基准**:
+The Windows Codex Desktop shell proportions, restrained sidebar, unframed task canvas, task-stream hierarchy, and layered Composer used as the Image Tools UI fidelity target. It does not include Codex branding or Codex-specific product features.
+_Avoid_: Generic two-column dashboard, Codex feature clone
+
+**新任务草稿**:
+A temporary creation state that has not yet been written to SQLite. It becomes a session only after the first valid generation submission.
+_Avoid_: Empty persisted session, generation run
+
+**参数摘要**:
+The compact Composer display of ratio, resolution, quality, and image count. It is not the full parameter editor.
+_Avoid_: Permanent parameter form, complete generation snapshot
+
 ## Rules
 
 - Use this file as the project's glossary and ubiquitous language.

@@ -12,3 +12,4 @@ src-tauri/binaries/
 src-tauri/gen/
 src-tauri/target/
 .DS_Store
+.superpowers/

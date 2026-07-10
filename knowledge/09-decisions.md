@@ -93,3 +93,19 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Active timeline cards match the desktop workbench model: history is part of the current creative workflow, not just an audit log.
 
 **Consequences:** Backend run snapshots must keep enough UI-facing parameter data, such as ratio and resolution, for future Composer restore actions to remain reliable.
+
+### 2026-07-10: Use Codex Desktop Windows As The UI Fidelity Baseline
+
+**Decision:** Redesign the desktop shell to closely match the user-provided Codex Desktop Windows reference while retaining the Image Tools brand, image-creation domain language, and existing feature scope. The app follows the Windows system light/dark theme; Codex-specific features such as Scheduled, Plugins, Sites, pinning, and a standalone library are not copied.
+
+**Context:** The existing two-column workbench satisfied the structural spec but still felt like a generic form application because of its card-heavy empty state, permanent six-column parameter row, text-button density, and browser-native dialogs.
+
+**Options Considered:**
+
+- Restyle the existing layout without changing its interaction model.
+- Adapt Codex visual language while keeping the current form layout.
+- Closely reproduce the Windows Codex shell and map image generation into its task stream and Composer model.
+
+**Reasoning:** High fidelity requires more than palette changes. The Windows shell proportions, restrained sidebar, unframed task canvas, task lifecycle, and layered Composer must operate together. Keeping Image Tools branding and excluding unavailable Codex features avoids impersonation and fake navigation.
+
+**Consequences:** Frontend work should follow `docs/spec/2026-07-10-codex-windows-ui.md`, remove permanent parameter forms and browser-native dialogs, preserve the existing backend/data contracts, and verify both Windows themes at desktop viewport sizes.
