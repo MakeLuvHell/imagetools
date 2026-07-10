@@ -47,6 +47,8 @@ def system_dependencies_available() -> bool:
 
 
 def sysroot_dependencies_available(sysroot: Path) -> bool:
+    if bootstrap.broken_library_symlink_targets(sysroot):
+        return False
     env = sysroot_env(sysroot)
     path = env["PATH"]
     if shutil.which("pkg-config", path=path) is None:
@@ -64,6 +66,10 @@ def command_env(project_root: Path) -> dict[str, str]:
     sysroot = sysroot_path(project_root)
     if not sysroot_dependencies_available(sysroot):
         bootstrap.bootstrap(project_root)
+    if not sysroot_dependencies_available(sysroot):
+        unresolved_targets = bootstrap.broken_library_symlink_targets(sysroot)
+        unresolved_detail = ", ".join(str(target) for target in unresolved_targets) or "pkg-config dependencies"
+        raise RuntimeError(f"Tauri Linux sysroot remains incomplete after bootstrap: {unresolved_detail}")
     return sysroot_env(sysroot)
 
 

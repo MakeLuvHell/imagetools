@@ -73,6 +73,13 @@ def test_runtime_paths_default_to_repo_data_dir(monkeypatch):
     assert paths.settings_path == main.ROOT_DIR / "data" / "settings.json"
 
 
+def test_resolve_root_dir_uses_pyinstaller_temp_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(main.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(main.sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    assert main.resolve_root_dir() == tmp_path
+
+
 def test_health_endpoint_returns_ok():
     client = TestClient(main.app)
 
@@ -80,6 +87,16 @@ def test_health_endpoint_returns_ok():
 
     assert response.status_code == 200
     assert response.json() == {"ok": True, "app": "Image Tools"}
+
+
+def test_health_endpoint_exposes_desktop_dev_token(monkeypatch):
+    monkeypatch.setenv("IMAGE_TOOLS_DESKTOP_DEV_TOKEN", "launch-token")
+    client = TestClient(main.app)
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json()["desktop_dev_token"] == "launch-token"
 
 
 def test_save_and_load_settings_round_trip(tmp_path, monkeypatch):

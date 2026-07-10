@@ -15,7 +15,7 @@ Windows 桌面图片创作工作台，用于通过兼容 OpenAI 图片接口进�
 
 ## 安装开发依赖
 
-推荐使用 `mise` 安装项目工具链：
+推荐使用 `mise` 安装项目工具链和依赖：
 
 ```bash
 mise install
@@ -28,13 +28,47 @@ mise run install
 - Node.js 24.16.0
 - Rust 1.96.1
 
+还需要安装当前平台的 Tauri 系统依赖。Ubuntu 24.04 可参考 Tauri v2 的 Linux 依赖安装：
+
+```bash
+sudo apt install -y \
+  build-essential \
+  curl \
+  file \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libssl-dev \
+  libwebkit2gtk-4.1-dev \
+  libxdo-dev \
+  pkg-config \
+  wget
+```
+
+检查 Linux 桌面系统依赖：
+
+```bash
+mise run desktop-prereqs
+```
+
+如果当前环境没有 sudo 或不能安装系统包，可以让项目下载本地 sysroot：
+
+```bash
+mise run desktop-sysroot
+```
+
+`desktop-check`、`desktop-dev` 和 `desktop-build` 会优先使用系统依赖；系统依赖缺失时会自动使用 `build/tauri-sysroot/`。
+
 ## 运行桌面开发版
 
 ```bash
 mise run desktop-dev
 ```
 
-Tauri 负责原生窗口，Python/FastAPI 后端会作为 sidecar 自动启动。浏览器入口仅作为开发测试入口，不是正式产品主入口。
+该命令会启动 Tauri 原生窗口，并自动运行源码版 Uvicorn：监听 `127.0.0.1:7860` 且启用 `--reload`。修改 Python 后端后 Uvicorn 会自动重载；修改 `frontend/` 下的 HTML、CSS 或 JavaScript 后，需要刷新原生窗口。Rust 代码由 Tauri watcher 监视并自动触发开发构建。
+
+`desktop-dev` 固定使用 `127.0.0.1:7860`，并由启动器独占该端口。端口已被 Web/Uvicorn 服务占用时，启动会立即失败；启动器会为本次运行生成校验令牌，桌面端不会连接遗留后端。`desktop:dev -- --release` 不受支持，因为发布模式需要打包后的 PyInstaller sidecar；请使用 `mise run desktop-build` 构建发布版。
+
+浏览器入口仅作为开发测试入口，不是正式产品主入口。
 
 如需单独调试后端或静态前端，可运行：
 
@@ -56,18 +90,14 @@ Windows x64 构建脚本：
 npm run desktop:build:windows
 ```
 
-Windows 安装包产物位于：
+构建产物位于 `src-tauri/target/release/bundle/`；Linux 默认生成 deb/rpm 安装包。Windows x64 安装包产物位于：
 
 ```text
 src-tauri/target/release/bundle/nsis/
 src-tauri/target/release/bundle/msi/
 ```
 
-Linux 本地构建产物仍位于：
-
-```text
-src-tauri/target/release/bundle/
-```
+Windows x64 安装包由 GitHub Actions 的 Windows runner 构建并上传到 GitHub Release；本地 Linux/WSL 构建只生成 Linux deb/rpm。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
 
 ## 运行时数据
 
@@ -105,13 +135,6 @@ node --test tests/*.test.js
 mise run backend-bundle
 mise run desktop-check
 mise run desktop-build
-```
-
-Linux 缺少 Tauri 系统依赖时：
-
-```bash
-mise run desktop-prereqs
-mise run desktop-sysroot
 ```
 
 ## 图片接口说明

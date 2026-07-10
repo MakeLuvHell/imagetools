@@ -1,0 +1,12 @@
+{
+  "build": {
+    "beforeDevCommand": {
+      "script": "python scripts/run_desktop_dev_backend.py",
+      "cwd": "..",
+      "wait": false
+    }
+  },
+  "bundle": {
+    "externalBin": []
+  }
+}

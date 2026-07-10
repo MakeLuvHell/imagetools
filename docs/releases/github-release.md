@@ -39,6 +39,39 @@ src-tauri/target/release/bundle/rpm/Image Tools-0.1.0-1.x86_64.rpm
 
 注意路径中有空格，命令里必须加引号。
 
+## Windows x64 安装包
+
+Windows x64 安装包不在 Linux/WSL 本机构建。Tauri 官方 Windows installer 文档说明，Windows `.msi` 需要在 Windows 机器上构建；因此项目使用 GitHub Actions 的 `windows-latest` runner 生成 Windows x64 安装包。
+
+触发现有 release 的 Windows x64 构建：
+
+```bash
+gh workflow run windows-release.yml -f release_tag=v0.1.0 -f build_ref=main
+```
+
+如果本机没有 `gh`，在 GitHub 网页打开：
+
+```text
+https://github.com/MakeLuvHell/imagetools/actions/workflows/windows-release.yml
+```
+
+点击 `Run workflow`，`release_tag` 填 `v0.1.0`，`build_ref` 填 `main`。
+
+构建成功后，workflow 会把 Windows 安装包上传到：
+
+```text
+https://github.com/MakeLuvHell/imagetools/releases/tag/v0.1.0
+```
+
+预期 Windows asset 类型：
+
+- NSIS `.exe`
+- MSI `.msi`
+
+当前没有配置代码签名证书，Windows 安装时可能显示未知发布者或 SmartScreen 提示。
+
+注意：本次是给已经存在的 `v0.1.0` release 补 Windows x64 资产。`v0.1.0` tag 保持不变，Windows 安装包从 `main` 构建；`main` 与 `v0.1.0` 的应用版本同为 `0.1.0`，新增差异只用于 CI、脚本和文档。
+
 ## 前置检查
 
 在发布前确认当前分支干净：

@@ -1,0 +1,83 @@
+name: Windows x64 Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to upload Windows x64 assets to
+        required: true
+        default: v0.1.0
+      build_ref:
+        description: Git ref to build from
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-x64:
+    name: Build Windows x64 installers
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout build ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.build_ref }}
+
+      - name: Install mise tools
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Install project dependencies
+        shell: pwsh
+        run: mise run install
+
+      - name: Build Windows x64 installers
+        shell: pwsh
+        env:
+          TAURI_TARGET_TRIPLE: x86_64-pc-windows-msvc
+        run: |
+          mise exec -- pwsh -NoProfile -Command '
+            $env:RUSTUP_DIST_SERVER = "https://static.rust-lang.org"
+            $env:RUSTUP_UPDATE_ROOT = "https://static.rust-lang.org/rustup"
+            npm run desktop:build:windows
+          '
+
+      - name: List installer outputs
+        shell: pwsh
+        run: |
+          Get-ChildItem src-tauri\target\x86_64-pc-windows-msvc\release\bundle -Recurse -File |
+            Select-Object FullName, Length |
+            Format-Table -AutoSize
+
+      - name: Upload installers as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-installers
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+      - name: Upload installers to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $assets = @(
+            Get-ChildItem "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
+            Get-ChildItem "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi" -Filter "*.msi" -Recurse -ErrorAction SilentlyContinue
+          )
+
+          if ($assets.Count -eq 0) {
+            throw "No Windows installer assets were produced."
+          }
+
+          foreach ($asset in $assets) {
+            gh release upload $env:RELEASE_TAG $asset.FullName --repo $env:GITHUB_REPOSITORY --clobber
+          }

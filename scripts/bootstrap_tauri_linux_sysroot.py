@@ -144,7 +144,7 @@ def download_packages(packages: Iterable[str], deb_dir: Path) -> None:
         return
     try:
         uris = apt_package_uris(package_list)
-    except ValueError:
+    except (subprocess.CalledProcessError, ValueError):
         uris = []
     for url, filename in uris:
         download_package(url, filename, deb_dir)

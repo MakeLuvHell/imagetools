@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import shutil
+import sys
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -23,7 +24,15 @@ from backend.workbench_db import GenerationRun, Provider, Session, StoredImage, 
 
 
 APP_TITLE = "Image Tools"
-ROOT_DIR = Path(__file__).resolve().parents[1]
+
+
+def resolve_root_dir() -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS).resolve()
+    return Path(__file__).resolve().parents[1]
+
+
+ROOT_DIR = resolve_root_dir()
 FRONTEND_DIR = ROOT_DIR / "frontend"
 QUALITY_OPTIONS = {"auto", "low", "medium", "high"}
 OUTPUT_FORMAT_OPTIONS = {"png", "jpeg", "webp"}
@@ -581,7 +590,11 @@ def index_head() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict[str, object]:
-    return {"ok": True, "app": APP_TITLE}
+    response: dict[str, object] = {"ok": True, "app": APP_TITLE}
+    desktop_dev_token = os.getenv("IMAGE_TOOLS_DESKTOP_DEV_TOKEN", "").strip()
+    if desktop_dev_token:
+        response["desktop_dev_token"] = desktop_dev_token
+    return response
 
 
 @app.get("/api/settings")

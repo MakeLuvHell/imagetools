@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 import platform
-import shutil
 import subprocess
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 
@@ -29,9 +29,10 @@ def sidecar_filename(name: str, target_triple: str) -> str:
 
 def pyinstaller_args(project_root: Path, output_path: Path) -> list[str]:
     entrypoint = project_root / "backend" / "desktop_entry.py"
+    frontend_dir = project_root / "frontend"
     work_dir = project_root / "build" / "pyinstaller"
     spec_dir = project_root / "build"
-    return [
+    args = [
         "-m",
         "PyInstaller",
         "--clean",
@@ -44,19 +45,35 @@ def pyinstaller_args(project_root: Path, output_path: Path) -> list[str]:
         str(work_dir),
         "--specpath",
         str(spec_dir),
-        str(entrypoint),
+        "--hidden-import",
+        "backend.main",
+        "--add-data",
+        f"{frontend_dir}{os.pathsep}frontend",
     ]
+    if output_path.suffix == ".exe":
+        args.append("--noconsole")
+    args.append(str(entrypoint))
+    return args
+
+
+def pyinstaller_available() -> bool:
+    return find_spec("PyInstaller") is not None
+
+
+def build_backend(project_root: Path, target_triple: str) -> Path:
+    output_dir = project_root / "src-tauri" / "binaries"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / sidecar_filename(APP_NAME, target_triple)
+    if not pyinstaller_available():
+        raise SystemExit("PyInstaller is not installed. Run: python -m pip install -r requirements-dev.txt")
+    subprocess.run([sys.executable, *pyinstaller_args(project_root, output_path)], cwd=project_root, check=True)
+    return output_path
 
 
 def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
     target_triple = os.getenv("TAURI_TARGET_TRIPLE", "").strip() or current_target_triple()
-    output_dir = project_root / "src-tauri" / "binaries"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / sidecar_filename(APP_NAME, target_triple)
-    if not shutil.which("pyinstaller") and not shutil.which("PyInstaller"):
-        raise SystemExit("PyInstaller is not installed. Run: python -m pip install -r requirements-dev.txt")
-    subprocess.run([sys.executable, *pyinstaller_args(project_root, output_path)], cwd=project_root, check=True)
+    build_backend(project_root, target_triple)
 
 
 if __name__ == "__main__":
