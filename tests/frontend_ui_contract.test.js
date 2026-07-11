@@ -107,6 +107,24 @@ test("Provider Cancel closes the settings dialog", () => {
   );
 });
 
+test("settings dialog exposes a restart-only local data directory workflow", () => {
+  for (const id of [
+    "storageCurrentPath",
+    "storageDataDir",
+    "storageMigrateExisting",
+    "storageApplyBtn",
+    "storageLocationStatus",
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(html, /id="storageDataDir"[^>]*required/);
+  assert.match(app, /fetch\("\/api\/storage-location"\)/);
+  assert.match(app, /method:\s*"POST"/);
+  assert.match(app, /migrate_existing/);
+  assert.match(app, /重启应用后生效/);
+  assert.match(styles, /\.storage-location-section/);
+});
+
 test("temporary layers use restrained motion with a reduced-motion fallback", () => {
   assert.match(styles, /--motion-fast:\s*120ms/);
   assert.match(styles, /--motion-dialog:\s*160ms/);

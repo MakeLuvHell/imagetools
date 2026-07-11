@@ -319,6 +319,31 @@
           </footer>
         </form>
       </div>
+      <section class="storage-location-section" aria-labelledby="storageLocationTitle">
+        <div class="storage-location-heading">
+          <h3 id="storageLocationTitle">本地数据</h3>
+          <output id="storageCurrentPath" aria-label="当前数据目录"></output>
+        </div>
+        <form id="storageLocationForm" class="storage-location-form">
+          <label>
+            <span>新的数据目录</span>
+            <input
+              id="storageDataDir"
+              required
+              autocomplete="off"
+              placeholder="D:\\Image Tools"
+            />
+          </label>
+          <label class="checkbox-field">
+            <input id="storageMigrateExisting" type="checkbox" />
+            <span>复制现有会话和文件</span>
+          </label>
+          <footer>
+            <p id="storageLocationStatus" role="status" hidden></p>
+            <button id="storageApplyBtn" type="submit" class="dialog-button primary">应用</button>
+          </footer>
+        </form>
+      </section>
     </dialog>
     <dialog id="sessionDialog" class="app-dialog" aria-labelledby="sessionDialogTitle">
       <form id="sessionDialogForm">

@@ -1031,6 +1031,8 @@ summary:focus-visible {
 
 #providerDialog {
   width: min(720px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .provider-dialog-grid {
@@ -1039,6 +1041,76 @@ summary:focus-visible {
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr);
   border-top: 1px solid var(--line);
+}
+
+.storage-location-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.storage-location-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.storage-location-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.storage-location-heading output {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-location-form {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.storage-location-form > label:not(.checkbox-field) {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.storage-location-form input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.storage-location-form footer {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.storage-location-form footer p {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .provider-list-pane {

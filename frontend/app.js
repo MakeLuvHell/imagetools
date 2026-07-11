@@ -48,6 +48,12 @@ const providerDefaultModel = document.querySelector("#providerDefaultModel");
 const providerIsDefault = document.querySelector("#providerIsDefault");
 const providerCancelBtn = document.querySelector("#providerCancelBtn");
 const providerSaveBtn = document.querySelector("#providerSaveBtn");
+const storageLocationForm = document.querySelector("#storageLocationForm");
+const storageCurrentPath = document.querySelector("#storageCurrentPath");
+const storageDataDir = document.querySelector("#storageDataDir");
+const storageMigrateExisting = document.querySelector("#storageMigrateExisting");
+const storageApplyBtn = document.querySelector("#storageApplyBtn");
+const storageLocationStatus = document.querySelector("#storageLocationStatus");
 const sessionDialog = document.querySelector("#sessionDialog");
 const sessionDialogForm = document.querySelector("#sessionDialogForm");
 const sessionDialogTitle = document.querySelector("#sessionDialogTitle");
@@ -816,10 +822,53 @@ function openProviderDialog(opener) {
   window.ImageToolsUi.openDialog(providerDialog, opener);
   renderProviderManager();
   startNewProvider();
+  void loadStorageLocation(opener === settingsBtn);
 }
 
 function closeProviderDialog() {
   window.ImageToolsUi.closeDialog(providerDialog);
+}
+
+function renderStorageLocation(location, message = "") {
+  storageCurrentPath.value = location.active_data_dir || "";
+  storageDataDir.value = location.pending_data_dir || location.active_data_dir || "";
+  storageMigrateExisting.checked = false;
+  storageLocationStatus.textContent = message;
+  storageLocationStatus.hidden = !message;
+}
+
+async function loadStorageLocation(focusInput = false) {
+  try {
+    renderStorageLocation(await fetch("/api/storage-location").then(readJson));
+    if (focusInput && providerDialog.open) {
+      storageDataDir.focus();
+    }
+  } catch (error) {
+    storageLocationStatus.textContent = error.message;
+    storageLocationStatus.hidden = false;
+  }
+}
+
+async function handleStorageLocationSubmit(event) {
+  event.preventDefault();
+  storageApplyBtn.disabled = true;
+  storageLocationStatus.hidden = true;
+  try {
+    const location = await fetch("/api/storage-location", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data_dir: storageDataDir.value.trim(),
+        migrate_existing: storageMigrateExisting.checked,
+      }),
+    }).then(readJson);
+    renderStorageLocation(location, "已设置新位置，重启应用后生效。");
+  } catch (error) {
+    storageLocationStatus.textContent = error.message;
+    storageLocationStatus.hidden = false;
+  } finally {
+    storageApplyBtn.disabled = false;
+  }
 }
 
 function handleEscape(event) {
@@ -968,6 +1017,7 @@ providerDialog.addEventListener("cancel", handleDialogCancel);
 addProviderBtn.addEventListener("click", startNewProvider);
 providerCancelBtn.addEventListener("click", closeProviderDialog);
 providerForm.addEventListener("submit", handleProviderSubmit);
+storageLocationForm.addEventListener("submit", handleStorageLocationSubmit);
 imagePreviewClose.addEventListener("click", closeImagePreview);
 imagePreviewDialog.addEventListener("cancel", cancelImagePreview);
 taskMenuBtn.addEventListener("click", toggleTaskMenu);
