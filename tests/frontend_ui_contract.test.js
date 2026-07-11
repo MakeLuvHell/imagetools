@@ -106,3 +106,11 @@ test("Provider Cancel closes the settings dialog", () => {
     /providerCancelBtn\.addEventListener\("click", closeProviderDialog\)/,
   );
 });
+
+test("temporary layers use restrained motion with a reduced-motion fallback", () => {
+  assert.match(styles, /--motion-fast:\s*120ms/);
+  assert.match(styles, /--motion-dialog:\s*160ms/);
+  assert.match(styles, /\.popover\[data-motion="opening"\]/);
+  assert.match(styles, /\.app-dialog\[data-motion="closing"\]/);
+  assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+});

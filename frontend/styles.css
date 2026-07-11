@@ -18,6 +18,11 @@
   --danger: #b4232d;
   --danger-soft: #fff0f1;
   --shadow: 0 5px 16px rgb(0 0 0 / 9%);
+  --motion-control: 100ms;
+  --motion-fast: 120ms;
+  --motion-content: 150ms;
+  --motion-dialog: 160ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
   font-family:
     "Segoe UI Variable", "Segoe UI", "Noto Sans CJK SC", system-ui, sans-serif;
 }
@@ -71,6 +76,16 @@ textarea {
 
 button {
   cursor: pointer;
+  transition:
+    color var(--motion-control) var(--motion-ease),
+    background-color var(--motion-control) var(--motion-ease),
+    border-color var(--motion-control) var(--motion-ease),
+    opacity var(--motion-control) var(--motion-ease),
+    transform 80ms var(--motion-ease);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 button:disabled {
@@ -235,6 +250,16 @@ summary:focus-visible {
   font-size: 13px;
 }
 
+.search-panel[data-motion="opening"] {
+  overflow: hidden;
+  animation: search-panel-in var(--motion-content) var(--motion-ease);
+}
+
+.search-panel[data-motion="closing"] {
+  overflow: hidden;
+  animation: search-panel-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
 .sidebar-section-label {
   padding: 8px 16px 5px;
   color: var(--muted);
@@ -358,6 +383,14 @@ summary:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.task-menu[data-motion="opening"] {
+  animation: layer-in var(--motion-fast) var(--motion-ease);
+}
+
+.task-menu[data-motion="closing"] {
+  animation: layer-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
 .task-menu button {
   width: 100%;
   height: 32px;
@@ -397,6 +430,7 @@ summary:focus-visible {
   gap: 14px;
   padding-bottom: 64px;
   text-align: center;
+  animation: content-in var(--motion-content) var(--motion-ease);
 }
 
 .empty-workspace img {
@@ -433,6 +467,7 @@ summary:focus-visible {
   min-width: 0;
   display: grid;
   gap: 14px;
+  animation: content-in var(--motion-content) var(--motion-ease);
 }
 
 .user-prompt {
@@ -829,6 +864,7 @@ summary:focus-visible {
 }
 
 .popover {
+  --layer-shift: -4px;
   position: fixed;
   z-index: 30;
   width: min(360px, calc(100vw - 32px));
@@ -840,17 +876,28 @@ summary:focus-visible {
   box-shadow: var(--shadow);
 }
 
+.popover[data-placement="top"] {
+  --layer-shift: 4px;
+  transform-origin: bottom left;
+}
+
+.popover[data-placement="bottom"] {
+  transform-origin: top left;
+}
+
+.popover[data-motion="opening"] {
+  animation: layer-in var(--motion-fast) var(--motion-ease);
+}
+
+.popover[data-motion="closing"] {
+  animation: layer-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
 .parameter-menu {
-  right: max(24px, calc((100vw - var(--sidebar-width) - var(--composer-width)) / 2));
-  bottom: 72px;
+  width: min(360px, calc(100vw - 32px));
 }
 
 .reference-menu {
-  left: max(
-    calc(var(--sidebar-width) + 24px),
-    calc(var(--sidebar-width) + (100vw - var(--sidebar-width) - var(--composer-width)) / 2)
-  );
-  bottom: 72px;
   width: 190px;
   padding: 5px;
 }
@@ -924,6 +971,26 @@ summary:focus-visible {
   color: var(--text);
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.app-dialog[data-motion="opening"],
+.image-preview-dialog[data-motion="opening"] {
+  animation: dialog-in var(--motion-dialog) var(--motion-ease);
+}
+
+.app-dialog[data-motion="closing"],
+.image-preview-dialog[data-motion="closing"] {
+  animation: dialog-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
+.app-dialog[data-motion="opening"]::backdrop,
+.image-preview-dialog[data-motion="opening"]::backdrop {
+  animation: backdrop-in var(--motion-dialog) var(--motion-ease);
+}
+
+.app-dialog[data-motion="closing"]::backdrop,
+.image-preview-dialog[data-motion="closing"]::backdrop {
+  animation: backdrop-out var(--motion-fast) var(--motion-ease) forwards;
 }
 
 .app-dialog::backdrop {
@@ -1213,6 +1280,149 @@ summary:focus-visible {
   background: var(--surface);
   box-shadow: var(--shadow);
   font-size: 13px;
+}
+
+.toast[data-motion="opening"] {
+  animation: toast-in var(--motion-dialog) var(--motion-ease);
+}
+
+.toast[data-motion="closing"] {
+  animation: toast-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
+@keyframes layer-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--layer-shift)) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes layer-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--layer-shift)) scale(0.985);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dialog-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes search-panel-in {
+  from {
+    height: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    height: 36px;
+    margin-bottom: 6px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes search-panel-out {
+  from {
+    height: 36px;
+    margin-bottom: 6px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    height: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes content-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 @media (max-width: 1040px) {
