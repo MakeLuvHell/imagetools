@@ -99,6 +99,39 @@ test("renderTaskRuns keeps success and failure in one chronological stream", () 
   assert.match(dom.window.document.querySelector(".run-error").textContent, /上游超时/);
 });
 
+test("anchoredLayerPosition aligns a menu above the trigger", () => {
+  assert.deepEqual(
+    ui.anchoredLayerPosition({
+      anchor: { top: 500, right: 260, bottom: 530, left: 160 },
+      layer: { width: 240, height: 180 },
+      viewport: { width: 960, height: 640 },
+    }),
+    { left: 160, top: 312, placement: "top" },
+  );
+});
+
+test("anchoredLayerPosition falls below when the menu does not fit above", () => {
+  assert.deepEqual(
+    ui.anchoredLayerPosition({
+      anchor: { top: 20, right: 280, bottom: 50, left: 40 },
+      layer: { width: 240, height: 180 },
+      viewport: { width: 960, height: 640 },
+    }),
+    { left: 40, top: 58, placement: "bottom" },
+  );
+});
+
+test("anchoredLayerPosition clamps a wide menu to the viewport inset", () => {
+  assert.deepEqual(
+    ui.anchoredLayerPosition({
+      anchor: { top: 500, right: 70, bottom: 530, left: 10 },
+      layer: { width: 240, height: 180 },
+      viewport: { width: 220, height: 640 },
+    }),
+    { left: 12, top: 312, placement: "top" },
+  );
+});
+
 test("dialog helpers focus the first input and restore the opener", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM(`

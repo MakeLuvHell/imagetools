@@ -15,6 +15,35 @@
     globalScope.ImageToolsIcons?.refresh();
   }
 
+  function anchoredLayerPosition({
+    anchor,
+    layer,
+    viewport,
+    gap = 8,
+    padding = 12,
+  }) {
+    const topPosition = anchor.top - layer.height - gap;
+    const bottomPosition = anchor.bottom + gap;
+    const fitsAbove = topPosition >= padding;
+    const fitsBelow =
+      bottomPosition + layer.height <= viewport.height - padding;
+    const placement = fitsAbove || !fitsBelow ? "top" : "bottom";
+    const desiredTop = placement === "top" ? topPosition : bottomPosition;
+    const maxLeft = Math.max(
+      padding,
+      viewport.width - layer.width - padding,
+    );
+    const maxTop = Math.max(
+      padding,
+      viewport.height - layer.height - padding,
+    );
+    return {
+      left: Math.min(Math.max(anchor.left, padding), maxLeft),
+      top: Math.min(Math.max(desiredTop, padding), maxTop),
+      placement,
+    };
+  }
+
   function renderSessionList(container, sessions, selectedSessionId, onSelect) {
     container.replaceChildren();
     for (const session of sessions) {
@@ -277,6 +306,7 @@
   }
 
   const api = {
+    anchoredLayerPosition,
     renderSessionList,
     renderNewTask,
     renderProviderList,
