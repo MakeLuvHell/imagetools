@@ -9,7 +9,7 @@ Windows 桌面图片创作工作台，用于通过兼容 OpenAI 图片接口进�
 - 新任务先保存在本地草稿中，第一次有效提交才自动创建会话。
 - 多 provider 配置：名称、Base URL、API Key、默认模型。
 - 每次生成写入本地历史：提示词、参数、provider/model 快照、参考图、结果图或错误。
-- 图片文件保存在本地目录，元数据保存在 SQLite。
+- 图片文件保存在本地目录，元数据保存在 SQLite；可在设置中选择数据目录。
 - 支持结果预览、下载、复制链接、设为参考图、复制参数继续生成。
 
 不包含云同步、账号、多用户、素材中心、系统凭据存储、自动更新或内置图片编辑器。
@@ -104,7 +104,11 @@ Windows x64 安装包由 GitHub Actions 的 Windows runner 构建并上传到 Gi
 
 ## 运行时数据
 
-桌面版运行时数据保存到系统应用数据目录。开发测试入口未设置 `IMAGE_TOOLS_DATA_DIR` 时使用仓库内 `data/`。
+Windows 桌面版默认把数据保存到 `%APPDATA%\com.imagetools.desktop\`。开发测试入口未设置 `IMAGE_TOOLS_DATA_DIR` 时使用仓库内 `data/`。
+
+在左下角设置中可输入新的绝对路径。提交后重启应用才会切换目录；可选择复制现有数据。复制会保留旧目录作为恢复副本，不会移动或删除旧文件。迁移期间目标目录必须为空；若已选择的自定义目录在后续启动时不可读写，应用会启动失败，而不会悄悄创建新的历史目录。
+
+目录选择本身保存在固定的 `%LOCALAPPDATA%\com.imagetools.desktop\storage-location.json`，不随工作数据迁移。
 
 数据布局：
 
@@ -113,9 +117,9 @@ Windows x64 安装包由 GitHub Actions 的 Windows runner 构建并上传到 Gi
 - `sessions`：创作会话。
 - `generation_runs`：每轮生成的提示词、参数、provider/model 快照、状态和错误。
 - `images`：生成图片文件的本地路径和元数据。
-- `data/images/`：生成图片文件。
-- `data/uploads/`：上传或继续生成使用的参考图。
-- `data/settings.json`：旧版单 provider 设置；首次访问 provider API 时会迁移为默认 provider。
+- `images/`：生成图片文件；开发默认数据根下对应 `data/images/`。
+- `uploads/`：上传或继续生成使用的参考图。
+- `settings.json`：旧版单 provider 设置；首次访问 provider API 时会迁移为默认 provider。
 
 ## 测试与验证
 

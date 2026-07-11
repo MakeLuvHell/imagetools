@@ -20,6 +20,7 @@
 | UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | Done |
 | PKG001 | Release | Apply new app icon and localize Windows installers | Version 0.2.1 NSIS/MSI release preparation | UI008 | Done |
 | UI009 | Interaction | Anchor temporary layers and add restrained motion | Responsive popovers, dialogs, and reduced-motion support | UI008 | Done |
+| STG001 | Storage | Configure a restart-only local data directory | Copy-safe migration, bootstrap configuration, settings UI, and browser coverage | UI004, UI008 | Done |
 
 ## Recommended Order
 
@@ -29,6 +30,7 @@
 4. UI007 and UI008 complete visual and release verification.
 5. PKG001 prepares the branded Simplified Chinese Windows installers after UI verification.
 6. UI009 refines temporary-layer geometry and interaction motion without changing product scope.
+7. STG001 makes the local workbench payload location user-configurable without an in-process data-root switch.
 
 ## Blockers
 

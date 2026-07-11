@@ -4,7 +4,7 @@
 
 ### Python API And Persistence
 
-Run `pytest -q` or `mise run test`. Tests cover Provider/session CRUD, generation history, unexpected failure finalization, sidecar packaging, Tauri configuration, and release workflows.
+Run `pytest -q` or `mise run test`. Tests cover Provider/session CRUD, generation history, unexpected failure finalization, sidecar packaging, Tauri configuration, release workflows, and configurable data-directory resolution. Storage tests cover bootstrap parsing, pending activation, SQLite backup, recursive payload copying, unsafe path rejection, and restart-only API scheduling.
 
 ### Frontend State And DOM
 
@@ -20,7 +20,7 @@ Baselines cover:
 - Parameter menu, Provider dialog, running, success, and failure states.
 - Enter/Shift+Enter, focus restoration, menu arrows, rapid submit, retry, long CJK text, and overflow.
 - Popover-to-trigger geometry before and after viewport resize at both supported viewport sizes.
-- Provider Cancel close/focus behavior and the system reduced-motion preference.
+- Provider Cancel close/focus behavior, storage-location loading/submission/errors/restart feedback, and the system reduced-motion preference.
 
 Regenerate intentional baselines with `npm run test:ui:update`, then inspect the PNG files before committing.
 

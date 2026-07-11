@@ -141,3 +141,19 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Live rectangle calculation works across the supported Windows WebView2 range without relying on newer CSS anchor support. A shared lifecycle keeps visibility, `aria-expanded`, animation completion, re-entry, and focus restoration synchronized.
 
 **Consequences:** New temporary layers should use `ImageToolsUi.openLayer`, `openAnchoredLayer`, and `closeLayer` instead of mutating `hidden` directly. Browser tests must assert trigger proximity and viewport containment rather than only comparing isolated layer screenshots.
+
+### 2026-07-12: Keep Storage Selection Outside The Movable Workbench Payload
+
+**Decision:** Keep the movable payload (`workbench.sqlite3`, `images/`, `uploads/`, and `settings.json`) under the selected data root, while storing the active and pending data-root selection in `%LOCALAPPDATA%\com.imagetools.desktop\storage-location.json` on Windows.
+
+**Context:** Users need control over the local location of creative history without losing sessions or allowing a running process to point SQLite and static files at different roots.
+
+**Options Considered:**
+
+- Store the selection inside the movable data root.
+- Switch the backend root while the process is running.
+- Keep a stable bootstrap file and activate a requested change on restart.
+
+**Reasoning:** A stable bootstrap file remains discoverable after payload migration. Restart-only activation preserves the existing import-time SQLite/static-file bindings. SQLite backup plus recursive copies preserves a coherent copy of the payload while retaining the original directory for recovery.
+
+**Consequences:** The settings API schedules a pending change only. Pending copy migrations require an empty destination, never delete their source, and custom roots that cannot be used on startup must fail explicitly instead of silently falling back to a new history store.
