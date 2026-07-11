@@ -1,6 +1,23 @@
 const { test, expect } = require("@playwright/test");
 const { installApiMocks, settleUi } = require("./helpers");
 
+async function expectTopStartAnchor(page, trigger, layer) {
+  await expect(layer).toHaveAttribute("data-placement", "top");
+  await expect(layer).toHaveAttribute("data-motion", "open");
+  const [triggerBox, layerBox] = await Promise.all([
+    trigger.boundingBox(),
+    layer.boundingBox(),
+  ]);
+  const viewport = page.viewportSize();
+
+  expect(Math.abs(layerBox.x - triggerBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(triggerBox.y - (layerBox.y + layerBox.height) - 8)).toBeLessThanOrEqual(1);
+  expect(layerBox.x).toBeGreaterThanOrEqual(12);
+  expect(layerBox.y).toBeGreaterThanOrEqual(12);
+  expect(layerBox.x + layerBox.width).toBeLessThanOrEqual(viewport.width - 12);
+  expect(layerBox.y + layerBox.height).toBeLessThanOrEqual(viewport.height - 12);
+}
+
 test("new task creates a session only on first valid submit", async ({ page }) => {
   const requests = await installApiMocks(page);
   await page.goto("/");
@@ -89,6 +106,53 @@ test("desktop shell has no horizontal overflow at the minimum size", async ({ pa
     );
     expect(fits, selector).toBe(true);
   }
+});
+
+test("Composer menus stay anchored through viewport resize", async ({ page }) => {
+  await installApiMocks(page);
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.goto("/");
+  const parameterTrigger = page.getByRole("button", { name: "图片参数" });
+  const parameterMenu = page.getByRole("menu", { name: "图片参数" });
+
+  await parameterTrigger.click();
+  await expectTopStartAnchor(page, parameterTrigger, parameterMenu);
+  await page.setViewportSize({ width: 960, height: 640 });
+  await expectTopStartAnchor(page, parameterTrigger, parameterMenu);
+
+  await page.keyboard.press("Escape");
+  await expect(parameterMenu).toBeHidden();
+  const referenceTrigger = page.getByRole("button", { name: "添加参考图" });
+  const referenceMenu = page.locator("#referenceMenu");
+  await referenceTrigger.click();
+  await expectTopStartAnchor(page, referenceTrigger, referenceMenu);
+});
+
+test("Provider Cancel closes settings and restores the sidebar opener", async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto("/");
+  const opener = page.getByRole("button", { name: "Providers" });
+
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Providers" });
+  await expect(dialog).toHaveAttribute("data-motion", "open");
+  await dialog.getByRole("button", { name: "取消" }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test("reduced motion opens anchored menus without active animation", async ({ page }) => {
+  await installApiMocks(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "图片参数" }).click();
+  const menu = page.getByRole("menu", { name: "图片参数" });
+
+  await expect(menu).toHaveAttribute("data-motion", "open");
+  expect(
+    await menu.evaluate((element) => element.getAnimations({ subtree: true }).length),
+  ).toBe(0);
 });
 
 test("shell visual baselines follow viewport and system theme", async ({ page }) => {
