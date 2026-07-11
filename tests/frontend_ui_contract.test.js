@@ -123,6 +123,14 @@ test("settings dialog exposes a restart-only local data directory workflow", () 
   assert.match(app, /migrate_existing/);
   assert.match(app, /重启应用后生效/);
   assert.match(styles, /\.storage-location-section/);
+  assert.match(
+    styles,
+    /\.storage-location-form \.checkbox-field input\s*\{[\s\S]*width:\s*16px/,
+  );
+  assert.match(
+    styles,
+    /\.app-dialog \.storage-location-form > \.checkbox-field\s*\{[\s\S]*display:\s*flex/,
+  );
 });
 
 test("temporary layers use restrained motion with a reduced-motion fallback", () => {

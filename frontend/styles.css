@@ -1097,6 +1097,13 @@ summary:focus-visible {
   background: var(--surface);
 }
 
+.storage-location-form .checkbox-field input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+}
+
 .storage-location-form footer {
   min-width: 0;
   display: flex;
@@ -1326,6 +1333,13 @@ summary:focus-visible {
 }
 
 .app-dialog .provider-form > .checkbox-field {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 7px;
+}
+
+.app-dialog .storage-location-form > .checkbox-field {
   display: flex;
   grid-template-columns: none;
   align-items: center;
