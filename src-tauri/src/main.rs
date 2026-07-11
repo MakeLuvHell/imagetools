@@ -101,13 +101,16 @@ fn wait_for_backend(port: u16) -> Result<(), Box<dyn std::error::Error>> {
 fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
     let port = find_available_port()?;
     let data_dir = app.path().app_data_dir()?;
+    let config_dir = app.path().app_local_data_dir()?;
     std::fs::create_dir_all(&data_dir)?;
+    std::fs::create_dir_all(&config_dir)?;
     let (_events, child) = app
         .shell()
         .sidecar("imagetools-backend")?
         .env("IMAGE_TOOLS_HOST", "127.0.0.1")
         .env("IMAGE_TOOLS_PORT", port.to_string())
         .env("IMAGE_TOOLS_DATA_DIR", data_dir.to_string_lossy().to_string())
+        .env("IMAGE_TOOLS_CONFIG_DIR", config_dir.to_string_lossy().to_string())
         .spawn()?;
     app.manage(BackendProcess(Mutex::new(Some(child))));
     wait_for_backend(port)?;

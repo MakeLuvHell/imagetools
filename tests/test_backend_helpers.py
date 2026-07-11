@@ -53,10 +53,13 @@ def test_load_settings_can_use_environment_defaults_when_file_missing(tmp_path, 
 
 def test_runtime_paths_use_environment_data_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("IMAGE_TOOLS_DATA_DIR", str(tmp_path / "desktop-data"))
+    monkeypatch.setenv("IMAGE_TOOLS_CONFIG_DIR", str(tmp_path / "desktop-config"))
 
     paths = main.resolve_runtime_paths()
 
     assert paths.data_dir == tmp_path / "desktop-data"
+    assert paths.default_data_dir == tmp_path / "desktop-data"
+    assert paths.config_dir == tmp_path / "desktop-config"
     assert paths.image_dir == tmp_path / "desktop-data" / "images"
     assert paths.upload_dir == tmp_path / "desktop-data" / "uploads"
     assert paths.settings_path == tmp_path / "desktop-data" / "settings.json"
@@ -64,10 +67,13 @@ def test_runtime_paths_use_environment_data_dir(tmp_path, monkeypatch):
 
 def test_runtime_paths_default_to_repo_data_dir(monkeypatch):
     monkeypatch.delenv("IMAGE_TOOLS_DATA_DIR", raising=False)
+    monkeypatch.delenv("IMAGE_TOOLS_CONFIG_DIR", raising=False)
 
     paths = main.resolve_runtime_paths()
 
     assert paths.data_dir == main.ROOT_DIR / "data"
+    assert paths.default_data_dir == main.ROOT_DIR / "data"
+    assert paths.config_dir == main.ROOT_DIR / ".imagetools"
     assert paths.image_dir == main.ROOT_DIR / "data" / "images"
     assert paths.upload_dir == main.ROOT_DIR / "data" / "uploads"
     assert paths.settings_path == main.ROOT_DIR / "data" / "settings.json"

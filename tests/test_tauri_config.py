@@ -65,6 +65,13 @@ def test_tauri_rust_selects_source_backend_only_for_debug_builds():
     assert "prepare_backend(app)" in main_rs
 
 
+def test_tauri_release_sidecar_receives_a_stable_storage_config_directory():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+
+    assert "app_local_data_dir()" in main_rs
+    assert '"IMAGE_TOOLS_CONFIG_DIR"' in main_rs
+
+
 def test_tauri_debug_backend_requires_the_launcher_token():
     main_rs = Path("src-tauri/src/main.rs").read_text()
 

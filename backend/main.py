@@ -20,6 +20,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from backend.storage_location import (
+    StorageLocationError,
+    normalize_absolute_path,
+    pending_location,
+    read_bootstrap,
+    resolve_storage_location,
+    schedule_storage_location,
+)
 from backend.workbench_db import GenerationRun, Provider, Session, StoredImage, WorkbenchStore
 
 
@@ -47,7 +55,10 @@ CHSHAPI_IMAGE_BASE_URL = "https://img-api.chshapi.org/v1"
 
 @dataclass(frozen=True)
 class RuntimePaths:
+    default_data_dir: Path
     data_dir: Path
+    config_dir: Path
+    storage_config_path: Path
     image_dir: Path
     upload_dir: Path
     settings_path: Path
@@ -55,10 +66,16 @@ class RuntimePaths:
 
 def resolve_runtime_paths() -> RuntimePaths:
     configured_data_dir = os.getenv("IMAGE_TOOLS_DATA_DIR", "").strip()
-    data_dir = Path(configured_data_dir).expanduser() if configured_data_dir else ROOT_DIR / "data"
-    data_dir = data_dir.resolve()
+    default_data_dir = Path(configured_data_dir).expanduser() if configured_data_dir else ROOT_DIR / "data"
+    configured_config_dir = os.getenv("IMAGE_TOOLS_CONFIG_DIR", "").strip()
+    config_dir = Path(configured_config_dir).expanduser() if configured_config_dir else ROOT_DIR / ".imagetools"
+    location = resolve_storage_location(default_data_dir, config_dir)
+    data_dir = location.active_data_dir
     return RuntimePaths(
+        default_data_dir=location.default_data_dir,
         data_dir=data_dir,
+        config_dir=config_dir.resolve(),
+        storage_config_path=location.config_path,
         image_dir=data_dir / "images",
         upload_dir=data_dir / "uploads",
         settings_path=data_dir / "settings.json",
@@ -66,7 +83,10 @@ def resolve_runtime_paths() -> RuntimePaths:
 
 
 RUNTIME_PATHS = resolve_runtime_paths()
+DEFAULT_DATA_DIR = RUNTIME_PATHS.default_data_dir
 DATA_DIR = RUNTIME_PATHS.data_dir
+CONFIG_DIR = RUNTIME_PATHS.config_dir
+STORAGE_CONFIG_PATH = RUNTIME_PATHS.storage_config_path
 IMAGE_DIR = RUNTIME_PATHS.image_dir
 UPLOAD_DIR = RUNTIME_PATHS.upload_dir
 SETTINGS_PATH = RUNTIME_PATHS.settings_path
@@ -88,6 +108,11 @@ class ProviderPayload(BaseModel):
     api_key: str = ""
     default_model: str = "gpt-image-2"
     is_default: bool = False
+
+
+class StorageLocationPayload(BaseModel):
+    data_dir: str
+    migrate_existing: bool = False
 
 
 class SessionPayload(BaseModel):
@@ -600,6 +625,48 @@ def health() -> dict[str, object]:
 @app.get("/api/settings")
 def get_settings() -> dict[str, object]:
     return public_settings(load_settings())
+
+
+def storage_location_status(*, restart_required: bool = False) -> dict[str, object]:
+    payload = read_bootstrap(STORAGE_CONFIG_PATH)
+    pending = pending_location(payload)
+    pending_data_dir: str | None = None
+    if pending is not None:
+        target = pending.get("data_dir")
+        if not isinstance(target, str):
+            raise StorageLocationError("数据目录配置中的迁移任务缺少路径。")
+        pending_data_dir = str(normalize_absolute_path(target))
+    response: dict[str, object] = {
+        "active_data_dir": str(DATA_DIR),
+        "default_data_dir": str(DEFAULT_DATA_DIR),
+        "pending_data_dir": pending_data_dir,
+        "is_custom": DATA_DIR != DEFAULT_DATA_DIR,
+    }
+    if restart_required:
+        response["restart_required"] = True
+    return response
+
+
+@app.get("/api/storage-location")
+def get_storage_location() -> dict[str, object]:
+    try:
+        return storage_location_status()
+    except StorageLocationError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@app.post("/api/storage-location")
+def update_storage_location(payload: StorageLocationPayload) -> dict[str, object]:
+    try:
+        schedule_storage_location(
+            current_data_dir=DATA_DIR,
+            config_dir=CONFIG_DIR,
+            data_dir=payload.data_dir,
+            migrate_existing=payload.migrate_existing,
+        )
+        return storage_location_status(restart_required=True)
+    except StorageLocationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/api/settings")
