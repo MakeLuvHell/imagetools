@@ -83,7 +83,7 @@ test("offline icon scripts load before application orchestration", () => {
 
 test("shell follows system themes and keeps Windows desktop geometry", () => {
   assert.match(styles, /color-scheme:\s*light dark/);
-  assert.match(styles, /--sidebar-width:\s*clamp\(248px,\s*20\.3vw,\s*280px\)/);
+  assert.match(styles, /--sidebar-width:\s*clamp\(248px,\s*20\.3vw,\s*360px\)/);
   assert.match(styles, /--task-width:\s*760px/);
   assert.match(styles, /--composer-width:\s*746px/);
   assert.match(styles, /@media\s*\(prefers-color-scheme:\s*dark\)/);

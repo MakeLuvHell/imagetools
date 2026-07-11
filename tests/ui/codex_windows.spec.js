@@ -128,6 +128,48 @@ test("Composer menus stay anchored through viewport resize", async ({ page }) =>
   await expectTopStartAnchor(page, referenceTrigger, referenceMenu);
 });
 
+test("expanded advanced parameters stay inside the viewport", async ({ page }) => {
+  await installApiMocks(page);
+  await page.setViewportSize({ width: 960, height: 640 });
+  await page.goto("/");
+  const trigger = page.getByRole("button", { name: "图片参数" });
+  const menu = page.getByRole("menu", { name: "图片参数" });
+  await trigger.click();
+  await menu.locator("summary").click();
+
+  const [box, viewport] = await Promise.all([menu.boundingBox(), page.viewportSize()]);
+  expect(box.y).toBeGreaterThanOrEqual(12);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height - 12);
+});
+
+test("search keeps the local workspace control at the sidebar bottom", async ({ page }) => {
+  await installApiMocks(page);
+  await page.setViewportSize({ width: 960, height: 640 });
+  await page.goto("/");
+  const workspace = page.locator(".workspace-account");
+  const search = page.getByRole("button", { name: "搜索会话" });
+
+  const before = await workspace.boundingBox();
+  await search.click();
+  await expect(page.locator("#searchPanel")).toBeVisible();
+  const opened = await workspace.boundingBox();
+  await search.click();
+  await expect(page.locator("#searchPanel")).toBeHidden();
+  const closed = await workspace.boundingBox();
+
+  for (const box of [before, opened, closed]) {
+    expect(Math.round(box.y + box.height)).toBe(640);
+  }
+});
+
+test("wide desktop windows expand the session sidebar", async ({ page }) => {
+  await installApiMocks(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+
+  expect((await page.locator(".session-sidebar").boundingBox()).width).toBeGreaterThan(280);
+});
+
 test("Provider Cancel closes settings and restores the sidebar opener", async ({ page }) => {
   await installApiMocks(page);
   await page.goto("/");

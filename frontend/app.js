@@ -35,6 +35,7 @@ const generateBtn = document.querySelector("#generateBtn");
 const parameterMenu = document.querySelector("#parameterMenu");
 const parameterMenuBtn = document.querySelector("#parameterMenuBtn");
 const parameterSummaryText = document.querySelector("#parameterSummaryText");
+const advancedParamsPanel = document.querySelector("#advancedParamsPanel");
 const providerDialog = document.querySelector("#providerDialog");
 const providerDialogClose = document.querySelector("#providerDialogClose");
 const providerList = document.querySelector("#providerList");
@@ -1036,6 +1037,11 @@ promptInput.addEventListener("input", resizePrompt);
 promptInput.addEventListener("keydown", handlePromptKeydown);
 parameterMenu.addEventListener("input", saveDraftFromInput);
 parameterMenu.addEventListener("change", saveDraftFromInput);
+advancedParamsPanel.addEventListener("toggle", () => {
+  if (window.ImageToolsUi.isLayerOpen(parameterMenu)) {
+    window.ImageToolsUi.positionAnchoredLayer(parameterMenu, parameterMenuBtn);
+  }
+});
 parameterMenu.addEventListener("keydown", handleMenuKeydown);
 referenceMenu.addEventListener("keydown", handleMenuKeydown);
 taskMenu.addEventListener("keydown", handleMenuKeydown);
