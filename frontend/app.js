@@ -73,9 +73,9 @@ const runsBySession = {};
 function showToast(message) {
   clearTimeout(toastTimer);
   toast.textContent = message;
-  toast.hidden = false;
+  window.ImageToolsUi.openLayer(toast);
   toastTimer = setTimeout(() => {
-    toast.hidden = true;
+    void window.ImageToolsUi.closeLayer(toast);
   }, 2400);
 }
 
@@ -561,9 +561,8 @@ async function ensureSessionForSubmit(prompt) {
   return session.id;
 }
 
-function closeTaskMenu() {
-  taskMenu.hidden = true;
-  taskMenuBtn.setAttribute("aria-expanded", "false");
+function closeTaskMenu(options) {
+  return window.ImageToolsUi.closeLayer(taskMenu, taskMenuBtn, options);
 }
 
 function openRenameDialog() {
@@ -800,9 +799,16 @@ async function handleSessionDialogSubmit(event) {
 }
 
 function toggleSearch() {
-  searchPanel.hidden = !searchPanel.hidden;
-  if (!searchPanel.hidden) {
+  const opening = !window.ImageToolsUi.isLayerOpen(searchPanel);
+  if (opening) {
+    window.ImageToolsUi.openLayer(searchPanel, searchToggle, {
+      placement: "top",
+    });
     sessionFilter.focus();
+  } else {
+    void window.ImageToolsUi.closeLayer(searchPanel, searchToggle, {
+      restoreFocus: true,
+    });
   }
 }
 
@@ -818,43 +824,51 @@ function closeProviderDialog() {
 
 function handleEscape(event) {
   if (event.key !== "Escape") return;
-  if (!taskMenu.hidden) {
-    closeTaskMenu();
-    taskMenuBtn.focus();
+  if (window.ImageToolsUi.isLayerOpen(taskMenu)) {
+    void closeTaskMenu({ restoreFocus: true });
   }
-  if (!searchPanel.hidden) {
-    searchPanel.hidden = true;
-    searchToggle.focus();
+  if (window.ImageToolsUi.isLayerOpen(searchPanel)) {
+    void window.ImageToolsUi.closeLayer(searchPanel, searchToggle, {
+      restoreFocus: true,
+    });
   }
-  if (!parameterMenu.hidden) {
-    parameterMenu.hidden = true;
-    parameterMenuBtn.setAttribute("aria-expanded", "false");
-    parameterMenuBtn.focus();
+  if (window.ImageToolsUi.isLayerOpen(parameterMenu)) {
+    void closeParameterMenu({ restoreFocus: true });
   }
-  if (!referenceMenu.hidden) {
-    referenceMenu.hidden = true;
-    referenceBtn.setAttribute("aria-expanded", "false");
-    referenceBtn.focus();
+  if (window.ImageToolsUi.isLayerOpen(referenceMenu)) {
+    void closeReferenceMenu({ restoreFocus: true });
   }
 }
 
 function toggleTaskMenu() {
-  const opening = taskMenu.hidden;
-  taskMenu.hidden = !opening;
-  taskMenuBtn.setAttribute("aria-expanded", String(opening));
+  const opening = !window.ImageToolsUi.isLayerOpen(taskMenu);
   if (opening) {
+    window.ImageToolsUi.openLayer(taskMenu, taskMenuBtn, {
+      placement: "bottom",
+    });
     renameSessionBtn.focus();
+  } else {
+    void closeTaskMenu({ restoreFocus: true });
   }
 }
 
+function closeParameterMenu(options) {
+  return window.ImageToolsUi.closeLayer(
+    parameterMenu,
+    parameterMenuBtn,
+    options,
+  );
+}
+
 function toggleParameterMenu() {
-  const opening = parameterMenu.hidden;
-  closeTaskMenu();
-  closeReferenceMenu();
-  parameterMenu.hidden = !opening;
-  parameterMenuBtn.setAttribute("aria-expanded", String(opening));
+  const opening = !window.ImageToolsUi.isLayerOpen(parameterMenu);
+  void closeTaskMenu();
+  void closeReferenceMenu();
   if (opening) {
+    window.ImageToolsUi.openAnchoredLayer(parameterMenu, parameterMenuBtn);
     ratioSelect.focus();
+  } else {
+    void closeParameterMenu({ restoreFocus: true });
   }
 }
 
@@ -876,19 +890,20 @@ function handleMenuKeydown(event) {
   items[next].focus();
 }
 
-function closeReferenceMenu() {
-  referenceMenu.hidden = true;
-  referenceBtn.setAttribute("aria-expanded", "false");
+function closeReferenceMenu(options) {
+  return window.ImageToolsUi.closeLayer(referenceMenu, referenceBtn, options);
 }
 
 function toggleReferenceMenu() {
-  const opening = referenceMenu.hidden;
-  closeTaskMenu();
-  parameterMenu.hidden = true;
-  parameterMenuBtn.setAttribute("aria-expanded", "false");
-  referenceMenu.hidden = !opening;
-  referenceBtn.setAttribute("aria-expanded", String(opening));
-  if (opening) uploadReferenceBtn.focus();
+  const opening = !window.ImageToolsUi.isLayerOpen(referenceMenu);
+  void closeTaskMenu();
+  void closeParameterMenu();
+  if (opening) {
+    window.ImageToolsUi.openAnchoredLayer(referenceMenu, referenceBtn);
+    uploadReferenceBtn.focus();
+  } else {
+    void closeReferenceMenu({ restoreFocus: true });
+  }
 }
 
 function handlePromptKeydown(event) {
@@ -898,12 +913,28 @@ function handlePromptKeydown(event) {
 }
 
 function handleOutsideClick(event) {
-  if (!parameterMenu.hidden && !parameterMenu.contains(event.target) && !parameterMenuBtn.contains(event.target)) {
-    parameterMenu.hidden = true;
-    parameterMenuBtn.setAttribute("aria-expanded", "false");
+  if (
+    window.ImageToolsUi.isLayerOpen(parameterMenu) &&
+    !parameterMenu.contains(event.target) &&
+    !parameterMenuBtn.contains(event.target)
+  ) {
+    void closeParameterMenu();
   }
-  if (!referenceMenu.hidden && !referenceMenu.contains(event.target) && !referenceBtn.contains(event.target)) {
-    closeReferenceMenu();
+  if (
+    window.ImageToolsUi.isLayerOpen(referenceMenu) &&
+    !referenceMenu.contains(event.target) &&
+    !referenceBtn.contains(event.target)
+  ) {
+    void closeReferenceMenu();
+  }
+}
+
+function repositionComposerMenus() {
+  if (window.ImageToolsUi.isLayerOpen(parameterMenu)) {
+    window.ImageToolsUi.positionAnchoredLayer(parameterMenu, parameterMenuBtn);
+  }
+  if (window.ImageToolsUi.isLayerOpen(referenceMenu)) {
+    window.ImageToolsUi.positionAnchoredLayer(referenceMenu, referenceBtn);
   }
 }
 
@@ -935,7 +966,7 @@ settingsBtn.addEventListener("click", () => openProviderDialog(settingsBtn));
 providerDialogClose.addEventListener("click", closeProviderDialog);
 providerDialog.addEventListener("cancel", handleDialogCancel);
 addProviderBtn.addEventListener("click", startNewProvider);
-providerCancelBtn.addEventListener("click", startNewProvider);
+providerCancelBtn.addEventListener("click", closeProviderDialog);
 providerForm.addEventListener("submit", handleProviderSubmit);
 imagePreviewClose.addEventListener("click", closeImagePreview);
 imagePreviewDialog.addEventListener("cancel", cancelImagePreview);
@@ -992,6 +1023,7 @@ clearReferenceBtn.addEventListener("click", () => {
 });
 modelInput.addEventListener("input", syncTransparentBackground);
 outputFormatSelect.addEventListener("change", syncTransparentBackground);
+window.addEventListener("resize", repositionComposerMenus);
 
 render();
 restoreActiveDraft();

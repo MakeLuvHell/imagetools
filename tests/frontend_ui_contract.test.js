@@ -9,6 +9,7 @@ const styles = fs.readFileSync(
   path.join(root, "frontend", "styles.css"),
   "utf8",
 );
+const app = fs.readFileSync(path.join(root, "frontend", "app.js"), "utf8");
 
 test("shell exposes Codex Windows task regions without permanent parameter columns", () => {
   for (const id of [
@@ -97,4 +98,11 @@ test("Composer keeps controls in context and popover layers", () => {
   assert.match(html, /id="referenceInput"/);
   assert.match(html, /id="providerSelect"/);
   assert.doesNotMatch(html, /class="composer-controls"/);
+});
+
+test("Provider Cancel closes the settings dialog", () => {
+  assert.match(
+    app,
+    /providerCancelBtn\.addEventListener\("click", closeProviderDialog\)/,
+  );
 });

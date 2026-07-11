@@ -1,6 +1,7 @@
 (function initUi(globalScope) {
   const dialogOpeners = new WeakMap();
   const dialogKeyHandlers = new WeakMap();
+  const motionStates = new WeakMap();
 
   function focusableElements(dialog) {
     return [...dialog.querySelectorAll("input, select, textarea, button, [href], [tabindex]")].filter(
@@ -42,6 +43,121 @@
       top: Math.min(Math.max(desiredTop, padding), maxTop),
       placement,
     };
+  }
+
+  function currentAnimations(element) {
+    if (typeof element.getAnimations !== "function") return [];
+    return element
+      .getAnimations({ subtree: true })
+      .filter((animation) => animation.playState !== "finished");
+  }
+
+  function cancelAnimations(element) {
+    for (const animation of currentAnimations(element)) animation.cancel();
+  }
+
+  function startMotion(element, phase) {
+    cancelAnimations(element);
+    delete element.dataset.motion;
+    void element.offsetWidth;
+    element.dataset.motion = phase;
+    return currentAnimations(element);
+  }
+
+  function finishMotion(element, token, animations, callback) {
+    if (!animations.length) {
+      callback();
+      return Promise.resolve();
+    }
+    return Promise.allSettled(animations.map((animation) => animation.finished)).then(
+      () => {
+        if (motionStates.get(element)?.token === token) callback();
+      },
+    );
+  }
+
+  function beginOpen(element, trigger, placement) {
+    const token = {};
+    motionStates.set(element, { token, status: "opening" });
+    element.hidden = false;
+    if (trigger) trigger.setAttribute("aria-expanded", "true");
+    if (placement) element.dataset.placement = placement;
+    return token;
+  }
+
+  function runOpenMotion(element, token) {
+    const animations = startMotion(element, "opening");
+    void finishMotion(element, token, animations, () => {
+      motionStates.set(element, { token, status: "open" });
+      element.dataset.motion = "open";
+    });
+  }
+
+  function openLayer(element, trigger, { placement = "bottom" } = {}) {
+    const token = beginOpen(element, trigger, placement);
+    runOpenMotion(element, token);
+  }
+
+  function positionAnchoredLayer(
+    element,
+    trigger,
+    { gap = 8, padding = 12 } = {},
+  ) {
+    const view = element.ownerDocument.defaultView || globalScope;
+    const position = anchoredLayerPosition({
+      anchor: trigger.getBoundingClientRect(),
+      layer: element.getBoundingClientRect(),
+      viewport: { width: view.innerWidth, height: view.innerHeight },
+      gap,
+      padding,
+    });
+    element.style.right = "auto";
+    element.style.bottom = "auto";
+    element.style.left = `${position.left}px`;
+    element.style.top = `${position.top}px`;
+    element.dataset.placement = position.placement;
+    return position;
+  }
+
+  function openAnchoredLayer(element, trigger, options = {}) {
+    const token = beginOpen(element, trigger);
+    const position = positionAnchoredLayer(element, trigger, options);
+    runOpenMotion(element, token);
+    return position;
+  }
+
+  function isLayerOpen(element) {
+    if (element.hidden) return false;
+    return motionStates.get(element)?.status !== "closing";
+  }
+
+  function closeLayer(
+    element,
+    trigger,
+    { restoreFocus = false } = {},
+  ) {
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+    if (element.hidden) {
+      if (restoreFocus) trigger?.focus();
+      return Promise.resolve();
+    }
+    const current = motionStates.get(element);
+    if (current?.status === "closing") {
+      if (restoreFocus) current.restoreFocus = true;
+      return current.promise || Promise.resolve();
+    }
+
+    const token = {};
+    const state = { token, status: "closing", restoreFocus };
+    motionStates.set(element, state);
+    const animations = startMotion(element, "closing");
+    state.promise = finishMotion(element, token, animations, () => {
+      element.hidden = true;
+      delete element.dataset.motion;
+      motionStates.delete(element);
+      if (state.restoreFocus) trigger?.focus();
+    });
+    return state.promise;
   }
 
   function renderSessionList(container, sessions, selectedSessionId, onSelect) {
@@ -271,6 +387,8 @@
     if (!dialog.open) {
       dialog.showModal();
     }
+    const token = beginOpen(dialog);
+    runOpenMotion(dialog, token);
     const focusable = focusableElements(dialog);
     focusable[0]?.focus();
     const keyHandler = (event) => {
@@ -294,19 +412,38 @@
   }
 
   function closeDialog(dialog, returnValue) {
-    if (dialog.open) {
-      dialog.close(returnValue);
-    }
     const opener = dialogOpeners.get(dialog);
     const keyHandler = dialogKeyHandlers.get(dialog);
-    if (keyHandler) dialog.removeEventListener("keydown", keyHandler);
-    dialogOpeners.delete(dialog);
-    dialogKeyHandlers.delete(dialog);
-    opener?.focus();
+    if (!dialog.open) {
+      opener?.focus();
+      return Promise.resolve();
+    }
+    const current = motionStates.get(dialog);
+    if (current?.status === "closing") return current.promise;
+
+    const token = {};
+    const state = { token, status: "closing" };
+    motionStates.set(dialog, state);
+    const animations = startMotion(dialog, "closing");
+    state.promise = finishMotion(dialog, token, animations, () => {
+      dialog.close(returnValue);
+      if (keyHandler) dialog.removeEventListener("keydown", keyHandler);
+      dialogOpeners.delete(dialog);
+      dialogKeyHandlers.delete(dialog);
+      delete dialog.dataset.motion;
+      motionStates.delete(dialog);
+      opener?.focus();
+    });
+    return state.promise;
   }
 
   const api = {
     anchoredLayerPosition,
+    openLayer,
+    openAnchoredLayer,
+    positionAnchoredLayer,
+    closeLayer,
+    isLayerOpen,
     renderSessionList,
     renderNewTask,
     renderProviderList,

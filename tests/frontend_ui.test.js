@@ -132,6 +132,77 @@ test("anchoredLayerPosition clamps a wide menu to the viewport inset", () => {
   );
 });
 
+test("openAnchoredLayer positions the layer and closeLayer restores focus", async () => {
+  const dom = new JSDOM(`
+    <button id="trigger" aria-expanded="false">参数</button>
+    <div id="menu" hidden></div>
+  `);
+  const trigger = dom.window.document.querySelector("#trigger");
+  const menu = dom.window.document.querySelector("#menu");
+  trigger.getBoundingClientRect = () => ({
+    top: 500,
+    right: 260,
+    bottom: 530,
+    left: 160,
+  });
+  menu.getBoundingClientRect = () => ({ width: 240, height: 180 });
+  Object.defineProperty(dom.window, "innerWidth", { value: 960 });
+  Object.defineProperty(dom.window, "innerHeight", { value: 640 });
+
+  ui.openAnchoredLayer(menu, trigger);
+
+  assert.equal(menu.hidden, false);
+  assert.equal(menu.style.left, "160px");
+  assert.equal(menu.style.top, "312px");
+  assert.equal(menu.dataset.placement, "top");
+  assert.equal(trigger.getAttribute("aria-expanded"), "true");
+
+  await ui.closeLayer(menu, trigger, { restoreFocus: true });
+
+  assert.equal(menu.hidden, true);
+  assert.equal(trigger.getAttribute("aria-expanded"), "false");
+  assert.equal(dom.window.document.activeElement, trigger);
+});
+
+test("reopening a closing layer prevents stale animation completion from hiding it", async () => {
+  const dom = new JSDOM('<button id="trigger"></button><div id="menu" hidden></div>');
+  const trigger = dom.window.document.querySelector("#trigger");
+  const menu = dom.window.document.querySelector("#menu");
+  trigger.getBoundingClientRect = () => ({
+    top: 500,
+    right: 260,
+    bottom: 530,
+    left: 160,
+  });
+  menu.getBoundingClientRect = () => ({ width: 240, height: 180 });
+  Object.defineProperty(dom.window, "innerWidth", { value: 960 });
+  Object.defineProperty(dom.window, "innerHeight", { value: 640 });
+
+  let finishClose;
+  const closeAnimation = {
+    playState: "running",
+    finished: new Promise((resolve) => {
+      finishClose = resolve;
+    }),
+    cancel() {
+      this.playState = "idle";
+      finishClose();
+    },
+  };
+  menu.getAnimations = () =>
+    menu.dataset.motion === "closing" && closeAnimation.playState === "running"
+      ? [closeAnimation]
+      : [];
+
+  ui.openAnchoredLayer(menu, trigger);
+  const closing = ui.closeLayer(menu, trigger);
+  ui.openAnchoredLayer(menu, trigger);
+  await closing;
+
+  assert.equal(menu.hidden, false);
+  assert.equal(trigger.getAttribute("aria-expanded"), "true");
+});
+
 test("dialog helpers focus the first input and restore the opener", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM(`
