@@ -24,9 +24,40 @@
       id: Number(session.id),
       title: String(session.title || "未命名会话"),
       recentThumbnailPath: session.recent_thumbnail_path || session.recentThumbnailPath || "",
+      projectId:
+        session.project_id == null && session.projectId == null
+          ? null
+          : Number(session.project_id ?? session.projectId),
+      isPinned: Boolean(session.is_pinned ?? session.isPinned),
       createdAt: session.created_at || session.createdAt || "",
       updatedAt: session.updated_at || session.updatedAt || "",
     }));
+  }
+
+  function normalizeProjects(projects = []) {
+    return projects.map((project) => ({
+      id: Number(project.id),
+      name: String(project.name || "未命名项目"),
+      createdAt: project.created_at || project.createdAt || "",
+      updatedAt: project.updated_at || project.updatedAt || "",
+    }));
+  }
+
+  function groupSessions(sessions = [], projects = []) {
+    const pinned = sessions.filter((session) => session.isPinned);
+    const remaining = sessions.filter((session) => !session.isPinned);
+    const projectGroups = projects.map((project) => ({
+      project,
+      sessions: remaining.filter((session) => session.projectId === project.id),
+    }));
+    const projectIds = new Set(projects.map((project) => project.id));
+    return {
+      pinned,
+      projects: projectGroups,
+      ungrouped: remaining.filter(
+        (session) => session.projectId == null || !projectIds.has(session.projectId),
+      ),
+    };
   }
 
   function normalizeProviders(providers = []) {
@@ -318,6 +349,8 @@
   const api = {
     defaultWorkbenchState,
     normalizeSessions,
+    normalizeProjects,
+    groupSessions,
     normalizeProviders,
     applySessionList,
     selectSession,

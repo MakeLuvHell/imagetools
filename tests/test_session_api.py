@@ -51,3 +51,54 @@ def test_session_api_uses_default_title_when_blank(tmp_path, monkeypatch):
 
     assert created.status_code == 200
     assert created.json()["title"].startswith("新会话 ")
+
+
+def test_session_category_api_manages_projects_assignments_and_pins(tmp_path, monkeypatch):
+    configure_runtime(tmp_path, monkeypatch)
+    client = TestClient(main.app)
+    session = client.post("/api/sessions", json={"title": "产品海报"}).json()
+
+    project = client.post("/api/projects", json={"name": "品牌视觉"})
+
+    assert project.status_code == 200
+    assert project.json()["name"] == "品牌视觉"
+    project_id = project.json()["id"]
+
+    assigned = client.patch(
+        f"/api/sessions/{session['id']}",
+        json={"project_id": project_id},
+    )
+    pinned = client.post(f"/api/sessions/{session['id']}/pin")
+
+    assert assigned.status_code == 200
+    assert assigned.json()["project_id"] == project_id
+    assert assigned.json()["is_pinned"] is False
+    assert pinned.status_code == 200
+    assert pinned.json()["is_pinned"] is True
+    assert client.get("/api/projects").json()[0]["id"] == project_id
+    assert client.get("/api/sessions").json()[0]["project_id"] == project_id
+
+    deleted = client.delete(f"/api/projects/{project_id}")
+
+    assert deleted.status_code == 204
+    restored = client.get(f"/api/sessions/{session['id']}").json()
+    assert restored["project_id"] is None
+    assert restored["is_pinned"] is True
+
+
+def test_session_category_api_rejects_unknown_project_and_can_unpin(tmp_path, monkeypatch):
+    configure_runtime(tmp_path, monkeypatch)
+    client = TestClient(main.app)
+    session = client.post("/api/sessions", json={"title": "产品海报"}).json()
+
+    rejected = client.patch(
+        f"/api/sessions/{session['id']}",
+        json={"project_id": 999},
+    )
+    client.post(f"/api/sessions/{session['id']}/pin")
+    unpinned = client.delete(f"/api/sessions/{session['id']}/pin")
+
+    assert rejected.status_code == 400
+    assert "项目不存在" in rejected.json()["detail"]
+    assert unpinned.status_code == 200
+    assert unpinned.json()["is_pinned"] is False

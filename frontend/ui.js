@@ -160,20 +160,94 @@
     return state.promise;
   }
 
+  function renderSessionItem(document, session, selectedSessionId, callbacks, { nested = false } = {}) {
+    const row = document.createElement("div");
+    row.className = `session-row${nested ? " project-session-row" : ""}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "session-item";
+    button.textContent = session.title;
+    button.title = session.title;
+    if (session.id === selectedSessionId) {
+      button.setAttribute("aria-current", "page");
+    }
+    button.addEventListener("click", () => callbacks.onSelect?.(session.id));
+    row.appendChild(button);
+    if (callbacks.onSessionAction) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "session-row-action icon-button";
+      action.setAttribute("aria-label", "整理会话");
+      action.title = "整理会话";
+      action.innerHTML = '<i data-lucide="ellipsis"></i>';
+      action.addEventListener("click", () => callbacks.onSessionAction(session, action));
+      row.appendChild(action);
+    }
+    return row;
+  }
+
+  function appendGroup(document, container, title, content) {
+    if (!content.childElementCount) return;
+    const section = document.createElement("section");
+    section.className = "session-group";
+    const heading = document.createElement("h2");
+    heading.className = "session-group-title";
+    heading.textContent = title;
+    section.append(heading, content);
+    container.appendChild(section);
+  }
+
   function renderSessionList(container, sessions, selectedSessionId, onSelect) {
     container.replaceChildren();
-    for (const session of sessions) {
-      const button = container.ownerDocument.createElement("button");
-      button.type = "button";
-      button.className = "session-item";
-      button.textContent = session.title;
-      button.title = session.title;
-      if (session.id === selectedSessionId) {
-        button.setAttribute("aria-current", "page");
+    const document = container.ownerDocument;
+    if (Array.isArray(sessions)) {
+      for (const session of sessions) {
+        container.appendChild(
+          renderSessionItem(document, session, selectedSessionId, { onSelect }),
+        );
       }
-      button.addEventListener("click", () => onSelect(session.id));
-      container.appendChild(button);
+      refreshIcons();
+      return;
     }
+    const callbacks = onSelect || {};
+    const pinned = document.createElement("div");
+    for (const session of sessions.pinned || []) {
+      pinned.appendChild(renderSessionItem(document, session, selectedSessionId, callbacks));
+    }
+    appendGroup(document, container, "置顶", pinned);
+
+    const projects = document.createElement("div");
+    for (const group of sessions.projects || []) {
+      const projectRow = document.createElement("div");
+      projectRow.className = "project-row";
+      const projectName = document.createElement("span");
+      projectName.textContent = group.project.name;
+      projectRow.innerHTML = '<i data-lucide="folder"></i>';
+      projectRow.appendChild(projectName);
+      if (callbacks.onProjectAction) {
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = "project-row-action icon-button";
+        action.setAttribute("aria-label", `管理项目 ${group.project.name}`);
+        action.title = "管理项目";
+        action.innerHTML = '<i data-lucide="ellipsis"></i>';
+        action.addEventListener("click", () => callbacks.onProjectAction(group.project, action));
+        projectRow.appendChild(action);
+      }
+      projects.appendChild(projectRow);
+      for (const session of group.sessions) {
+        projects.appendChild(
+          renderSessionItem(document, session, selectedSessionId, callbacks, { nested: true }),
+        );
+      }
+    }
+    appendGroup(document, container, "项目", projects);
+
+    const ungrouped = document.createElement("div");
+    for (const session of sessions.ungrouped || []) {
+      ungrouped.appendChild(renderSessionItem(document, session, selectedSessionId, callbacks));
+    }
+    appendGroup(document, container, "会话", ungrouped);
     refreshIcons();
   }
 

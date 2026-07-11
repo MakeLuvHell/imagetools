@@ -15,7 +15,7 @@ def test_initialize_database_creates_schema_version_and_is_idempotent(tmp_path):
     store.initialize()
 
     assert store.database_path == tmp_path / "workbench.sqlite3"
-    assert store.schema_version() == 1
+    assert store.schema_version() == 2
     assert store.get_provider(first_provider.id).name == "Primary"
 
 
@@ -88,6 +88,61 @@ def test_session_crud_lists_by_recent_update(tmp_path):
 
     assert store.get_session(first.id) is None
     assert [session.id for session in store.list_sessions()] == [second.id]
+
+
+def test_initialize_migrates_v1_sessions_without_losing_data(tmp_path):
+    database_path = tmp_path / "workbench.sqlite3"
+    connection = workbench_db.sqlite3.connect(database_path)
+    connection.executescript(
+        """
+        CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+        INSERT INTO schema_migrations (version, applied_at) VALUES (1, '2026-07-12T00:00:00+00:00');
+        CREATE TABLE sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            recent_thumbnail_path TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT
+        );
+        INSERT INTO sessions (title, recent_thumbnail_path, created_at, updated_at, deleted_at)
+        VALUES ('旧会话', NULL, '2026-07-12T00:00:00+00:00', '2026-07-12T00:00:00+00:00', NULL);
+        """
+    )
+    connection.close()
+
+    store = workbench_db.WorkbenchStore(tmp_path)
+    store.initialize()
+
+    session = store.get_session(1)
+    assert store.schema_version() == 2
+    assert session.title == "旧会话"
+    assert session.project_id is None
+    assert session.is_pinned is False
+
+
+def test_projects_assign_sessions_pin_them_and_unassign_on_delete(tmp_path):
+    store = workbench_db.WorkbenchStore(tmp_path)
+    store.initialize()
+    project = store.create_project(name="品牌项目")
+    session = store.create_session(title="产品海报")
+
+    assigned = store.update_session(
+        session.id,
+        title=session.title,
+        project_id=project.id,
+    )
+    pinned = store.set_session_pinned(session.id, True)
+
+    assert [item.name for item in store.list_projects()] == ["品牌项目"]
+    assert assigned.project_id == project.id
+    assert pinned.is_pinned is True
+
+    store.delete_project(project.id)
+
+    unassigned = store.get_session(session.id)
+    assert unassigned.project_id is None
+    assert unassigned.is_pinned is True
 
 
 def test_generation_runs_and_images_are_written_and_read_by_session(tmp_path):

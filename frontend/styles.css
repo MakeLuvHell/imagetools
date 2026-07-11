@@ -271,11 +271,99 @@ summary:focus-visible {
   line-height: 18px;
 }
 
+.sidebar-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 9px;
+}
+
+.sidebar-list-header .icon-button {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+}
+
 .session-list {
   grid-row: 5;
   min-height: 0;
   overflow: auto;
   padding: 0 8px 12px;
+}
+
+.session-group + .session-group {
+  margin-top: 12px;
+}
+
+.session-group-title {
+  height: 25px;
+  margin: 0;
+  padding: 4px 8px 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.session-row,
+.project-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: center;
+}
+
+.session-row .session-item {
+  grid-column: 1;
+}
+
+.session-row-action,
+.project-row-action {
+  grid-column: 2;
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+  opacity: 0;
+}
+
+.project-row-action {
+  grid-column: 3;
+}
+
+.session-row:hover .session-row-action,
+.session-row:focus-within .session-row-action,
+.project-row:hover .project-row-action,
+.project-row:focus-within .project-row-action {
+  opacity: 1;
+}
+
+.project-row {
+  grid-template-columns: 18px minmax(0, 1fr) 30px;
+  height: 30px;
+  padding-left: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.project-row > svg {
+  width: 15px;
+  color: var(--muted);
+}
+
+.project-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-session-row .session-item {
+  padding-left: 26px;
+}
+
+.sidebar-menu {
+  position: fixed;
+  z-index: 12;
 }
 
 .sidebar-empty {

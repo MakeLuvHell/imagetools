@@ -167,3 +167,19 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** A persistent settings frame gives each category a stable location, leaves room for future settings categories, and follows familiar desktop software conventions without adding unrelated product features.
 
 **Consequences:** The sidebar Provider action opens the Provider navigation item; the workspace settings action opens local data. Returning restores focus to the original opener, while Provider Cancel resets only the current editor.
+
+### 2026-07-12: Classify Sessions With Local Projects And Pinning
+
+**Decision:** Add a SQLite schema v2 migration with local `projects`, nullable `sessions.project_id`, and `sessions.is_pinned`; render the sidebar as independent pinned, project, and ordinary-session groups.
+
+**Context:** A flat chronological sidebar does not let creators keep important sessions visible or gather related work without adding unrelated Codex navigation.
+
+**Options Considered:**
+
+- Keep a flat list and rely only on search.
+- Add frontend-only group metadata.
+- Persist projects and pinning locally with a backward-compatible SQLite migration.
+
+**Reasoning:** Durable metadata survives restart and local data-directory migration. A database migration preserves existing workbench history, while project deletion can safely unassign sessions rather than deleting creative records.
+
+**Consequences:** Session JSON now includes `project_id` and `is_pinned`; project CRUD and pin endpoints are local API contracts. Search filters sessions before rendering but preserves their category rules. Future session organization must use these durable fields instead of browser-only state.

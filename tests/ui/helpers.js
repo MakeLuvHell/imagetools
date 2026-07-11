@@ -18,6 +18,7 @@ async function installApiMocks(page, overrides = {}) {
         updated_at: "2026-07-10T12:00:00Z",
       },
     ],
+    projects: overrides.projects || [],
     providers:
       overrides.providers === undefined
         ? [
@@ -63,6 +64,18 @@ async function installApiMocks(page, overrides = {}) {
     };
     return route.fulfill({ json: state.storageLocation });
   });
+  await page.route("**/api/projects", async (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: state.projects });
+    }
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      const project = { id: state.projects.length + 1, name: body.name };
+      state.projects.push(project);
+      return route.fulfill({ status: 200, json: project });
+    }
+    return route.fulfill({ status: 405, json: { detail: "Method not allowed" } });
+  });
   await page.route("**/api/sessions", async (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON();
@@ -78,6 +91,25 @@ async function installApiMocks(page, overrides = {}) {
       return route.fulfill({ status: 200, json: session });
     }
     return route.fulfill({ json: state.sessions });
+  });
+  await page.route(/\/api\/sessions\/(\d+)(?:\/pin)?$/, async (route) => {
+    const parts = new URL(route.request().url()).pathname.split("/");
+    const sessionId = Number(parts[3]);
+    const session = state.sessions.find((item) => item.id === sessionId);
+    if (!session) {
+      return route.fulfill({ status: 404, json: { detail: "会话不存在。" } });
+    }
+    if (parts[4] === "pin") {
+      session.is_pinned = route.request().method() === "POST";
+      return route.fulfill({ json: session });
+    }
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON();
+      if (Object.hasOwn(body, "title")) session.title = body.title;
+      if (Object.hasOwn(body, "project_id")) session.project_id = body.project_id;
+      return route.fulfill({ json: session });
+    }
+    return route.fulfill({ json: session });
   });
   await page.route(/\/api\/sessions\/(\d+)\/runs$/, (route) => {
     const id = Number(new URL(route.request().url()).pathname.split("/")[3]);

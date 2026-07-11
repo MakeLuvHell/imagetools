@@ -30,6 +30,34 @@ test("renderSessionList creates compact selectable text rows", () => {
   assert.deepEqual(selected, [7]);
 });
 
+test("renderSessionList groups pinned and project sessions with compact actions", () => {
+  assert.ok(ui, "frontend/ui.js must exist");
+  const dom = new JSDOM('<nav id="sessions"></nav>');
+  ui.renderSessionList(
+    dom.window.document.querySelector("#sessions"),
+    {
+      pinned: [{ id: 1, title: "置顶灵感" }],
+      projects: [
+        {
+          project: { id: 7, name: "品牌视觉" },
+          sessions: [{ id: 2, title: "产品海报" }],
+        },
+      ],
+      ungrouped: [{ id: 3, title: "独立尝试" }],
+    },
+    2,
+    { onSelect() {} },
+  );
+
+  assert.deepEqual(
+    [...dom.window.document.querySelectorAll(".session-group-title")].map((node) => node.textContent),
+    ["置顶", "项目", "会话"],
+  );
+  assert.equal(dom.window.document.querySelector(".project-row").textContent.trim(), "品牌视觉");
+  assert.equal(dom.window.document.querySelector(".session-item[aria-current='page']").textContent.trim(), "产品海报");
+  assert.equal(dom.window.document.querySelectorAll("button.session-item").length, 3);
+});
+
 test("renderNewTask creates an unframed creation empty state", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM('<section id="timeline"></section>');

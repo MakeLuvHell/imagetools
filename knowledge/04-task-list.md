@@ -22,6 +22,7 @@
 | UI009 | Interaction | Anchor temporary layers and add restrained motion | Responsive popovers, dialogs, and reduced-motion support | UI008 | Done |
 | STG001 | Storage | Configure a restart-only local data directory | Copy-safe migration, bootstrap configuration, settings UI, and browser coverage | UI004, UI008 | Done |
 | UI010 | Settings | Replace the mixed Provider dialog with a dedicated settings view | Vertical settings navigation with isolated Provider and local-data panels | UI004, STG001 | Done |
+| UI011 | Sessions | Add pinned sessions and local project groups | SQLite migration, project APIs, and grouped sidebar management | UI003, UI010 | Done |
 
 ## Recommended Order
 
@@ -33,6 +34,7 @@
 6. UI009 refines temporary-layer geometry and interaction motion without changing product scope.
 7. STG001 makes the local workbench payload location user-configurable without an in-process data-root switch.
 8. UI010 separates settings concerns into a dedicated desktop work area.
+9. UI011 adds durable session grouping without adding Codex-only navigation.
 
 ## Blockers
 

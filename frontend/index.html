@@ -44,7 +44,11 @@
           />
         </div>
 
-        <div class="sidebar-section-label">会话</div>
+        <div class="sidebar-section-label sidebar-list-header">
+          <button id="newProjectBtn" type="button" class="icon-button" aria-label="新建项目" title="新建项目">
+            <i data-lucide="folder-plus"></i>
+          </button>
+        </div>
         <nav id="sessionList" class="session-list" aria-label="历史会话"></nav>
 
         <footer class="workspace-account">
@@ -75,6 +79,24 @@
               <i data-lucide="ellipsis"></i>
             </button>
             <div id="taskMenu" class="task-menu" role="menu" hidden>
+            <button
+              id="pinSessionBtn"
+              type="button"
+              role="menuitem"
+              disabled
+            >
+              <i data-lucide="pin"></i>
+              <span>置顶</span>
+            </button>
+            <button
+              id="organizeSessionBtn"
+              type="button"
+              role="menuitem"
+              disabled
+            >
+              <i data-lucide="folder-input"></i>
+              <span>移动到项目</span>
+            </button>
             <button
               id="renameSessionBtn"
               type="button"
@@ -374,8 +396,12 @@
         <h2 id="sessionDialogTitle">会话</h2>
         <p id="sessionDialogMessage" hidden></p>
         <label id="sessionTitleField">
-          <span>名称</span>
+          <span id="sessionTitleLabel">名称</span>
           <input id="sessionTitleInput" autocomplete="off" />
+        </label>
+        <label id="sessionProjectField" hidden>
+          <span>项目</span>
+          <select id="sessionProjectSelect"></select>
         </label>
         <footer>
           <button id="sessionDialogCancel" type="button" class="dialog-button">
@@ -387,6 +413,24 @@
         </footer>
       </form>
     </dialog>
+    <div id="sidebarMenu" class="task-menu sidebar-menu" role="menu" hidden>
+      <button id="sidebarMenuPinBtn" type="button" role="menuitem">
+        <i data-lucide="pin"></i>
+        <span>置顶</span>
+      </button>
+      <button id="sidebarMenuOrganizeBtn" type="button" role="menuitem">
+        <i data-lucide="folder-input"></i>
+        <span>移动到项目</span>
+      </button>
+      <button id="sidebarMenuRenameProjectBtn" type="button" role="menuitem" hidden>
+        <i data-lucide="pencil"></i>
+        <span>重命名项目</span>
+      </button>
+      <button id="sidebarMenuDeleteProjectBtn" type="button" class="danger-menu-item" role="menuitem" hidden>
+        <i data-lucide="trash-2"></i>
+        <span>删除项目</span>
+      </button>
+    </div>
     <dialog id="imagePreviewDialog" class="image-preview-dialog" aria-label="图片预览">
       <button id="imagePreviewClose" type="button" class="icon-button" aria-label="关闭预览" title="关闭预览">
         <i data-lucide="x"></i>

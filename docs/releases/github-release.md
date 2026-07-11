@@ -1,6 +1,6 @@
 # GitHub Release 发布步骤
 
-本文记录 Image Tools Windows x64 安装包的发布流程。当前待发布版本为 `0.2.2`，对应不可变 tag `v0.2.2`。
+本文记录 Image Tools Windows x64 安装包的发布流程。当前待发布版本为 `0.2.3`，对应不可变 tag `v0.2.3`。
 
 ## 发布原则
 
@@ -31,24 +31,24 @@ Windows 安装器配置应满足：
 确认所有验证通过并推送 `main` 后创建 tag：
 
 ```bash
-git tag -a v0.2.2 -m "Image Tools v0.2.2"
+git tag -a v0.2.3 -m "Image Tools v0.2.3"
 git push origin main
-git push origin v0.2.2
+git push origin v0.2.3
 ```
 
-可以在 GitHub 手工创建 `v0.2.2` Release，说明使用 `docs/releases/v0.2.2.md`：
+可以在 GitHub 手工创建 `v0.2.3` Release，说明使用 `docs/releases/v0.2.3.md`：
 
 ```text
-https://github.com/MakeLuvHell/imagetools/releases/new?tag=v0.2.2
+https://github.com/MakeLuvHell/imagetools/releases/new?tag=v0.2.3
 ```
 
 使用 GitHub CLI 时可执行：
 
 ```bash
-gh release create v0.2.2 \
+gh release create v0.2.3 \
   --repo MakeLuvHell/imagetools \
-  --title "Image Tools v0.2.2" \
-  --notes-file docs/releases/v0.2.2.md
+  --title "Image Tools v0.2.3" \
+  --notes-file docs/releases/v0.2.3.md
 ```
 
 手工创建不是必须步骤。Windows Release 工作流会先检查 Release；若 tag 存在但 Release 不存在，会自动使用对应的 `docs/releases/vX.Y.Z.md` 创建 Release，再上传安装包。
@@ -62,7 +62,7 @@ gh release create v0.2.2 \
 GitHub CLI 触发命令：
 
 ```bash
-gh workflow run windows-release.yml -f release_tag=v0.2.2 -f build_ref=v0.2.2
+gh workflow run windows-release.yml -f release_tag=v0.2.3 -f build_ref=v0.2.3
 ```
 
 没有安装 `gh` 时打开：
@@ -71,7 +71,7 @@ gh workflow run windows-release.yml -f release_tag=v0.2.2 -f build_ref=v0.2.2
 https://github.com/MakeLuvHell/imagetools/actions/workflows/windows-release.yml
 ```
 
-点击 `Run workflow`，两个输入均填写 `v0.2.2`。构建成功后，工作流会把以下文件上传到 Release：
+点击 `Run workflow`，两个输入均填写 `v0.2.3`。构建成功后，工作流会把以下文件上传到 Release：
 
 - Windows x64 NSIS `.exe`
 - Windows x64 MSI `.msi`
@@ -94,12 +94,12 @@ src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/
 打开 Release 页面：
 
 ```text
-https://github.com/MakeLuvHell/imagetools/releases/tag/v0.2.2
+https://github.com/MakeLuvHell/imagetools/releases/tag/v0.2.3
 ```
 
 确认：
 
-- tag 和标题均为 `v0.2.2`。
+- tag 和标题均为 `v0.2.3`。
 - `.exe` 和 `.msi` 两种资产都存在。
 - 两种安装界面均显示简体中文。
 - 应用、安装器、卸载器和开始菜单快捷方式显示新图标。
@@ -107,6 +107,6 @@ https://github.com/MakeLuvHell/imagetools/releases/tag/v0.2.2
 也可使用命令检查：
 
 ```bash
-gh release view v0.2.2 --repo MakeLuvHell/imagetools
-curl --fail --silent https://api.github.com/repos/MakeLuvHell/imagetools/releases/tags/v0.2.2
+gh release view v0.2.3 --repo MakeLuvHell/imagetools
+curl --fail --silent https://api.github.com/repos/MakeLuvHell/imagetools/releases/tags/v0.2.3
 ```

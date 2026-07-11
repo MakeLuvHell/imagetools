@@ -68,6 +68,21 @@ test("selectNewTask clears an explicit session selection", () => {
   assert.equal(next.view, "new-task");
 });
 
+test("groupSessions separates pinned, project, and ordinary sessions without duplicates", () => {
+  const sessions = workbench.normalizeSessions([
+    { id: 1, title: "置顶灵感", is_pinned: true, project_id: 8 },
+    { id: 2, title: "品牌海报", project_id: 8 },
+    { id: 3, title: "独立尝试" },
+  ]);
+  const projects = workbench.normalizeProjects([{ id: 8, name: "品牌视觉" }]);
+
+  assert.deepEqual(workbench.groupSessions(sessions, projects), {
+    pinned: [sessions[0]],
+    projects: [{ project: projects[0], sessions: [sessions[1]] }],
+    ungrouped: [sessions[2]],
+  });
+});
+
 test("deriveSessionTitle normalizes the first line and limits it to 36 characters", () => {
   assert.equal(
     workbench.deriveSessionTitle("  夏季   饮品海报\n第二行  "),

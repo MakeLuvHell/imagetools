@@ -28,7 +28,7 @@ from backend.storage_location import (
     resolve_storage_location,
     schedule_storage_location,
 )
-from backend.workbench_db import GenerationRun, Provider, Session, StoredImage, WorkbenchStore
+from backend.workbench_db import UNSET, GenerationRun, Project, Provider, Session, StoredImage, WorkbenchStore
 
 
 APP_TITLE = "Image Tools"
@@ -117,6 +117,11 @@ class StorageLocationPayload(BaseModel):
 
 class SessionPayload(BaseModel):
     title: str = ""
+    project_id: int | None = None
+
+
+class ProjectPayload(BaseModel):
+    name: str = ""
 
 
 def ensure_runtime_dirs() -> None:
@@ -304,8 +309,19 @@ def public_session(session: Session) -> dict[str, object]:
         "id": session.id,
         "title": session.title,
         "recent_thumbnail_path": session.recent_thumbnail_path,
+        "project_id": session.project_id,
+        "is_pinned": session.is_pinned,
         "created_at": session.created_at,
         "updated_at": session.updated_at,
+    }
+
+
+def public_project(project: Project) -> dict[str, object]:
+    return {
+        "id": project.id,
+        "name": project.name,
+        "created_at": project.created_at,
+        "updated_at": project.updated_at,
     }
 
 
@@ -346,6 +362,13 @@ def default_session_title() -> str:
 
 def clean_session_title(title: str) -> str:
     return title.strip() or default_session_title()
+
+
+def clean_project_name(name: str) -> str:
+    clean = name.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="请填写项目名称。")
+    return clean
 
 
 def clean_provider_payload(payload: ProviderPayload, existing_key: str = "") -> ProviderPayload:
@@ -756,6 +779,37 @@ def list_sessions() -> list[dict[str, object]]:
     return [public_session(session) for session in store.list_sessions()]
 
 
+@app.get("/api/projects")
+def list_projects() -> list[dict[str, object]]:
+    store = initialized_workbench_store()
+    return [public_project(project) for project in store.list_projects()]
+
+
+@app.post("/api/projects")
+def create_project(project: ProjectPayload) -> dict[str, object]:
+    store = initialized_workbench_store()
+    created = store.create_project(name=clean_project_name(project.name))
+    return public_project(created)
+
+
+@app.patch("/api/projects/{project_id}")
+def update_project(project_id: int, project: ProjectPayload) -> dict[str, object]:
+    store = initialized_workbench_store()
+    if store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="项目不存在。")
+    updated = store.update_project(project_id, name=clean_project_name(project.name))
+    return public_project(updated)
+
+
+@app.delete("/api/projects/{project_id}", status_code=204)
+def delete_project(project_id: int) -> Response:
+    store = initialized_workbench_store()
+    if store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="项目不存在。")
+    store.delete_project(project_id)
+    return Response(status_code=204)
+
+
 @app.post("/api/sessions")
 def create_session(session: SessionPayload) -> dict[str, object]:
     store = initialized_workbench_store()
@@ -775,9 +829,18 @@ def get_session(session_id: int) -> dict[str, object]:
 @app.patch("/api/sessions/{session_id}")
 def update_session(session_id: int, session: SessionPayload) -> dict[str, object]:
     store = initialized_workbench_store()
-    if store.get_session(session_id) is None:
+    existing = store.get_session(session_id)
+    if existing is None:
         raise HTTPException(status_code=404, detail="Session not found.")
-    updated = store.update_session(session_id, title=clean_session_title(session.title))
+    project_id = session.project_id if "project_id" in session.model_fields_set else None
+    if "project_id" in session.model_fields_set and project_id is not None:
+        if store.get_project(project_id) is None:
+            raise HTTPException(status_code=400, detail="项目不存在。")
+    updated = store.update_session(
+        session_id,
+        title=clean_session_title(session.title) if "title" in session.model_fields_set else existing.title,
+        project_id=project_id if "project_id" in session.model_fields_set else UNSET,
+    )
     return public_session(updated)
 
 
@@ -786,6 +849,24 @@ def delete_session(session_id: int) -> Response:
     store = initialized_workbench_store()
     store.delete_session(session_id)
     return Response(status_code=204)
+
+
+@app.post("/api/sessions/{session_id}/pin")
+def pin_session(session_id: int) -> dict[str, object]:
+    store = initialized_workbench_store()
+    try:
+        return public_session(store.set_session_pinned(session_id, True))
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="会话不存在。") from error
+
+
+@app.delete("/api/sessions/{session_id}/pin")
+def unpin_session(session_id: int) -> dict[str, object]:
+    store = initialized_workbench_store()
+    try:
+        return public_session(store.set_session_pinned(session_id, False))
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="会话不存在。") from error
 
 
 @app.get("/api/sessions/{session_id}/runs")

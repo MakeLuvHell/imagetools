@@ -32,6 +32,42 @@ test("new task creates a session only on first valid submit", async ({ page }) =
   expect(requests.generateBodies[0]).toContain('name="session_id"\r\n\r\n2');
 });
 
+test("sidebar renders pinned, project, and ordinary session groups", async ({ page }) => {
+  await installApiMocks(page, {
+    projects: [{ id: 8, name: "品牌视觉" }],
+    sessions: [
+      { id: 1, title: "置顶灵感", is_pinned: true, project_id: 8 },
+      { id: 2, title: "产品海报", project_id: 8 },
+      { id: 3, title: "独立尝试" },
+    ],
+    runs: { 1: [], 2: [], 3: [] },
+  });
+  await page.goto("/");
+
+  await expect(page.locator(".session-group-title")).toHaveText(["置顶", "项目", "会话"]);
+  await expect(page.locator(".project-row")).toHaveText("品牌视觉");
+  await expect(page.locator(".session-item")).toHaveText([
+    "置顶灵感",
+    "产品海报",
+    "独立尝试",
+  ]);
+});
+
+test("sidebar session menu can remove a pinned session from the pinned group", async ({ page }) => {
+  await installApiMocks(page, {
+    projects: [{ id: 8, name: "品牌视觉" }],
+    sessions: [{ id: 1, title: "置顶灵感", is_pinned: true, project_id: 8 }],
+    runs: { 1: [] },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "整理会话" }).click();
+  await page.getByRole("menuitem", { name: "取消置顶" }).click();
+
+  await expect(page.locator(".session-group-title")).toHaveText(["项目"]);
+  await expect(page.locator(".project-row")).toHaveText("品牌视觉");
+  await expect(page.locator(".session-item")).toHaveText(["置顶灵感"]);
+});
+
 test("missing Provider opens settings without creating a session", async ({ page }) => {
   const requests = await installApiMocks(page, { providers: [] });
   await page.goto("/");

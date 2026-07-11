@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DATABASE_FILENAME = "workbench.sqlite3"
+UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,16 @@ class Session:
     id: int
     title: str
     recent_thumbnail_path: str | None
+    project_id: int | None
+    is_pinned: bool
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class Project:
+    id: int
+    name: str
     created_at: str
     updated_at: str
 
@@ -141,8 +152,43 @@ class WorkbenchStore:
                 INSERT OR IGNORE INTO schema_migrations (version, applied_at)
                 VALUES (?, ?)
                 """,
-                (SCHEMA_VERSION, utc_now()),
+                (1, utc_now()),
             )
+            self._migrate_to_v2(connection)
+
+    def _migrate_to_v2(self, connection: sqlite3.Connection) -> None:
+        migrated = connection.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = 2"
+        ).fetchone()
+        if migrated:
+            return
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted_at TEXT
+            )
+            """
+        )
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if "project_id" not in columns:
+            connection.execute(
+                "ALTER TABLE sessions ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"
+            )
+        if "is_pinned" not in columns:
+            connection.execute(
+                "ALTER TABLE sessions ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0"
+            )
+        connection.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (2, ?)",
+            (utc_now(),),
+        )
 
     def schema_version(self) -> int:
         with self.connect() as connection:
@@ -226,13 +272,68 @@ class WorkbenchStore:
         with self.connect() as connection:
             connection.execute("DELETE FROM providers WHERE id = ?", (provider_id,))
 
+    def create_project(self, *, name: str) -> Project:
+        now = utc_now()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO projects (name, created_at, updated_at, deleted_at)
+                VALUES (?, ?, ?, NULL)
+                """,
+                (name, now, now),
+            )
+            project_id = int(cursor.lastrowid)
+        project = self.get_project(project_id)
+        if project is None:
+            raise RuntimeError("Created project could not be loaded")
+        return project
+
+    def get_project(self, project_id: int) -> Project | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM projects WHERE id = ? AND deleted_at IS NULL", (project_id,)
+            ).fetchone()
+        return row_to_project(row) if row else None
+
+    def list_projects(self) -> list[Project]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY updated_at DESC, id DESC"
+            ).fetchall()
+        return [row_to_project(row) for row in rows]
+
+    def update_project(self, project_id: int, *, name: str) -> Project:
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE projects SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (name, utc_now(), project_id),
+            )
+        project = self.get_project(project_id)
+        if project is None:
+            raise KeyError(f"Project {project_id} does not exist")
+        return project
+
+    def delete_project(self, project_id: int) -> None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE sessions SET project_id = NULL, updated_at = ? WHERE project_id = ?",
+                (now, project_id),
+            )
+            connection.execute(
+                "UPDATE projects SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (now, now, project_id),
+            )
+
     def create_session(self, *, title: str) -> Session:
         now = utc_now()
         with self.connect() as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO sessions (title, recent_thumbnail_path, created_at, updated_at, deleted_at)
-                VALUES (?, NULL, ?, ?, NULL)
+                INSERT INTO sessions (
+                    title, recent_thumbnail_path, project_id, is_pinned, created_at, updated_at, deleted_at
+                )
+                VALUES (?, NULL, NULL, 0, ?, ?, NULL)
                 """,
                 (title, now, now),
             )
@@ -268,18 +369,30 @@ class WorkbenchStore:
         *,
         title: str,
         recent_thumbnail_path: str | None = None,
+        project_id: int | None | object = UNSET,
     ) -> Session:
         now = utc_now()
+        assignments: list[str] = ["title = ?", "recent_thumbnail_path = ?", "updated_at = ?"]
+        parameters: list[object] = [title, recent_thumbnail_path, now]
+        if project_id is not UNSET:
+            assignments.append("project_id = ?")
+            parameters.append(project_id)
+        parameters.append(session_id)
         with self.connect() as connection:
             connection.execute(
-                """
-                UPDATE sessions
-                SET title = ?,
-                    recent_thumbnail_path = ?,
-                    updated_at = ?
-                WHERE id = ? AND deleted_at IS NULL
-                """,
-                (title, recent_thumbnail_path, now, session_id),
+                f"UPDATE sessions SET {', '.join(assignments)} WHERE id = ? AND deleted_at IS NULL",
+                parameters,
+            )
+        session = self.get_session(session_id)
+        if session is None:
+            raise KeyError(f"Session {session_id} does not exist")
+        return session
+
+    def set_session_pinned(self, session_id: int, is_pinned: bool) -> Session:
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE sessions SET is_pinned = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (int(is_pinned), utc_now(), session_id),
             )
         session = self.get_session(session_id)
         if session is None:
@@ -454,6 +567,17 @@ def row_to_session(row: sqlite3.Row) -> Session:
         id=int(row["id"]),
         title=str(row["title"]),
         recent_thumbnail_path=row["recent_thumbnail_path"],
+        project_id=row["project_id"],
+        is_pinned=bool(row["is_pinned"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
+
+
+def row_to_project(row: sqlite3.Row) -> Project:
+    return Project(
+        id=int(row["id"]),
+        name=str(row["name"]),
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
     )
