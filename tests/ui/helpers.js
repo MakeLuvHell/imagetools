@@ -32,6 +32,13 @@ async function installApiMocks(page, overrides = {}) {
           ]
         : overrides.providers,
     runs: overrides.runs || { 1: [] },
+    storageLocation: overrides.storageLocation || {
+      active_data_dir: "C:\\Users\\creator\\AppData\\Roaming\\com.imagetools.desktop",
+      default_data_dir: "C:\\Users\\creator\\AppData\\Roaming\\com.imagetools.desktop",
+      pending_data_dir: null,
+      is_custom: false,
+    },
+    storageRequests: [],
   };
 
   await page.route("**/api/providers", async (route) => {
@@ -39,6 +46,22 @@ async function installApiMocks(page, overrides = {}) {
       return route.fulfill({ json: state.providers });
     }
     return route.fulfill({ status: 200, json: state.providers[0] || {} });
+  });
+  await page.route("**/api/storage-location", async (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: state.storageLocation });
+    }
+    const body = route.request().postDataJSON();
+    state.storageRequests.push(body);
+    if (overrides.storageLocationError) {
+      return route.fulfill({ status: 400, json: { detail: overrides.storageLocationError } });
+    }
+    state.storageLocation = {
+      ...state.storageLocation,
+      pending_data_dir: body.data_dir,
+      restart_required: true,
+    };
+    return route.fulfill({ json: state.storageLocation });
   });
   await page.route("**/api/sessions", async (route) => {
     if (route.request().method() === "POST") {

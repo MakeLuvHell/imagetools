@@ -142,6 +142,61 @@ test("Provider Cancel closes settings and restores the sidebar opener", async ({
   await expect(opener).toBeFocused();
 });
 
+test("settings schedules a copied data migration without switching the active path", async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const dialog = page.getByRole("dialog", { name: "Providers" });
+
+  await expect(dialog.getByLabel("当前数据目录")).toHaveText(
+    requests.storageLocation.active_data_dir,
+  );
+  await dialog.getByLabel("新的数据目录").fill("D:\\Image Tools");
+  await dialog.getByLabel("复制现有会话和文件").check();
+  await dialog.getByRole("button", { name: "应用" }).click();
+
+  await expect.poll(() => requests.storageRequests).toEqual([
+    { data_dir: "D:\\Image Tools", migrate_existing: true },
+  ]);
+  await expect(dialog.locator("#storageLocationStatus")).toHaveText(
+    "已设置新位置，重启应用后生效。",
+  );
+  await expect(dialog.getByLabel("当前数据目录")).toHaveText(
+    requests.storageLocation.default_data_dir,
+  );
+});
+
+test("settings displays storage validation errors in the local section", async ({ page }) => {
+  await installApiMocks(page, { storageLocationError: "数据目录必须使用绝对路径。" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const dialog = page.getByRole("dialog", { name: "Providers" });
+  await dialog.getByLabel("新的数据目录").fill("relative-data");
+  await dialog.getByRole("button", { name: "应用" }).click();
+
+  await expect(dialog.locator("#storageLocationStatus")).toHaveText(
+    "数据目录必须使用绝对路径。",
+  );
+});
+
+test("storage settings stay contained at desktop target sizes", async ({ page }) => {
+  await installApiMocks(page);
+  for (const viewport of [
+    { width: 1280, height: 860 },
+    { width: 960, height: 640 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await page.getByRole("button", { name: "设置" }).click();
+    const dialog = page.getByRole("dialog", { name: "Providers" });
+    await expect(dialog.getByLabel("新的数据目录")).toBeFocused();
+    expect(
+      await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      `${viewport.width}x${viewport.height}`,
+    ).toBe(true);
+  }
+});
+
 test("reduced motion opens anchored menus without active animation", async ({ page }) => {
   await installApiMocks(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
