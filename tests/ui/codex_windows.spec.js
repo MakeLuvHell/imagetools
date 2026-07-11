@@ -208,6 +208,28 @@ test("settings schedules a copied data migration without switching the active pa
   );
 });
 
+test("storage directory picker fills the selected native folder", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__TAURI__ = {
+      core: {
+        invoke(command) {
+          return command === "pick_data_directory"
+            ? Promise.resolve("D:\\Selected Images")
+            : Promise.reject(new Error("unexpected command"));
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const dialog = page.getByRole("dialog", { name: "Providers" });
+  await dialog.getByRole("button", { name: "选择目录" }).click();
+
+  await expect(dialog.getByLabel("新的数据目录")).toHaveValue("D:\\Selected Images");
+  await expect(dialog.getByLabel("新的数据目录")).toBeFocused();
+});
+
 test("settings displays storage validation errors in the local section", async ({ page }) => {
   await installApiMocks(page, { storageLocationError: "数据目录必须使用绝对路径。" });
   await page.goto("/");

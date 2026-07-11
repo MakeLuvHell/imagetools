@@ -52,6 +52,7 @@ const providerSaveBtn = document.querySelector("#providerSaveBtn");
 const storageLocationForm = document.querySelector("#storageLocationForm");
 const storageCurrentPath = document.querySelector("#storageCurrentPath");
 const storageDataDir = document.querySelector("#storageDataDir");
+const storageBrowseBtn = document.querySelector("#storageBrowseBtn");
 const storageMigrateExisting = document.querySelector("#storageMigrateExisting");
 const storageApplyBtn = document.querySelector("#storageApplyBtn");
 const storageLocationStatus = document.querySelector("#storageLocationStatus");
@@ -872,6 +873,28 @@ async function handleStorageLocationSubmit(event) {
   }
 }
 
+async function chooseStorageDirectory() {
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke !== "function") {
+    storageLocationStatus.textContent = "目录选择仅在桌面应用中可用。";
+    storageLocationStatus.hidden = false;
+    return;
+  }
+  storageBrowseBtn.disabled = true;
+  try {
+    const selected = await invoke("pick_data_directory");
+    if (selected) {
+      storageDataDir.value = selected;
+      storageDataDir.focus();
+    }
+  } catch (error) {
+    storageLocationStatus.textContent = error.message || "无法打开系统目录选择器。";
+    storageLocationStatus.hidden = false;
+  } finally {
+    storageBrowseBtn.disabled = false;
+  }
+}
+
 function handleEscape(event) {
   if (event.key !== "Escape") return;
   if (window.ImageToolsUi.isLayerOpen(taskMenu)) {
@@ -1019,6 +1042,7 @@ addProviderBtn.addEventListener("click", startNewProvider);
 providerCancelBtn.addEventListener("click", closeProviderDialog);
 providerForm.addEventListener("submit", handleProviderSubmit);
 storageLocationForm.addEventListener("submit", handleStorageLocationSubmit);
+storageBrowseBtn.addEventListener("click", chooseStorageDirectory);
 imagePreviewClose.addEventListener("click", closeImagePreview);
 imagePreviewDialog.addEventListener("cancel", cancelImagePreview);
 taskMenuBtn.addEventListener("click", toggleTaskMenu);

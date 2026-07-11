@@ -72,6 +72,18 @@ def test_tauri_release_sidecar_receives_a_stable_storage_config_directory():
     assert '"IMAGE_TOOLS_CONFIG_DIR"' in main_rs
 
 
+def test_tauri_exposes_a_native_directory_picker_command():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+    cargo = Path("src-tauri/Cargo.toml").read_text()
+    config = tauri_config()
+
+    assert "tauri-plugin-dialog" in cargo
+    assert "tauri_plugin_dialog::init()" in main_rs
+    assert "pick_data_directory" in main_rs
+    assert "generate_handler![pick_data_directory]" in main_rs
+    assert config["app"]["withGlobalTauri"] is True
+
+
 def test_tauri_debug_backend_requires_the_launcher_token():
     main_rs = Path("src-tauri/src/main.rs").read_text()
 

@@ -327,12 +327,23 @@
         <form id="storageLocationForm" class="storage-location-form">
           <label>
             <span>新的数据目录</span>
-            <input
-              id="storageDataDir"
-              required
-              autocomplete="off"
-              placeholder="D:\\Image Tools"
-            />
+            <span class="storage-directory-input">
+              <input
+                id="storageDataDir"
+                required
+                autocomplete="off"
+                placeholder="D:\\Image Tools"
+              />
+              <button
+                id="storageBrowseBtn"
+                type="button"
+                class="icon-button"
+                aria-label="选择目录"
+                title="选择目录"
+              >
+                <i data-lucide="folder-open"></i>
+              </button>
+            </span>
           </label>
           <label class="checkbox-field">
             <input id="storageMigrateExisting" type="checkbox" />

@@ -8,6 +8,7 @@ use std::{
 };
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::CommandChild;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_shell::ShellExt;
@@ -163,9 +164,25 @@ fn stop_backend(app_handle: &tauri::AppHandle) {
     }
 }
 
+#[tauri::command]
+fn pick_data_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    app.dialog()
+        .file()
+        .set_title("选择数据目录")
+        .pick_folder(move |selection| {
+            let _ = sender.send(selection.map(|path| path.to_string()));
+        });
+    receiver
+        .recv()
+        .map_err(|_| "系统目录选择器未返回结果。".to_string())
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![pick_data_directory])
         .setup(|app| {
             let port = prepare_backend(app)?;
             let url = Url::parse(&format!("http://127.0.0.1:{port}/"))?;

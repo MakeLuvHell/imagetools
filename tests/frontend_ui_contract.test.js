@@ -112,6 +112,7 @@ test("settings dialog exposes a restart-only local data directory workflow", () 
     "storageCurrentPath",
     "storageDataDir",
     "storageMigrateExisting",
+    "storageBrowseBtn",
     "storageApplyBtn",
     "storageLocationStatus",
   ]) {
@@ -122,6 +123,8 @@ test("settings dialog exposes a restart-only local data directory workflow", () 
   assert.match(app, /method:\s*"POST"/);
   assert.match(app, /migrate_existing/);
   assert.match(app, /重启应用后生效/);
+  assert.match(app, /pick_data_directory/);
+  assert.match(html, /data-lucide="folder-open"/);
   assert.match(styles, /\.storage-location-section/);
   assert.match(
     styles,
