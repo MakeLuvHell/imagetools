@@ -19,6 +19,7 @@
 | UI007 | Testing | Add Playwright accessibility and visual checks | Isolated deterministic UI suite | UI002-UI006 | Done |
 | UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | Done |
 | PKG001 | Release | Apply new app icon and localize Windows installers | Version 0.2.1 NSIS/MSI release preparation | UI008 | Done |
+| UI009 | Interaction | Anchor temporary layers and add restrained motion | Responsive popovers, dialogs, and reduced-motion support | UI008 | Done |
 
 ## Recommended Order
 
@@ -27,6 +28,7 @@
 3. UI005 and UI006 deliver the Composer-to-task-stream workflow.
 4. UI007 and UI008 complete visual and release verification.
 5. PKG001 prepares the branded Simplified Chinese Windows installers after UI verification.
+6. UI009 refines temporary-layer geometry and interaction motion without changing product scope.
 
 ## Blockers
 

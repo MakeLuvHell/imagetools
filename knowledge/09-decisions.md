@@ -125,3 +125,19 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Committed generated assets keep local and GitHub Actions builds deterministic while preserving the SVG as the editable source. NSIS and WiX use different native locale identifiers, so each bundler must be configured explicitly.
 
 **Consequences:** Artwork changes must start from `frontend/assets/icon.svg` and rerun `npx tauri icon`. Windows release verification must check both NSIS and MSI because one localized installer does not prove the other is localized.
+
+### 2026-07-11: Calculate Temporary-Layer Geometry In JavaScript
+
+**Decision:** Position Composer popovers from live trigger and layer rectangles, use a shared open/close lifecycle for temporary layers and dialogs, and express motion through CSS states with a reduced-motion fallback.
+
+**Context:** The parameter menu used a viewport formula unrelated to its trigger, so it appeared hundreds of pixels away at common desktop widths. Direct `hidden` mutations also made interaction changes abrupt and allowed event bindings such as Provider Cancel to diverge from dialog semantics.
+
+**Options Considered:**
+
+- Use CSS Anchor Positioning.
+- Nest popovers inside Composer and use absolute positioning.
+- Calculate fixed coordinates from live DOM rectangles and clamp them to the viewport.
+
+**Reasoning:** Live rectangle calculation works across the supported Windows WebView2 range without relying on newer CSS anchor support. A shared lifecycle keeps visibility, `aria-expanded`, animation completion, re-entry, and focus restoration synchronized.
+
+**Consequences:** New temporary layers should use `ImageToolsUi.openLayer`, `openAnchoredLayer`, and `closeLayer` instead of mutating `hidden` directly. Browser tests must assert trigger proximity and viewport containment rather than only comparing isolated layer screenshots.

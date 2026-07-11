@@ -19,6 +19,8 @@ Baselines cover:
 - `1280x860` and `960x640` in light and dark themes.
 - Parameter menu, Provider dialog, running, success, and failure states.
 - Enter/Shift+Enter, focus restoration, menu arrows, rapid submit, retry, long CJK text, and overflow.
+- Popover-to-trigger geometry before and after viewport resize at both supported viewport sizes.
+- Provider Cancel close/focus behavior and the system reduced-motion preference.
 
 Regenerate intentional baselines with `npm run test:ui:update`, then inspect the PNG files before committing.
 
