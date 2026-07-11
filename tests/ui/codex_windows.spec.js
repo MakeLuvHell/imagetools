@@ -38,7 +38,8 @@ test("missing Provider opens settings without creating a session", async ({ page
   const prompt = page.getByPlaceholder("描述你想创作的图片");
   await prompt.fill("夏季饮品海报");
   await prompt.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Providers" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "设置" })).toBeVisible();
+  await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
   await expect.poll(() => requests.sessionsCreated).toBe(0);
 });
 
@@ -170,17 +171,37 @@ test("wide desktop windows expand the session sidebar", async ({ page }) => {
   expect((await page.locator(".session-sidebar").boundingBox()).width).toBeGreaterThan(280);
 });
 
-test("Provider Cancel closes settings and restores the sidebar opener", async ({ page }) => {
+test("Provider Cancel resets its editor while settings remains open", async ({ page }) => {
   await installApiMocks(page);
   await page.goto("/");
   const opener = page.getByRole("button", { name: "Providers" });
 
   await opener.click();
-  const dialog = page.getByRole("dialog", { name: "Providers" });
-  await expect(dialog).toHaveAttribute("data-motion", "open");
-  await dialog.getByRole("button", { name: "取消" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await expect(settings).toBeVisible();
+  await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
+  await settings.locator("#providerName").fill("Temporary");
+  await settings.getByRole("button", { name: "取消" }).click();
 
-  await expect(dialog).toBeHidden();
+  await expect(settings).toBeVisible();
+  await expect(settings.locator("#providerName")).toHaveValue("");
+});
+
+test("settings opens as a dedicated view and switches between provider and storage", async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto("/");
+  const opener = page.getByRole("button", { name: "设置" });
+  await opener.click();
+  const settings = page.getByRole("region", { name: "设置" });
+
+  await expect(settings).toBeVisible();
+  await expect(page.locator("#composerForm")).toBeHidden();
+  await expect(page.locator("#settingsStoragePanel")).toBeVisible();
+  await settings.getByRole("button", { name: "Provider", exact: true }).click();
+  await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
+  await page.getByRole("button", { name: "返回工作区" }).click();
+
+  await expect(settings).toBeHidden();
   await expect(opener).toBeFocused();
 });
 
@@ -188,22 +209,22 @@ test("settings schedules a copied data migration without switching the active pa
   const requests = await installApiMocks(page);
   await page.goto("/");
   await page.getByRole("button", { name: "设置" }).click();
-  const dialog = page.getByRole("dialog", { name: "Providers" });
+  const settings = page.getByRole("region", { name: "设置" });
 
-  await expect(dialog.getByLabel("当前数据目录")).toHaveText(
+  await expect(settings.getByLabel("当前数据目录")).toHaveText(
     requests.storageLocation.active_data_dir,
   );
-  await dialog.getByLabel("新的数据目录").fill("D:\\Image Tools");
-  await dialog.getByLabel("复制现有会话和文件").check();
-  await dialog.getByRole("button", { name: "应用" }).click();
+  await settings.getByLabel("新的数据目录").fill("D:\\Image Tools");
+  await settings.getByLabel("复制现有会话和文件").check();
+  await settings.getByRole("button", { name: "应用" }).click();
 
   await expect.poll(() => requests.storageRequests).toEqual([
     { data_dir: "D:\\Image Tools", migrate_existing: true },
   ]);
-  await expect(dialog.locator("#storageLocationStatus")).toHaveText(
+  await expect(settings.locator("#storageLocationStatus")).toHaveText(
     "已设置新位置，重启应用后生效。",
   );
-  await expect(dialog.getByLabel("当前数据目录")).toHaveText(
+  await expect(settings.getByLabel("当前数据目录")).toHaveText(
     requests.storageLocation.default_data_dir,
   );
 });
@@ -223,22 +244,22 @@ test("storage directory picker fills the selected native folder", async ({ page 
   await installApiMocks(page);
   await page.goto("/");
   await page.getByRole("button", { name: "设置" }).click();
-  const dialog = page.getByRole("dialog", { name: "Providers" });
-  await dialog.getByRole("button", { name: "选择目录" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByRole("button", { name: "选择目录" }).click();
 
-  await expect(dialog.getByLabel("新的数据目录")).toHaveValue("D:\\Selected Images");
-  await expect(dialog.getByLabel("新的数据目录")).toBeFocused();
+  await expect(settings.getByLabel("新的数据目录")).toHaveValue("D:\\Selected Images");
+  await expect(settings.getByLabel("新的数据目录")).toBeFocused();
 });
 
 test("settings displays storage validation errors in the local section", async ({ page }) => {
   await installApiMocks(page, { storageLocationError: "数据目录必须使用绝对路径。" });
   await page.goto("/");
   await page.getByRole("button", { name: "设置" }).click();
-  const dialog = page.getByRole("dialog", { name: "Providers" });
-  await dialog.getByLabel("新的数据目录").fill("relative-data");
-  await dialog.getByRole("button", { name: "应用" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByLabel("新的数据目录").fill("relative-data");
+  await settings.getByRole("button", { name: "应用" }).click();
 
-  await expect(dialog.locator("#storageLocationStatus")).toHaveText(
+  await expect(settings.locator("#storageLocationStatus")).toHaveText(
     "数据目录必须使用绝对路径。",
   );
 });
@@ -252,10 +273,10 @@ test("storage settings stay contained at desktop target sizes", async ({ page })
     await page.setViewportSize(viewport);
     await page.goto("/");
     await page.getByRole("button", { name: "设置" }).click();
-    const dialog = page.getByRole("dialog", { name: "Providers" });
-    await expect(dialog.getByLabel("新的数据目录")).toBeFocused();
+    const settings = page.getByRole("region", { name: "设置" });
+    await expect(settings.getByLabel("新的数据目录")).toBeFocused();
     expect(
-      await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
       `${viewport.width}x${viewport.height}`,
     ).toBe(true);
   }
@@ -318,7 +339,7 @@ test("theme changes after load and long CJK content stays contained", async ({ p
   }
 });
 
-test("menus and Provider dialog have stable visual states", async ({ page }) => {
+test("menus and settings Provider view have stable visual states", async ({ page }) => {
   await installApiMocks(page);
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.goto("/");
@@ -329,10 +350,10 @@ test("menus and Provider dialog have stable visual states", async ({ page }) => 
   );
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Providers" }).click();
-  const dialog = page.getByRole("dialog", { name: "Providers" });
-  await expect(dialog).toHaveScreenshot("provider-dialog.png");
+  const settings = page.getByRole("region", { name: "设置" });
+  await expect(settings).toHaveScreenshot("settings-provider.png");
   expect(
-    await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
   ).toBe(true);
 });
 

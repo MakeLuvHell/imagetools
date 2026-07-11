@@ -21,6 +21,7 @@
 | PKG001 | Release | Apply new app icon and localize Windows installers | Version 0.2.1 NSIS/MSI release preparation | UI008 | Done |
 | UI009 | Interaction | Anchor temporary layers and add restrained motion | Responsive popovers, dialogs, and reduced-motion support | UI008 | Done |
 | STG001 | Storage | Configure a restart-only local data directory | Copy-safe migration, bootstrap configuration, settings UI, and browser coverage | UI004, UI008 | Done |
+| UI010 | Settings | Replace the mixed Provider dialog with a dedicated settings view | Vertical settings navigation with isolated Provider and local-data panels | UI004, STG001 | Done |
 
 ## Recommended Order
 
@@ -31,6 +32,7 @@
 5. PKG001 prepares the branded Simplified Chinese Windows installers after UI verification.
 6. UI009 refines temporary-layer geometry and interaction motion without changing product scope.
 7. STG001 makes the local workbench payload location user-configurable without an in-process data-root switch.
+8. UI010 separates settings concerns into a dedicated desktop work area.
 
 ## Blockers
 

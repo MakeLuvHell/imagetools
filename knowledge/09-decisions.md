@@ -157,3 +157,13 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** A stable bootstrap file remains discoverable after payload migration. Restart-only activation preserves the existing import-time SQLite/static-file bindings. SQLite backup plus recursive copies preserves a coherent copy of the payload while retaining the original directory for recovery.
 
 **Consequences:** The settings API schedules a pending change only. Pending copy migrations require an empty destination, never delete their source, and custom roots that cannot be used on startup must fail explicitly instead of silently falling back to a new history store.
+
+### 2026-07-12: Use A Dedicated Settings Work Area
+
+**Decision:** Open settings as a dedicated work-area view with vertical navigation for Provider and local-data configuration, rather than combining both workflows in a modal dialog.
+
+**Context:** Provider management and storage migration have different depth, risks, and confirmation paths. Combining them in one dialog made the interaction visually fragmented and constrained the storage workflow.
+
+**Reasoning:** A persistent settings frame gives each category a stable location, leaves room for future settings categories, and follows familiar desktop software conventions without adding unrelated product features.
+
+**Consequences:** The sidebar Provider action opens the Provider navigation item; the workspace settings action opens local data. Returning restores focus to the original opener, while Provider Cancel resets only the current editor.

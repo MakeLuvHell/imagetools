@@ -36,8 +36,13 @@ const parameterMenu = document.querySelector("#parameterMenu");
 const parameterMenuBtn = document.querySelector("#parameterMenuBtn");
 const parameterSummaryText = document.querySelector("#parameterSummaryText");
 const advancedParamsPanel = document.querySelector("#advancedParamsPanel");
-const providerDialog = document.querySelector("#providerDialog");
-const providerDialogClose = document.querySelector("#providerDialogClose");
+const workspace = document.querySelector(".workspace");
+const settingsView = document.querySelector("#settingsView");
+const settingsBackBtn = document.querySelector("#settingsBackBtn");
+const settingsProvidersNav = document.querySelector("#settingsProvidersNav");
+const settingsStorageNav = document.querySelector("#settingsStorageNav");
+const settingsProvidersPanel = document.querySelector("#settingsProvidersPanel");
+const settingsStoragePanel = document.querySelector("#settingsStoragePanel");
 const providerList = document.querySelector("#providerList");
 const addProviderBtn = document.querySelector("#addProviderBtn");
 const providerForm = document.querySelector("#providerForm");
@@ -76,6 +81,7 @@ let referenceSource = null;
 let sessionDialogMode = null;
 let editingProviderId = null;
 let newTaskSubmissionLocked = false;
+let settingsOpener = null;
 const runsBySession = {};
 
 function showToast(message) {
@@ -659,7 +665,7 @@ async function handleComposerSubmit(event) {
   const prompt = promptInput.value.trim();
   if (!provider) {
     showToast("请先配置 Provider");
-    openProviderDialog(providersBtn);
+    openSettingsView("providers", providersBtn);
     return;
   }
   if (!prompt) {
@@ -820,15 +826,33 @@ function toggleSearch() {
   }
 }
 
-function openProviderDialog(opener) {
-  window.ImageToolsUi.openDialog(providerDialog, opener);
-  renderProviderManager();
-  startNewProvider();
-  void loadStorageLocation(opener === settingsBtn);
+function selectSettingsTab(tab) {
+  const providersActive = tab === "providers";
+  settingsProvidersNav.setAttribute("aria-current", providersActive ? "page" : "false");
+  settingsStorageNav.setAttribute("aria-current", providersActive ? "false" : "page");
+  settingsProvidersPanel.hidden = !providersActive;
+  settingsStoragePanel.hidden = providersActive;
 }
 
-function closeProviderDialog() {
-  window.ImageToolsUi.closeDialog(providerDialog);
+function openSettingsView(tab, opener) {
+  settingsOpener = opener;
+  settingsView.hidden = false;
+  workspace.classList.add("settings-open");
+  selectSettingsTab(tab);
+  renderProviderManager();
+  startNewProvider();
+  if (tab === "storage") {
+    void loadStorageLocation(true);
+  } else {
+    providerName.focus();
+  }
+}
+
+function closeSettingsView() {
+  settingsView.hidden = true;
+  workspace.classList.remove("settings-open");
+  settingsOpener?.focus();
+  settingsOpener = null;
 }
 
 function renderStorageLocation(location, message = "") {
@@ -842,7 +866,7 @@ function renderStorageLocation(location, message = "") {
 async function loadStorageLocation(focusInput = false) {
   try {
     renderStorageLocation(await fetch("/api/storage-location").then(readJson));
-    if (focusInput && providerDialog.open) {
+    if (focusInput && !settingsView.hidden) {
       storageDataDir.focus();
     }
   } catch (error) {
@@ -897,6 +921,9 @@ async function chooseStorageDirectory() {
 
 function handleEscape(event) {
   if (event.key !== "Escape") return;
+  if (!settingsView.hidden) {
+    closeSettingsView();
+  }
   if (window.ImageToolsUi.isLayerOpen(taskMenu)) {
     void closeTaskMenu({ restoreFocus: true });
   }
@@ -1018,11 +1045,7 @@ function closeSessionDialog() {
 
 function handleDialogCancel(event) {
   event.preventDefault();
-  if (event.currentTarget === sessionDialog) {
-    closeSessionDialog();
-  } else {
-    closeProviderDialog();
-  }
+  if (event.currentTarget === sessionDialog) closeSessionDialog();
 }
 
 function saveDraftFromInput() {
@@ -1034,12 +1057,16 @@ function saveDraftFromInput() {
 
 newSessionBtn.addEventListener("click", startNewTask);
 searchToggle.addEventListener("click", toggleSearch);
-providersBtn.addEventListener("click", () => openProviderDialog(providersBtn));
-settingsBtn.addEventListener("click", () => openProviderDialog(settingsBtn));
-providerDialogClose.addEventListener("click", closeProviderDialog);
-providerDialog.addEventListener("cancel", handleDialogCancel);
+providersBtn.addEventListener("click", () => openSettingsView("providers", providersBtn));
+settingsBtn.addEventListener("click", () => openSettingsView("storage", settingsBtn));
+settingsBackBtn.addEventListener("click", closeSettingsView);
+settingsProvidersNav.addEventListener("click", () => selectSettingsTab("providers"));
+settingsStorageNav.addEventListener("click", () => {
+  selectSettingsTab("storage");
+  void loadStorageLocation(true);
+});
 addProviderBtn.addEventListener("click", startNewProvider);
-providerCancelBtn.addEventListener("click", closeProviderDialog);
+providerCancelBtn.addEventListener("click", startNewProvider);
 providerForm.addEventListener("submit", handleProviderSubmit);
 storageLocationForm.addEventListener("submit", handleStorageLocationSubmit);
 storageBrowseBtn.addEventListener("click", chooseStorageDirectory);

@@ -1037,15 +1037,78 @@ summary:focus-visible {
   font-size: 17px;
 }
 
-#providerDialog {
-  width: min(720px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
+.workspace.settings-open > * {
+  visibility: hidden;
+}
+
+.settings-view {
+  position: fixed;
+  z-index: 25;
+  inset: 0;
+  overflow: auto;
+  padding: 30px max(36px, calc((100% - 1080px) / 2)) 56px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 650;
+}
+
+.settings-layout {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 32px;
+}
+
+.settings-nav {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+}
+
+.settings-nav button {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.settings-nav button[aria-current="page"] {
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.settings-panel {
+  min-width: 0;
+}
+
+#settingsStoragePanel .storage-location-section {
+  max-width: 720px;
+  margin-top: 0;
 }
 
 .provider-dialog-grid {
   min-height: 390px;
-  margin-top: 18px;
+  max-width: 800px;
   display: grid;
   grid-template-columns: 250px minmax(0, 1fr);
   border-top: 1px solid var(--line);
@@ -1360,7 +1423,7 @@ summary:focus-visible {
   gap: 7px;
 }
 
-.app-dialog .storage-location-form > .checkbox-field {
+.settings-view .storage-location-form > .checkbox-field {
   display: flex;
   grid-template-columns: none;
   align-items: center;
@@ -1540,6 +1603,15 @@ summary:focus-visible {
 
   .composer {
     width: calc(100% - 48px);
+  }
+
+  .settings-view {
+    padding: 24px;
+  }
+
+  .settings-layout {
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: 24px;
   }
 }
 

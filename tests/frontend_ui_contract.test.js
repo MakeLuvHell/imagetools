@@ -18,7 +18,7 @@ test("shell exposes Codex Windows task regions without permanent parameter colum
     "timeline",
     "composerForm",
     "parameterMenu",
-    "providerDialog",
+    "settingsView",
     "sessionDialog",
     "imagePreviewDialog",
   ]) {
@@ -100,11 +100,28 @@ test("Composer keeps controls in context and popover layers", () => {
   assert.doesNotMatch(html, /class="composer-controls"/);
 });
 
-test("Provider Cancel closes the settings dialog", () => {
+test("Provider Cancel resets the editor without leaving settings", () => {
   assert.match(
     app,
-    /providerCancelBtn\.addEventListener\("click", closeProviderDialog\)/,
+    /providerCancelBtn\.addEventListener\("click", startNewProvider\)/,
   );
+});
+
+test("settings uses a dedicated workspace view with separate provider and storage navigation", () => {
+  for (const id of [
+    "settingsView",
+    "settingsBackBtn",
+    "settingsProvidersNav",
+    "settingsStorageNav",
+    "settingsProvidersPanel",
+    "settingsStoragePanel",
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(app, /function openSettingsView\(tab, opener\)/);
+  assert.match(app, /function closeSettingsView\(\)/);
+  assert.match(styles, /\.settings-view/);
+  assert.match(styles, /\.settings-nav/);
 });
 
 test("settings dialog exposes a restart-only local data directory workflow", () => {
@@ -132,7 +149,7 @@ test("settings dialog exposes a restart-only local data directory workflow", () 
   );
   assert.match(
     styles,
-    /\.app-dialog \.storage-location-form > \.checkbox-field\s*\{[\s\S]*display:\s*flex/,
+    /\.settings-view \.storage-location-form > \.checkbox-field\s*\{[\s\S]*display:\s*flex/,
   );
 });
 
