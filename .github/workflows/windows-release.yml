@@ -63,6 +63,35 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           if-no-files-found: error
 
+      - name: Ensure GitHub Release exists
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $releaseNotes = "docs/releases/$($env:RELEASE_TAG).md"
+          & gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path $releaseNotes) {
+              & gh release create $env:RELEASE_TAG `
+                --repo $env:GITHUB_REPOSITORY `
+                --verify-tag `
+                --title "Image Tools $($env:RELEASE_TAG)" `
+                --notes-file $releaseNotes
+            } else {
+              & gh release create $env:RELEASE_TAG `
+                --repo $env:GITHUB_REPOSITORY `
+                --verify-tag `
+                --title "Image Tools $($env:RELEASE_TAG)" `
+                --generate-notes
+            }
+
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to create GitHub Release $($env:RELEASE_TAG)."
+            }
+          }
+
       - name: Upload installers to GitHub Release
         shell: pwsh
         env:
@@ -79,5 +108,8 @@ jobs:
           }
 
           foreach ($asset in $assets) {
-            gh release upload $env:RELEASE_TAG $asset.FullName --repo $env:GITHUB_REPOSITORY --clobber
+            & gh release upload $env:RELEASE_TAG $asset.FullName --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to upload $($asset.Name) to GitHub Release $($env:RELEASE_TAG)."
+            }
           }

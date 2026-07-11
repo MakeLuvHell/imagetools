@@ -69,6 +69,16 @@ def test_windows_release_workflow_uploads_installers_to_release():
     assert "--clobber" in workflow
 
 
+def test_windows_release_workflow_creates_a_missing_release_before_upload():
+    workflow = windows_release_workflow()
+
+    assert "gh release view" in workflow
+    assert "gh release create" in workflow
+    assert "--verify-tag" in workflow
+    assert 'docs/releases/$($env:RELEASE_TAG).md' in workflow
+    assert "--generate-notes" in workflow
+
+
 def test_release_docs_include_windows_workflow_command():
     docs = Path("docs/releases/github-release.md").read_text()
 

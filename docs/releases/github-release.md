@@ -26,7 +26,7 @@ Windows 安装器配置应满足：
 - WiX/MSI `.msi` 使用 `zh-CN`。
 - 应用、安装器和卸载器使用 `src-tauri/icons/icon.ico`。
 
-## 创建 Tag 和 Release
+## 创建 Tag
 
 确认所有验证通过并推送 `main` 后创建 tag：
 
@@ -36,7 +36,7 @@ git push origin main
 git push origin v0.2.2
 ```
 
-在 GitHub 创建 `v0.2.2` Release，说明使用 `docs/releases/v0.2.2.md`：
+可以在 GitHub 手工创建 `v0.2.2` Release，说明使用 `docs/releases/v0.2.2.md`：
 
 ```text
 https://github.com/MakeLuvHell/imagetools/releases/new?tag=v0.2.2
@@ -51,9 +51,13 @@ gh release create v0.2.2 \
   --notes-file docs/releases/v0.2.2.md
 ```
 
+手工创建不是必须步骤。Windows Release 工作流会先检查 Release；若 tag 存在但 Release 不存在，会自动使用对应的 `docs/releases/vX.Y.Z.md` 创建 Release，再上传安装包。
+
 ## 构建 Windows 安装包
 
 工作流位于 `.github/workflows/windows-release.yml`，必须在 Windows runner 上构建 x64 NSIS 和 MSI 安装包。
+
+请启动新的 workflow run，不要重跑修复前已经失败的旧 run；旧 run 会继续使用当时的工作流定义。
 
 GitHub CLI 触发命令：
 
