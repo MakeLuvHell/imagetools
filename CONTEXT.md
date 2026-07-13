@@ -24,6 +24,10 @@ _Avoid_: Command line, terminal prompt
 A saved image API configuration containing a display name, Base URL, API Key, and default model.
 _Avoid_: Model, global settings
 
+**工作区数据目录**:
+The single user-selectable local root for durable Provider, session, generation, reference-image, and generated-image data. These items form one coherent workspace data set rather than independently configurable locations.
+_Avoid_: Output folder, per-category storage root
+
 **参考图**:
 An image used as input for image editing or continued generation. It can come from upload or from a previous generated result.
 _Avoid_: Generated result unless it is actively selected as input
