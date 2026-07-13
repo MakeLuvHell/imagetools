@@ -460,6 +460,38 @@ test("native storage picker opens confirmation with the selected folder", async 
   );
 });
 
+test("storage picker errors preserve the directory and restore input focus", async ({ page }) => {
+  await page.addInitScript(() => {
+    let pickerCalls = 0;
+    window.__TAURI__ = {
+      core: {
+        invoke(command) {
+          if (command !== "pick_data_directory") {
+            return Promise.reject(new Error("unexpected command"));
+          }
+          pickerCalls += 1;
+          return pickerCalls === 1
+            ? Promise.resolve("D:\\Selected Images")
+            : Promise.reject(new Error("目录选择器不可用。"));
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
+  const dataDirectory = dialog.getByLabel("新的数据目录");
+  await dialog.getByRole("button", { name: "选择目录" }).click();
+
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("alert")).toHaveText("目录选择器不可用。");
+  await expect(dataDirectory).toHaveValue("D:\\Selected Images");
+  await expect(dataDirectory).toBeFocused();
+});
+
 test("storage validation errors stay in the change dialog", async ({ page }) => {
   await installApiMocks(page, { storageLocationError: "数据目录必须使用绝对路径。" });
   await page.goto("/");

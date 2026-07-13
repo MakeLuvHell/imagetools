@@ -1319,6 +1319,7 @@ async function browseStorageDirectory() {
       storageDataDir.focus();
     } else if (result.error) {
       setInlineStatus(storageDialogStatus, result.error, "error");
+      storageDataDir.focus();
     } else if (result.selected) {
       storageDataDir.value = result.selected;
       setInlineStatus(storageDialogStatus, "");
