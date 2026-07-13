@@ -264,68 +264,6 @@
     timeline.replaceChildren(empty);
   }
 
-  function renderProviderList(
-    container,
-    providers,
-    selectedProviderId,
-    onAction,
-  ) {
-    const document = container.ownerDocument;
-    container.replaceChildren();
-    for (const provider of providers) {
-      const row = document.createElement("article");
-      row.className = "provider-row";
-      row.dataset.providerId = String(provider.id);
-      if (provider.id === Number(selectedProviderId)) {
-        row.classList.add("selected");
-      }
-      const copy = document.createElement("div");
-      copy.className = "provider-copy";
-      const name = document.createElement("strong");
-      name.textContent = provider.name;
-      const model = document.createElement("span");
-      model.textContent = provider.defaultModel;
-      const keyStatus = document.createElement("span");
-      keyStatus.textContent = provider.apiKeySet ? "已配置密钥" : "未配置密钥";
-      copy.append(name, model, keyStatus);
-      if (provider.isDefault) {
-        const badge = document.createElement("span");
-        badge.className = "provider-default";
-        badge.textContent = "默认";
-        copy.appendChild(badge);
-      }
-
-      const actions = document.createElement("div");
-      actions.className = "provider-actions";
-      const definitions = [
-        ["default", "star", "设为默认"],
-        ["edit", "pencil", "编辑"],
-        ["delete", "trash-2", "删除"],
-      ];
-      for (const [action, icon, label] of definitions) {
-        if (action === "default" && provider.isDefault) continue;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = `icon-button${action === "delete" ? " danger-icon" : ""}`;
-        button.dataset.action = action;
-        button.setAttribute("aria-label", label);
-        button.title = label;
-        button.innerHTML = `<i data-lucide="${icon}"></i>`;
-        if (action === "delete") {
-          button.className = "provider-delete-button";
-          const text = document.createElement("span");
-          text.textContent = label;
-          button.appendChild(text);
-        }
-        button.addEventListener("click", () => onAction(action, provider.id));
-        actions.appendChild(button);
-      }
-      row.append(copy, actions);
-      container.appendChild(row);
-    }
-    refreshIcons();
-  }
-
   function settingsStateAction(document, label, callback) {
     const button = document.createElement("button");
     button.type = "button";
@@ -633,7 +571,6 @@
     isLayerOpen,
     renderSessionList,
     renderNewTask,
-    renderProviderList,
     renderProviderSettings,
     renderTaskRuns,
     renderTaskHeader,

@@ -53,8 +53,16 @@ const settingsProvidersPanel = document.querySelector("#settingsProvidersPanel")
 const settingsStoragePanel = document.querySelector("#settingsStoragePanel");
 const providerList = document.querySelector("#providerList");
 const addProviderBtn = document.querySelector("#addProviderBtn");
+const providerActionStatus = document.querySelector("#providerActionStatus");
+const providerMenu = document.querySelector("#providerMenu");
+const providerMenuEditBtn = document.querySelector("#providerMenuEditBtn");
+const providerMenuDefaultBtn = document.querySelector("#providerMenuDefaultBtn");
+const providerMenuDeleteBtn = document.querySelector("#providerMenuDeleteBtn");
+const providerDialog = document.querySelector("#providerDialog");
+const providerDialogClose = document.querySelector("#providerDialogClose");
 const providerForm = document.querySelector("#providerForm");
 const providerEditorTitle = document.querySelector("#providerEditorTitle");
+const providerDialogStatus = document.querySelector("#providerDialogStatus");
 const providerName = document.querySelector("#providerName");
 const providerBaseUrl = document.querySelector("#providerBaseUrl");
 const providerApiKey = document.querySelector("#providerApiKey");
@@ -62,6 +70,12 @@ const providerDefaultModel = document.querySelector("#providerDefaultModel");
 const providerIsDefault = document.querySelector("#providerIsDefault");
 const providerCancelBtn = document.querySelector("#providerCancelBtn");
 const providerSaveBtn = document.querySelector("#providerSaveBtn");
+const providerDeleteDialog = document.querySelector("#providerDeleteDialog");
+const providerDeleteForm = document.querySelector("#providerDeleteForm");
+const providerDeleteMessage = document.querySelector("#providerDeleteMessage");
+const providerDeleteStatus = document.querySelector("#providerDeleteStatus");
+const providerDeleteCancel = document.querySelector("#providerDeleteCancel");
+const providerDeleteConfirm = document.querySelector("#providerDeleteConfirm");
 const storageLocationForm = document.querySelector("#storageLocationForm");
 const storageCurrentPath = document.querySelector("#storageCurrentPath");
 const storageDataDir = document.querySelector("#storageDataDir");
@@ -95,9 +109,25 @@ let sessionDialogTarget = null;
 let sidebarMenuTarget = null;
 let sidebarMenuTrigger = null;
 let editingProviderId = null;
+let providerSettingsStatus = "loading";
+let providerSettingsError = "";
+let providerMenuTarget = null;
+let providerMenuTrigger = null;
+let providerDeleteTarget = null;
+let providerSaveToken = 0;
 let newTaskSubmissionLocked = false;
 let settingsOpener = null;
 const runsBySession = {};
+
+function setInlineStatus(element, message, tone = "") {
+  element.textContent = message;
+  element.hidden = !message;
+  if (tone) {
+    element.dataset.tone = tone;
+  } else {
+    delete element.dataset.tone;
+  }
+}
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -455,93 +485,207 @@ function renderProviders() {
   renderCurrentSession();
 }
 
-async function loadProviders() {
+async function loadProviders({ showLoading = false } = {}) {
+  if (showLoading) {
+    providerSettingsStatus = "loading";
+    providerSettingsError = "";
+    renderProviderManager();
+  }
   try {
     providers = window.ImageToolsWorkbench.normalizeProviders(
       await fetch("/api/providers").then(readJson),
     );
+    providerSettingsStatus = "ready";
+    providerSettingsError = "";
     renderProviders();
+    return true;
   } catch (error) {
-    showToast(error.message);
+    providerSettingsStatus = "error";
+    providerSettingsError = error.message;
+    renderProviderManager();
+    if (settingsView.hidden) showToast(error.message);
+    return false;
   }
 }
 
 function renderProviderManager() {
-  window.ImageToolsUi.renderProviderList(
+  window.ImageToolsUi.renderProviderSettings(
     providerList,
-    providers,
-    Number(providerSelect.value),
-    handleProviderAction,
+    {
+      status: providerSettingsStatus,
+      providers,
+      error: providerSettingsError,
+    },
+    {
+      onAdd: (event) => openNewProviderDialog(event?.currentTarget || addProviderBtn),
+      onEdit: (provider, trigger) => openEditProviderDialog(provider.id, trigger),
+      onMenu: (provider, trigger) => toggleProviderMenu(provider, trigger),
+      onRetry: () => void loadProviders({ showLoading: true }),
+    },
   );
-  if (!providers.length) {
-    const empty = document.createElement("p");
-    empty.className = "provider-empty";
-    empty.textContent = "尚未配置 Provider";
-    providerList.appendChild(empty);
-  }
 }
 
-function startNewProvider() {
-  editingProviderId = null;
-  providerEditorTitle.textContent = "新增 Provider";
+function providerRowMain(providerId) {
+  return providerList.querySelector(
+    `[data-provider-id="${Number(providerId)}"] .provider-row-main`,
+  );
+}
+
+function resetProviderForm() {
   providerForm.reset();
   providerDefaultModel.value = "gpt-image-2";
   providerApiKey.value = "";
   providerApiKey.placeholder = "输入 API Key";
+  providerSaveBtn.disabled = false;
+  providerCancelBtn.disabled = false;
+  providerDialogClose.disabled = false;
+  providerSaveBtn.textContent = "保存";
+  setInlineStatus(providerDialogStatus, "");
+}
+
+function openNewProviderDialog(opener) {
+  editingProviderId = null;
+  providerSaveToken += 1;
+  resetProviderForm();
+  providerEditorTitle.textContent = "添加 Provider";
+  window.ImageToolsUi.openDialog(providerDialog, opener);
   providerName.focus();
 }
 
-function editProvider(providerId) {
+function openEditProviderDialog(providerId, opener) {
   const provider = providers.find((item) => item.id === Number(providerId));
   if (!provider) return;
   editingProviderId = provider.id;
-  providerEditorTitle.textContent = `编辑 ${provider.name}`;
+  providerSaveToken += 1;
+  resetProviderForm();
+  providerEditorTitle.textContent = "编辑 Provider";
   providerName.value = provider.name;
   providerBaseUrl.value = provider.baseUrl;
-  providerApiKey.value = "";
   providerApiKey.placeholder = provider.apiKeySet
     ? "已保存，留空则保持不变"
     : "输入 API Key";
   providerDefaultModel.value = provider.defaultModel;
   providerIsDefault.checked = provider.isDefault;
+  window.ImageToolsUi.openDialog(providerDialog, opener);
   providerName.focus();
 }
 
-async function mutateProvider(url, options) {
-  providerSaveBtn.disabled = true;
+function closeProviderDialog() {
+  if (providerSaveBtn.disabled) return Promise.resolve();
+  providerSaveToken += 1;
+  editingProviderId = null;
+  return window.ImageToolsUi.closeDialog(providerDialog).then(resetProviderForm);
+}
+
+function handleProviderDialogCancel(event) {
+  event.preventDefault();
+  void closeProviderDialog();
+}
+
+function closeProviderMenu(options) {
+  const trigger = providerMenuTrigger;
+  providerMenuTarget = null;
+  providerMenuTrigger = null;
+  return window.ImageToolsUi.closeLayer(providerMenu, trigger, options);
+}
+
+function toggleProviderMenu(provider, trigger) {
+  const isSameMenu =
+    window.ImageToolsUi.isLayerOpen(providerMenu) &&
+    providerMenuTarget?.id === provider.id;
+  if (isSameMenu) {
+    void closeProviderMenu({ restoreFocus: true });
+    return;
+  }
+
+  if (window.ImageToolsUi.isLayerOpen(providerMenu)) {
+    void closeProviderMenu();
+  }
+  providerMenuTarget = provider;
+  providerMenuTrigger = trigger;
+  providerMenuDefaultBtn.hidden = provider.isDefault;
+  window.ImageToolsUi.openAnchoredLayer(providerMenu, trigger);
+  providerMenuEditBtn.focus();
+}
+
+async function editProviderFromMenu() {
+  const providerId = providerMenuTarget?.id;
+  const opener = providerRowMain(providerId);
+  await closeProviderMenu();
+  if (providerId != null) openEditProviderDialog(providerId, opener);
+}
+
+async function setDefaultProviderFromMenu() {
+  const providerId = providerMenuTarget?.id;
+  await closeProviderMenu();
+  if (providerId == null) return;
+  setInlineStatus(providerActionStatus, "");
   try {
-    await fetch(url, options).then(readJson);
+    await fetch(`/api/providers/${providerId}/default`, {
+      method: "POST",
+    }).then(readJson);
     await loadProviders();
-    return true;
+    (providerRowMain(providerId) || addProviderBtn).focus();
   } catch (error) {
-    showToast(error.message);
-    return false;
-  } finally {
-    providerSaveBtn.disabled = false;
+    setInlineStatus(providerActionStatus, error.message, "error");
+    (providerRowMain(providerId) || addProviderBtn).focus();
   }
 }
 
-async function handleProviderAction(action, providerId) {
-  if (action === "edit") {
-    editProvider(providerId);
-    return;
-  }
-  if (action === "default") {
-    await mutateProvider(`/api/providers/${providerId}/default`, {
-      method: "POST",
-    });
-    return;
-  }
-  if (action === "delete") {
-    const deleted = await mutateProvider(`/api/providers/${providerId}`, {
-      method: "DELETE",
-    });
-    if (deleted && editingProviderId === Number(providerId)) startNewProvider();
+function openProviderDeleteDialog(providerId, opener) {
+  const provider = providers.find((item) => item.id === Number(providerId));
+  if (!provider) return;
+  providerDeleteTarget = provider;
+  providerDeleteMessage.textContent = `确定删除“${provider.name}”吗？此操作无法撤销。`;
+  setInlineStatus(providerDeleteStatus, "");
+  providerDeleteCancel.disabled = false;
+  providerDeleteConfirm.disabled = false;
+  window.ImageToolsUi.openDialog(providerDeleteDialog, opener);
+}
+
+async function deleteProviderFromMenu() {
+  const providerId = providerMenuTarget?.id;
+  const opener = providerMenuTrigger;
+  await closeProviderMenu();
+  if (providerId != null) openProviderDeleteDialog(providerId, opener);
+}
+
+function closeProviderDeleteDialog() {
+  if (providerDeleteConfirm.disabled) return Promise.resolve();
+  providerDeleteTarget = null;
+  return window.ImageToolsUi.closeDialog(providerDeleteDialog);
+}
+
+function handleProviderDeleteCancel(event) {
+  event.preventDefault();
+  void closeProviderDeleteDialog();
+}
+
+async function handleProviderDeleteSubmit(event) {
+  event.preventDefault();
+  const providerId = providerDeleteTarget?.id;
+  if (providerId == null) return;
+  providerDeleteCancel.disabled = true;
+  providerDeleteConfirm.disabled = true;
+  setInlineStatus(providerDeleteStatus, "");
+  try {
+    await fetch(`/api/providers/${providerId}`, { method: "DELETE" }).then(readJson);
+    await window.ImageToolsUi.closeDialog(providerDeleteDialog);
+    providerDeleteTarget = null;
+    await loadProviders();
+    (providerList.querySelector(".provider-row-main") || addProviderBtn).focus();
+  } catch (error) {
+    setInlineStatus(providerDeleteStatus, error.message, "error");
+  } finally {
+    providerDeleteCancel.disabled = false;
+    providerDeleteConfirm.disabled = false;
   }
 }
 
 async function handleProviderSubmit(event) {
   event.preventDefault();
+  const token = ++providerSaveToken;
+  const providerId = editingProviderId;
   const payload = window.ImageToolsWorkbench.buildProviderPayload({
     name: providerName.value,
     baseUrl: providerBaseUrl.value,
@@ -549,18 +693,42 @@ async function handleProviderSubmit(event) {
     defaultModel: providerDefaultModel.value,
     isDefault: providerIsDefault.checked,
   });
-  const method = editingProviderId == null ? "POST" : "PATCH";
+  const method = providerId == null ? "POST" : "PATCH";
   const url =
-    editingProviderId == null
+    providerId == null
       ? "/api/providers"
-      : `/api/providers/${editingProviderId}`;
-  if (await mutateProvider(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  })) {
-    const saved = providers.find((provider) => provider.name === payload.name);
-    if (saved) editProvider(saved.id);
+      : `/api/providers/${providerId}`;
+  setInlineStatus(providerDialogStatus, "");
+  providerSaveBtn.disabled = true;
+  providerCancelBtn.disabled = true;
+  providerDialogClose.disabled = true;
+  providerSaveBtn.textContent = "保存中";
+  try {
+    const saved = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(readJson);
+    if (token !== providerSaveToken || !providerDialog.open) return;
+    const savedId = Number(saved.id ?? providerId);
+    await window.ImageToolsUi.closeDialog(providerDialog);
+    if (token !== providerSaveToken) return;
+    resetProviderForm();
+    editingProviderId = null;
+    const loaded = await loadProviders();
+    if (token !== providerSaveToken) return;
+    if (loaded) (providerRowMain(savedId) || addProviderBtn).focus();
+  } catch (error) {
+    if (token === providerSaveToken && providerDialog.open) {
+      setInlineStatus(providerDialogStatus, error.message, "error");
+    }
+  } finally {
+    if (token === providerSaveToken) {
+      providerSaveBtn.disabled = false;
+      providerCancelBtn.disabled = false;
+      providerDialogClose.disabled = false;
+      providerSaveBtn.textContent = "保存";
+    }
   }
 }
 
@@ -1027,16 +1195,17 @@ function openSettingsView(tab, opener) {
   settingsView.hidden = false;
   workspace.classList.add("settings-open");
   selectSettingsTab(tab);
+  setInlineStatus(providerActionStatus, "");
   renderProviderManager();
-  startNewProvider();
   if (tab === "storage") {
     void loadStorageLocation(true);
   } else {
-    providerName.focus();
+    addProviderBtn.focus();
   }
 }
 
 function closeSettingsView() {
+  void closeProviderMenu();
   settingsView.hidden = true;
   workspace.classList.remove("settings-open");
   settingsOpener?.focus();
@@ -1109,8 +1278,14 @@ async function chooseStorageDirectory() {
 
 function handleEscape(event) {
   if (event.key !== "Escape") return;
+  if (providerDialog.open || providerDeleteDialog.open) return;
+  if (window.ImageToolsUi.isLayerOpen(providerMenu)) {
+    void closeProviderMenu({ restoreFocus: true });
+    return;
+  }
   if (!settingsView.hidden) {
     closeSettingsView();
+    return;
   }
   if (window.ImageToolsUi.isLayerOpen(taskMenu)) {
     void closeTaskMenu({ restoreFocus: true });
@@ -1259,14 +1434,27 @@ searchToggle.addEventListener("click", toggleSearch);
 providersBtn.addEventListener("click", () => openSettingsView("providers", providersBtn));
 settingsBtn.addEventListener("click", () => openSettingsView("storage", settingsBtn));
 settingsBackBtn.addEventListener("click", closeSettingsView);
-settingsProvidersNav.addEventListener("click", () => selectSettingsTab("providers"));
+settingsProvidersNav.addEventListener("click", () => {
+  selectSettingsTab("providers");
+  renderProviderManager();
+  addProviderBtn.focus();
+});
 settingsStorageNav.addEventListener("click", () => {
   selectSettingsTab("storage");
   void loadStorageLocation(true);
 });
-addProviderBtn.addEventListener("click", startNewProvider);
-providerCancelBtn.addEventListener("click", startNewProvider);
+addProviderBtn.addEventListener("click", () => openNewProviderDialog(addProviderBtn));
+providerDialogClose.addEventListener("click", () => void closeProviderDialog());
+providerCancelBtn.addEventListener("click", () => void closeProviderDialog());
+providerDialog.addEventListener("cancel", handleProviderDialogCancel);
 providerForm.addEventListener("submit", handleProviderSubmit);
+providerMenuEditBtn.addEventListener("click", () => void editProviderFromMenu());
+providerMenuDefaultBtn.addEventListener("click", () => void setDefaultProviderFromMenu());
+providerMenuDeleteBtn.addEventListener("click", () => void deleteProviderFromMenu());
+providerMenu.addEventListener("keydown", handleMenuKeydown);
+providerDeleteCancel.addEventListener("click", () => void closeProviderDeleteDialog());
+providerDeleteDialog.addEventListener("cancel", handleProviderDeleteCancel);
+providerDeleteForm.addEventListener("submit", handleProviderDeleteSubmit);
 storageLocationForm.addEventListener("submit", handleStorageLocationSubmit);
 storageBrowseBtn.addEventListener("click", chooseStorageDirectory);
 imagePreviewClose.addEventListener("click", closeImagePreview);

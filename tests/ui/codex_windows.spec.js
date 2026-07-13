@@ -207,20 +207,152 @@ test("wide desktop windows expand the session sidebar", async ({ page }) => {
   expect((await page.locator(".session-sidebar").boundingBox()).width).toBeGreaterThan(280);
 });
 
-test("Provider Cancel resets its editor while settings remains open", async ({ page }) => {
-  await installApiMocks(page);
+test("Provider settings adds and edits through a focused dialog", async ({ page }) => {
+  const requests = await installApiMocks(page);
   await page.goto("/");
-  const opener = page.getByRole("button", { name: "Providers" });
-
-  await opener.click();
+  await page.getByRole("button", { name: "Providers" }).click();
   const settings = page.getByRole("region", { name: "设置" });
-  await expect(settings).toBeVisible();
-  await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
-  await settings.locator("#providerName").fill("Temporary");
-  await settings.getByRole("button", { name: "取消" }).click();
+  await expect(
+    settings.getByRole("button", { name: "编辑 Provider Default" }),
+  ).toBeVisible();
+  await expect(settings.locator("#providerName")).toHaveCount(0);
 
-  await expect(settings).toBeVisible();
-  await expect(settings.locator("#providerName")).toHaveValue("");
+  await settings.getByRole("button", { name: "添加 Provider" }).click();
+  const addDialog = page.getByRole("dialog", { name: "添加 Provider" });
+  await expect(addDialog).toBeVisible();
+  await addDialog.getByLabel("名称").fill("Studio");
+  await addDialog.getByLabel("Base URL").fill("https://studio.example/v1");
+  await addDialog.getByLabel("API Key").fill("secret-value");
+  await addDialog.getByLabel("默认模型").fill("studio-image-v1");
+  await addDialog.getByRole("button", { name: "保存", exact: true }).click();
+
+  await expect(addDialog).toBeHidden();
+  const studioRow = settings.getByRole("button", {
+    name: "编辑 Provider Studio",
+  });
+  await expect(studioRow).toBeVisible();
+  await studioRow.click();
+
+  const editDialog = page.getByRole("dialog", { name: "编辑 Provider" });
+  await expect(editDialog).toBeVisible();
+  await expect(editDialog.getByLabel("API Key")).toHaveValue("");
+  await expect(editDialog.getByLabel("API Key")).toHaveAttribute(
+    "placeholder",
+    "已保存，留空则保持不变",
+  );
+  await editDialog.getByLabel("名称").fill("Studio Updated");
+  await editDialog.getByRole("button", { name: "保存", exact: true }).click();
+
+  await expect(editDialog).toBeHidden();
+  await expect(
+    settings.getByRole("button", { name: "编辑 Provider Studio Updated" }),
+  ).toBeVisible();
+  await expect.poll(() => requests.providerRequests.at(-1)?.method).toBe("PATCH");
+  expect(requests.providerRequests.at(-1).body.api_key).toBe("");
+});
+
+test("Provider stale reloads do not disable a newer dialog", async ({ page }) => {
+  const requests = await installApiMocks(page, { providerReloadDelayMs: 500 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByRole("button", { name: "添加 Provider" }).click();
+  const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+  await dialog.getByLabel("名称").fill("Studio");
+  await dialog.getByLabel("Base URL").fill("https://studio.example/v1");
+  await dialog.getByLabel("API Key").fill("secret-value");
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => requests.providerListRequests).toBe(2);
+  await settings.getByRole("button", { name: "添加 Provider" }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "保存", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "取消" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "关闭" })).toBeEnabled();
+});
+
+test("Provider menu sets defaults and confirms deletion", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    providers: [
+      {
+        id: 1,
+        name: "Default",
+        base_url: "https://api.example/v1",
+        default_model: "gpt-image-2",
+        is_default: true,
+        api_key_set: true,
+      },
+      {
+        id: 2,
+        name: "Studio",
+        base_url: "https://studio.example/v1",
+        default_model: "studio-image-v1",
+        is_default: false,
+        api_key_set: true,
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  const studioMenuButton = settings.getByRole("button", {
+    name: "管理 Provider Studio",
+  });
+
+  await studioMenuButton.click();
+  const menu = page.getByRole("menu", { name: "Provider 操作" });
+  await menu.getByRole("menuitem", { name: "设为默认" }).click();
+  await expect
+    .poll(() => requests.providers.filter((provider) => provider.is_default).map((provider) => provider.id))
+    .toEqual([2]);
+
+  await studioMenuButton.click();
+  await menu.getByRole("menuitem", { name: "删除" }).click();
+  const deleteDialog = page.getByRole("dialog", { name: "删除 Provider" });
+  await expect(deleteDialog).toContainText("Studio");
+  await deleteDialog.getByRole("button", { name: "取消" }).click();
+  await expect(
+    settings.getByRole("button", { name: "编辑 Provider Studio" }),
+  ).toBeVisible();
+
+  await studioMenuButton.click();
+  await menu.getByRole("menuitem", { name: "删除" }).click();
+  await deleteDialog.getByRole("button", { name: "删除", exact: true }).click();
+  await expect(
+    settings.getByRole("button", { name: "编辑 Provider Studio" }),
+  ).toHaveCount(0);
+});
+
+test("Provider mutation errors remain in the active dialog", async ({ page }) => {
+  await installApiMocks(page, {
+    providerMutationError: "Base URL 无法连接。",
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "添加 Provider" }).click();
+  const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+  await dialog.getByLabel("名称").fill("Broken");
+  await dialog.getByLabel("Base URL").fill("https://broken.example/v1");
+  await dialog.getByLabel("API Key").fill("secret-value");
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("alert")).toHaveText("Base URL 无法连接。");
+  await expect(dialog.getByLabel("名称")).toHaveValue("Broken");
+});
+
+test("Provider list failures render an inline retry state", async ({ page }) => {
+  await installApiMocks(page, {
+    providerListError: "Provider 列表读取失败。",
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  const error = settings.getByRole("alert");
+
+  await expect(error).toContainText("Provider 列表读取失败。");
+  await expect(error.getByRole("button", { name: "重试" })).toBeVisible();
 });
 
 test("settings opens as a dedicated view and switches between provider and storage", async ({ page }) => {

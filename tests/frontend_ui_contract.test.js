@@ -100,11 +100,31 @@ test("Composer keeps controls in context and popover layers", () => {
   assert.doesNotMatch(html, /class="composer-controls"/);
 });
 
-test("Provider Cancel resets the editor without leaving settings", () => {
-  assert.match(
-    app,
-    /providerCancelBtn\.addEventListener\("click", startNewProvider\)/,
-  );
+test("Provider settings uses a scan-first list and dedicated task dialogs", () => {
+  for (const id of [
+    "providerList",
+    "addProviderBtn",
+    "providerDialog",
+    "providerForm",
+    "providerDialogStatus",
+    "providerMenu",
+    "providerDeleteDialog",
+    "providerDeleteMessage",
+    "providerDeleteStatus",
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+
+  const providerPanelStart = html.indexOf('<section id="settingsProvidersPanel"');
+  const storagePanelStart = html.indexOf('<section id="settingsStoragePanel"');
+  assert.notEqual(providerPanelStart, -1);
+  assert.ok(storagePanelStart > providerPanelStart);
+  const providerPanel = html.slice(providerPanelStart, storagePanelStart);
+  assert.doesNotMatch(providerPanel, /id="providerForm"/);
+
+  assert.match(app, /function openNewProviderDialog\(/);
+  assert.match(app, /function openEditProviderDialog\(/);
+  assert.match(app, /function openProviderDeleteDialog\(/);
 });
 
 test("settings uses a dedicated workspace view with separate provider and storage navigation", () => {
@@ -118,6 +138,27 @@ test("settings uses a dedicated workspace view with separate provider and storag
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+  assert.match(
+    html,
+    /id="settingsView" class="settings-view" role="region" aria-label="设置" hidden/,
+  );
+  for (const className of [
+    "settings-shell",
+    "settings-sidebar",
+    "settings-nav-label",
+    "settings-nav",
+    "settings-main",
+    "settings-page-heading",
+  ]) {
+    assert.match(html, new RegExp(`class="[^"]*${className}[^"]*"`));
+  }
+  assert.match(html, /class="settings-nav" aria-label="设置分类"/);
+  assert.match(html, /id="settingsProvidersNav"[^>]*aria-current="false"/);
+  assert.match(html, /id="settingsStorageNav"[^>]*aria-current="page"/);
+  assert.match(
+    html,
+    /id="settingsProvidersPanel" class="settings-panel" aria-labelledby="settingsProvidersTitle"/,
+  );
   assert.match(app, /function openSettingsView\(tab, opener\)/);
   assert.match(app, /function closeSettingsView\(\)/);
   assert.match(styles, /\.settings-view/);

@@ -291,105 +291,145 @@
     </div>
 
     <section id="settingsView" class="settings-view" role="region" aria-label="设置" hidden>
-      <header class="settings-header">
-        <button id="settingsBackBtn" type="button" class="icon-button" aria-label="返回工作区" title="返回工作区">
-          <i data-lucide="arrow-left"></i>
-        </button>
-        <h2>设置</h2>
-      </header>
-      <div class="settings-layout">
-        <nav class="settings-nav" aria-label="设置分类">
-          <button id="settingsProvidersNav" type="button" aria-current="false">
-            <i data-lucide="panels-top-left"></i>
-            <span>Provider</span>
+      <div class="settings-shell">
+        <aside class="settings-sidebar">
+          <button id="settingsBackBtn" type="button" aria-label="返回工作区">
+            <i data-lucide="arrow-left"></i>
+            <span>设置</span>
           </button>
-          <button id="settingsStorageNav" type="button" aria-current="page">
-            <i data-lucide="hard-drive"></i>
-            <span>本地数据</span>
-          </button>
-        </nav>
-        <div class="settings-content">
-          <section id="settingsProvidersPanel" class="settings-panel" aria-label="Provider" hidden>
-        <div class="provider-dialog-grid">
-          <section class="provider-list-pane">
-            <div class="provider-pane-heading">
-              <span>已保存</span>
-              <button id="addProviderBtn" type="button" class="icon-button" aria-label="新增 Provider" title="新增 Provider">
+          <p class="settings-nav-label">设置</p>
+          <nav class="settings-nav" aria-label="设置分类">
+            <button id="settingsProvidersNav" type="button" aria-current="false">
+              <i data-lucide="panels-top-left"></i>
+              <span>Provider</span>
+            </button>
+            <button id="settingsStorageNav" type="button" aria-current="page">
+              <i data-lucide="hard-drive"></i>
+              <span>本地数据</span>
+            </button>
+          </nav>
+        </aside>
+        <main class="settings-main">
+          <section id="settingsProvidersPanel" class="settings-panel" aria-labelledby="settingsProvidersTitle" hidden>
+            <header class="settings-page-heading">
+              <div>
+                <h2 id="settingsProvidersTitle">Provider</h2>
+                <p>管理 Image Tools 用于生成图片的 API 连接。</p>
+              </div>
+              <button id="addProviderBtn" type="button" class="dialog-button primary">
                 <i data-lucide="plus"></i>
+                <span>添加 Provider</span>
               </button>
-            </div>
-            <div id="providerList" class="provider-list"></div>
-          </section>
-          <form id="providerForm" class="provider-form">
-            <h3 id="providerEditorTitle">新增 Provider</h3>
-            <label>
-              <span>名称</span>
-              <input id="providerName" required autocomplete="off" />
-            </label>
-            <label>
-              <span>Base URL</span>
-              <input id="providerBaseUrl" required type="url" autocomplete="url" />
-            </label>
-            <label>
-              <span>API Key</span>
-              <input id="providerApiKey" type="password" autocomplete="new-password" placeholder="输入 API Key" />
-            </label>
-            <label>
-              <span>默认模型</span>
-              <input id="providerDefaultModel" required value="gpt-image-2" autocomplete="off" />
-            </label>
-            <label class="checkbox-field">
-              <input id="providerIsDefault" type="checkbox" />
-              <span>设为默认 Provider</span>
-            </label>
-            <footer>
-              <button id="providerCancelBtn" type="button" class="dialog-button">取消</button>
-              <button id="providerSaveBtn" type="submit" class="dialog-button primary">保存</button>
-            </footer>
-          </form>
-        </div>
+            </header>
+            <p id="providerActionStatus" class="settings-inline-status" role="status" hidden></p>
+            <div id="providerList" class="provider-list" aria-live="polite"></div>
           </section>
           <section id="settingsStoragePanel" class="settings-panel" aria-label="本地数据">
-        <section class="storage-location-section" aria-labelledby="storageLocationTitle">
-          <div class="storage-location-heading">
-            <h3 id="storageLocationTitle">本地数据</h3>
-            <output id="storageCurrentPath" aria-label="当前数据目录"></output>
-          </div>
-          <form id="storageLocationForm" class="storage-location-form">
-            <label>
-              <span>新的数据目录</span>
-              <span class="storage-directory-input">
-                <input
-                  id="storageDataDir"
-                  required
-                  autocomplete="off"
-                  placeholder="D:\\Image Tools"
-                />
-                <button
-                  id="storageBrowseBtn"
-                  type="button"
-                  class="icon-button"
-                  aria-label="选择目录"
-                  title="选择目录"
-                >
-                  <i data-lucide="folder-open"></i>
-                </button>
-              </span>
-            </label>
-            <label class="checkbox-field">
-              <input id="storageMigrateExisting" type="checkbox" />
-              <span>复制现有会话和文件</span>
-            </label>
-            <footer>
-              <p id="storageLocationStatus" role="status" hidden></p>
-              <button id="storageApplyBtn" type="submit" class="dialog-button primary">应用</button>
-            </footer>
-          </form>
-        </section>
+            <section class="storage-location-section" aria-labelledby="storageLocationTitle">
+              <div class="storage-location-heading">
+                <h3 id="storageLocationTitle">本地数据</h3>
+                <output id="storageCurrentPath" aria-label="当前数据目录"></output>
+              </div>
+              <form id="storageLocationForm" class="storage-location-form">
+                <label>
+                  <span>新的数据目录</span>
+                  <span class="storage-directory-input">
+                    <input
+                      id="storageDataDir"
+                      required
+                      autocomplete="off"
+                      placeholder="D:\\Image Tools"
+                    />
+                    <button
+                      id="storageBrowseBtn"
+                      type="button"
+                      class="icon-button"
+                      aria-label="选择目录"
+                      title="选择目录"
+                    >
+                      <i data-lucide="folder-open"></i>
+                    </button>
+                  </span>
+                </label>
+                <label class="checkbox-field">
+                  <input id="storageMigrateExisting" type="checkbox" />
+                  <span>复制现有会话和文件</span>
+                </label>
+                <footer>
+                  <p id="storageLocationStatus" role="status" hidden></p>
+                  <button id="storageApplyBtn" type="submit" class="dialog-button primary">应用</button>
+                </footer>
+              </form>
+            </section>
           </section>
-        </div>
+        </main>
+      </div>
+      <div id="providerMenu" class="task-menu provider-menu" role="menu" aria-label="Provider 操作" hidden>
+        <button id="providerMenuEditBtn" type="button" role="menuitem">
+          <i data-lucide="pencil"></i>
+          <span>编辑</span>
+        </button>
+        <button id="providerMenuDefaultBtn" type="button" role="menuitem">
+          <i data-lucide="star"></i>
+          <span>设为默认</span>
+        </button>
+        <button id="providerMenuDeleteBtn" type="button" class="danger-menu-item" role="menuitem">
+          <i data-lucide="trash-2"></i>
+          <span>删除</span>
+        </button>
       </div>
     </section>
+
+    <dialog id="providerDialog" class="app-dialog settings-dialog" aria-labelledby="providerEditorTitle">
+      <header>
+        <div>
+          <h2 id="providerEditorTitle">添加 Provider</h2>
+          <p>配置图片生成 API 连接。</p>
+        </div>
+        <button id="providerDialogClose" type="button" class="icon-button" aria-label="关闭">
+          <i data-lucide="x"></i>
+        </button>
+      </header>
+      <form id="providerForm" class="provider-form">
+        <p id="providerDialogStatus" class="dialog-status" role="alert" hidden></p>
+        <label>
+          <span>名称</span>
+          <input id="providerName" required autocomplete="off" />
+        </label>
+        <label>
+          <span>Base URL</span>
+          <input id="providerBaseUrl" required type="url" autocomplete="url" />
+        </label>
+        <label>
+          <span>API Key</span>
+          <input id="providerApiKey" type="password" autocomplete="new-password" placeholder="输入 API Key" />
+        </label>
+        <label>
+          <span>默认模型</span>
+          <input id="providerDefaultModel" required value="gpt-image-2" autocomplete="off" />
+        </label>
+        <label class="checkbox-field">
+          <input id="providerIsDefault" type="checkbox" />
+          <span>设为默认 Provider</span>
+        </label>
+        <footer>
+          <button id="providerCancelBtn" type="button" class="dialog-button">取消</button>
+          <button id="providerSaveBtn" type="submit" class="dialog-button primary">保存</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="providerDeleteDialog" class="app-dialog settings-dialog" aria-labelledby="providerDeleteTitle">
+      <form id="providerDeleteForm">
+        <h2 id="providerDeleteTitle">删除 Provider</h2>
+        <p id="providerDeleteMessage"></p>
+        <p id="providerDeleteStatus" class="dialog-status" role="alert" hidden></p>
+        <footer>
+          <button id="providerDeleteCancel" type="button" class="dialog-button">取消</button>
+          <button id="providerDeleteConfirm" type="submit" class="dialog-button danger">删除</button>
+        </footer>
+      </form>
+    </dialog>
 
     <dialog id="sessionDialog" class="app-dialog" aria-labelledby="sessionDialogTitle">
       <form id="sessionDialogForm">

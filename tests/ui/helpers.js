@@ -6,6 +6,22 @@ const IMAGE_BYTES = fs.readFileSync(
 );
 
 async function installApiMocks(page, overrides = {}) {
+  const initialProviders =
+    overrides.providers === undefined
+      ? [
+          {
+            id: 1,
+            name: "Default",
+            base_url: "https://api.example/v1",
+            default_model: "gpt-image-2",
+            is_default: true,
+            api_key_set: true,
+          },
+        ]
+      : overrides.providers;
+  const providerIds = initialProviders
+    .map((provider) => Number(provider.id))
+    .filter(Number.isFinite);
   const state = {
     sessionsCreated: 0,
     requestLog: [],
@@ -19,19 +35,10 @@ async function installApiMocks(page, overrides = {}) {
       },
     ],
     projects: overrides.projects || [],
-    providers:
-      overrides.providers === undefined
-        ? [
-            {
-              id: 1,
-              name: "Default",
-              base_url: "https://api.example/v1",
-              default_model: "gpt-image-2",
-              is_default: true,
-              api_key_set: true,
-            },
-          ]
-        : overrides.providers,
+    providers: initialProviders,
+    providerRequests: [],
+    providerListRequests: 0,
+    nextProviderId: Math.max(0, ...providerIds) + 1,
     runs: overrides.runs || { 1: [] },
     storageLocation: overrides.storageLocation || {
       active_data_dir: "C:\\Users\\creator\\AppData\\Roaming\\com.imagetools.desktop",
@@ -43,10 +50,95 @@ async function installApiMocks(page, overrides = {}) {
   };
 
   await page.route("**/api/providers", async (route) => {
-    if (route.request().method() === "GET") {
+    const method = route.request().method();
+    if (method === "GET") {
+      state.providerListRequests += 1;
+      if (overrides.providerReloadDelayMs && state.providerListRequests > 1) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, overrides.providerReloadDelayMs);
+        });
+      }
+      if (overrides.providerListError) {
+        return route.fulfill({
+          status: 500,
+          json: { detail: overrides.providerListError },
+        });
+      }
       return route.fulfill({ json: state.providers });
     }
-    return route.fulfill({ status: 200, json: state.providers[0] || {} });
+    if (method === "POST") {
+      if (overrides.providerMutationError) {
+        return route.fulfill({
+          status: 400,
+          json: { detail: overrides.providerMutationError },
+        });
+      }
+      const body = route.request().postDataJSON();
+      state.providerRequests.push({ method, id: null, body });
+      if (body.is_default) {
+        state.providers.forEach((provider) => {
+          provider.is_default = false;
+        });
+      }
+      const provider = {
+        id: state.nextProviderId++,
+        name: body.name,
+        base_url: body.base_url,
+        default_model: body.default_model,
+        is_default: Boolean(body.is_default),
+        api_key_set: Boolean(body.api_key),
+      };
+      state.providers.push(provider);
+      return route.fulfill({ status: 200, json: provider });
+    }
+    return route.fulfill({ status: 405, json: { detail: "Method not allowed" } });
+  });
+  await page.route(/\/api\/providers\/(\d+)(?:\/default)?$/, async (route) => {
+    const request = route.request();
+    const method = request.method();
+    const parts = new URL(request.url()).pathname.split("/");
+    const providerId = Number(parts[3]);
+    const provider = state.providers.find((item) => Number(item.id) === providerId);
+    if (!provider) {
+      return route.fulfill({ status: 404, json: { detail: "Provider 不存在。" } });
+    }
+    if (overrides.providerMutationError) {
+      return route.fulfill({
+        status: 400,
+        json: { detail: overrides.providerMutationError },
+      });
+    }
+    if (parts[4] === "default" && method === "POST") {
+      state.providerRequests.push({ method, id: providerId, body: null });
+      state.providers.forEach((item) => {
+        item.is_default = Number(item.id) === providerId;
+      });
+      return route.fulfill({ json: provider });
+    }
+    if (parts[4] === undefined && method === "PATCH") {
+      const body = request.postDataJSON();
+      state.providerRequests.push({ method, id: providerId, body });
+      provider.name = body.name;
+      provider.base_url = body.base_url;
+      provider.default_model = body.default_model;
+      if (body.api_key) provider.api_key_set = true;
+      if (body.is_default) {
+        state.providers.forEach((item) => {
+          item.is_default = Number(item.id) === providerId;
+        });
+      } else {
+        provider.is_default = false;
+      }
+      return route.fulfill({ json: provider });
+    }
+    if (parts[4] === undefined && method === "DELETE") {
+      state.providerRequests.push({ method, id: providerId, body: null });
+      state.providers = state.providers.filter(
+        (item) => Number(item.id) !== providerId,
+      );
+      return route.fulfill({ status: 204, body: "" });
+    }
+    return route.fulfill({ status: 405, json: { detail: "Method not allowed" } });
   });
   await page.route("**/api/storage-location", async (route) => {
     if (route.request().method() === "GET") {
