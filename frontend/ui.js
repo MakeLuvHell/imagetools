@@ -326,6 +326,119 @@
     refreshIcons();
   }
 
+  function settingsStateAction(document, label, callback) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "dialog-button";
+    button.textContent = label;
+    if (callback) button.addEventListener("click", callback);
+    return button;
+  }
+
+  function renderProviderSettings(container, state, callbacks = {}) {
+    const document = container.ownerDocument;
+    const status = state?.status || "ready";
+    const providers = state?.providers || [];
+    container.replaceChildren();
+    container.removeAttribute("aria-busy");
+
+    if (status === "loading") {
+      container.setAttribute("aria-busy", "true");
+      for (let index = 0; index < 2; index += 1) {
+        const skeleton = document.createElement("div");
+        skeleton.className = "settings-skeleton-row";
+        skeleton.setAttribute("aria-hidden", "true");
+        container.appendChild(skeleton);
+      }
+      return;
+    }
+
+    if (status === "error") {
+      const error = document.createElement("div");
+      error.className = "settings-error-state";
+      error.setAttribute("role", "alert");
+      const title = document.createElement("strong");
+      title.textContent = "无法加载 Provider";
+      const message = document.createElement("p");
+      message.textContent = state?.error || "请求失败";
+      error.append(
+        title,
+        message,
+        settingsStateAction(document, "重试", callbacks.onRetry),
+      );
+      container.appendChild(error);
+      return;
+    }
+
+    if (!providers.length) {
+      const empty = document.createElement("div");
+      empty.className = "settings-empty-state";
+      const title = document.createElement("strong");
+      title.textContent = "尚未配置 Provider";
+      const message = document.createElement("p");
+      message.textContent = "添加一个图片 API 连接后即可开始生成。";
+      empty.append(
+        title,
+        message,
+        settingsStateAction(document, "添加 Provider", callbacks.onAdd),
+      );
+      container.appendChild(empty);
+      return;
+    }
+
+    for (const provider of providers) {
+      const row = document.createElement("article");
+      row.className = "provider-row";
+      row.dataset.providerId = String(provider.id);
+
+      const main = document.createElement("button");
+      main.type = "button";
+      main.className = "provider-row-main";
+      main.setAttribute("aria-label", `编辑 Provider ${provider.name}`);
+      main.addEventListener("click", () => callbacks.onEdit?.(provider, main));
+
+      const avatar = document.createElement("span");
+      avatar.className = "provider-avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = String(provider.name || "").trim().charAt(0).toUpperCase() || "P";
+
+      const copy = document.createElement("span");
+      copy.className = "provider-copy";
+      const nameLine = document.createElement("span");
+      nameLine.className = "provider-name-line";
+      const name = document.createElement("strong");
+      name.textContent = provider.name;
+      nameLine.appendChild(name);
+      if (provider.isDefault) {
+        const badge = document.createElement("span");
+        badge.className = "provider-default";
+        badge.textContent = "默认";
+        nameLine.appendChild(badge);
+      }
+      const detail = document.createElement("span");
+      detail.className = "provider-detail";
+      detail.textContent = `${provider.defaultModel} · ${
+        provider.apiKeySet ? "API Key 已配置" : "API Key 未配置"
+      }`;
+      copy.append(nameLine, detail);
+      main.append(avatar, copy);
+
+      const menu = document.createElement("button");
+      menu.type = "button";
+      menu.className = "provider-row-menu icon-button";
+      menu.setAttribute("aria-label", `管理 Provider ${provider.name}`);
+      menu.setAttribute("aria-haspopup", "menu");
+      menu.setAttribute("aria-expanded", "false");
+      menu.title = "Provider 操作";
+      menu.innerHTML = '<i data-lucide="ellipsis"></i>';
+      menu.addEventListener("click", () => callbacks.onMenu?.(provider, menu));
+
+      row.append(main, menu);
+      container.appendChild(row);
+    }
+    refreshIcons();
+  }
+
   function actionButton(document, icon, label, callback) {
     const button = document.createElement("button");
     button.type = "button";
@@ -521,6 +634,7 @@
     renderSessionList,
     renderNewTask,
     renderProviderList,
+    renderProviderSettings,
     renderTaskRuns,
     renderTaskHeader,
     openDialog,

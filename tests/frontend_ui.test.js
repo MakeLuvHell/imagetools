@@ -69,32 +69,73 @@ test("renderNewTask creates an unframed creation empty state", () => {
   assert.equal(timeline.querySelector(".empty-workspace img").alt, "");
 });
 
-test("renderProviderList exposes actions without rendering API keys", () => {
+test("renderProviderSettings renders scan-first provider rows", () => {
   assert.ok(ui, "frontend/ui.js must exist");
-  const dom = new JSDOM('<div id="providers"></div>');
-  const actions = [];
-  ui.renderProviderList(
+  assert.equal(typeof ui.renderProviderSettings, "function");
+  const dom = new JSDOM('<div id="providers" aria-live="polite"></div>');
+  const edits = [];
+  const menus = [];
+  ui.renderProviderSettings(
     dom.window.document.querySelector("#providers"),
-    [
-      {
+    {
+      status: "ready",
+      providers: [{
         id: 2,
         name: "Default",
         defaultModel: "gpt-image-2",
         apiKeySet: true,
         isDefault: true,
-      },
-    ],
-    2,
-    (action, id) => actions.push([action, id]),
+      }],
+    },
+    {
+      onEdit: (provider, trigger) => edits.push([provider.id, trigger.className]),
+      onMenu: (provider, trigger) => menus.push([provider.id, trigger.className]),
+    },
   );
 
   const row = dom.window.document.querySelector("[data-provider-id='2']");
   assert.match(row.textContent, /Default/);
   assert.match(row.textContent, /gpt-image-2/);
-  assert.match(row.textContent, /已配置密钥/);
+  assert.match(row.textContent, /API Key 已配置/);
+  assert.match(row.textContent, /默认/);
   assert.doesNotMatch(row.textContent, /sk-/);
-  row.querySelector("[data-action='edit']").click();
-  assert.deepEqual(actions, [["edit", 2]]);
+  row.querySelector(".provider-row-main").click();
+  row.querySelector(".provider-row-menu").click();
+  assert.deepEqual(edits, [[2, "provider-row-main"]]);
+  assert.deepEqual(menus, [[2, "provider-row-menu icon-button"]]);
+});
+
+test("renderProviderSettings renders stable loading, empty, and error states", () => {
+  assert.ok(ui, "frontend/ui.js must exist");
+  assert.equal(typeof ui.renderProviderSettings, "function");
+  const dom = new JSDOM('<div id="providers" aria-live="polite"></div>');
+  const container = dom.window.document.querySelector("#providers");
+
+  ui.renderProviderSettings(container, { status: "loading" });
+  assert.equal(container.getAttribute("aria-busy"), "true");
+  assert.equal(container.querySelectorAll(".settings-skeleton-row").length, 2);
+
+  let added = false;
+  ui.renderProviderSettings(
+    container,
+    { status: "ready", providers: [] },
+    { onAdd: () => { added = true; } },
+  );
+  const empty = container.querySelector(".settings-empty-state");
+  assert.ok(empty);
+  empty.querySelector("button").click();
+  assert.equal(added, true);
+
+  let retried = false;
+  ui.renderProviderSettings(
+    container,
+    { status: "error", error: "Provider 加载失败" },
+    { onRetry: () => { retried = true; } },
+  );
+  const error = container.querySelector(".settings-error-state");
+  assert.match(error.textContent, /Provider 加载失败/);
+  error.querySelector("button").click();
+  assert.equal(retried, true);
 });
 
 test("renderTaskRuns keeps success and failure in one chronological stream", () => {
