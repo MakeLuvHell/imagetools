@@ -76,13 +76,21 @@ const providerDeleteMessage = document.querySelector("#providerDeleteMessage");
 const providerDeleteStatus = document.querySelector("#providerDeleteStatus");
 const providerDeleteCancel = document.querySelector("#providerDeleteCancel");
 const providerDeleteConfirm = document.querySelector("#providerDeleteConfirm");
-const storageLocationForm = document.querySelector("#storageLocationForm");
 const storageCurrentPath = document.querySelector("#storageCurrentPath");
+const storageChangeBtn = document.querySelector("#storageChangeBtn");
+const storagePendingState = document.querySelector("#storagePendingState");
+const storagePendingPath = document.querySelector("#storagePendingPath");
+const storageIdleState = document.querySelector("#storageIdleState");
+const storagePanelStatus = document.querySelector("#storagePanelStatus");
+const storageDialog = document.querySelector("#storageDialog");
+const storageDialogClose = document.querySelector("#storageDialogClose");
+const storageLocationForm = document.querySelector("#storageLocationForm");
+const storageDialogStatus = document.querySelector("#storageDialogStatus");
 const storageDataDir = document.querySelector("#storageDataDir");
 const storageBrowseBtn = document.querySelector("#storageBrowseBtn");
 const storageMigrateExisting = document.querySelector("#storageMigrateExisting");
+const storageCancelBtn = document.querySelector("#storageCancelBtn");
 const storageApplyBtn = document.querySelector("#storageApplyBtn");
-const storageLocationStatus = document.querySelector("#storageLocationStatus");
 const sessionDialog = document.querySelector("#sessionDialog");
 const sessionDialogForm = document.querySelector("#sessionDialogForm");
 const sessionDialogTitle = document.querySelector("#sessionDialogTitle");
@@ -116,6 +124,7 @@ let providerMenuTrigger = null;
 let providerDeleteTarget = null;
 let providerSaveToken = 0;
 let providerLoadToken = 0;
+let storageLocation = null;
 let newTaskSubmissionLocked = false;
 let settingsOpener = null;
 const runsBySession = {};
@@ -1203,7 +1212,8 @@ function openSettingsView(tab, opener) {
   setInlineStatus(providerActionStatus, "");
   renderProviderManager();
   if (tab === "storage") {
-    void loadStorageLocation(true);
+    void loadStorageLocation();
+    storageChangeBtn.focus();
   } else {
     addProviderBtn.focus();
   }
@@ -1218,31 +1228,118 @@ function closeSettingsView() {
 }
 
 function renderStorageLocation(location, message = "") {
+  storageLocation = location;
   storageCurrentPath.value = location.active_data_dir || "";
-  storageDataDir.value = location.pending_data_dir || location.active_data_dir || "";
-  storageMigrateExisting.checked = false;
-  storageLocationStatus.textContent = message;
-  storageLocationStatus.hidden = !message;
+  const pendingPath = location.pending_data_dir || "";
+  storagePendingPath.value = pendingPath;
+  storagePendingState.hidden = !pendingPath;
+  storageIdleState.hidden = Boolean(pendingPath);
+  setInlineStatus(storagePanelStatus, message);
 }
 
-async function loadStorageLocation(focusInput = false) {
+async function loadStorageLocation({ announce = "" } = {}) {
+  setInlineStatus(storagePanelStatus, "正在读取工作区数据位置。");
   try {
-    renderStorageLocation(await fetch("/api/storage-location").then(readJson));
-    if (focusInput && !settingsView.hidden) {
+    const location = await fetch("/api/storage-location").then(readJson);
+    renderStorageLocation(location, announce);
+    return location;
+  } catch (error) {
+    setInlineStatus(storagePanelStatus, error.message, "error");
+    return null;
+  }
+}
+
+function openStorageDialog(opener, dataDir, error = "") {
+  storageLocationForm.reset();
+  storageDataDir.value =
+    dataDir !== undefined
+      ? dataDir
+      : storageLocation?.pending_data_dir || storageLocation?.active_data_dir || "";
+  storageMigrateExisting.checked = true;
+  storageBrowseBtn.disabled = false;
+  storageCancelBtn.disabled = false;
+  storageDialogClose.disabled = false;
+  storageApplyBtn.disabled = false;
+  storageApplyBtn.textContent = "应用更改";
+  setInlineStatus(storageDialogStatus, error, error ? "error" : "");
+  window.ImageToolsUi.openDialog(storageDialog, opener);
+  storageDataDir.focus();
+}
+
+function closeStorageDialog() {
+  if (storageApplyBtn.disabled) return Promise.resolve();
+  return window.ImageToolsUi.closeDialog(storageDialog);
+}
+
+function handleStorageDialogCancel(event) {
+  event.preventDefault();
+  void closeStorageDialog();
+}
+
+async function invokeStoragePicker() {
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke !== "function") {
+    return { available: false, selected: null };
+  }
+  try {
+    const selected = await invoke("pick_data_directory");
+    return { available: true, selected: selected || null, error: "" };
+  } catch (error) {
+    const message = typeof error === "string" ? error : error?.message;
+    return {
+      available: true,
+      selected: null,
+      error: message || "无法打开系统目录选择器。",
+    };
+  }
+}
+
+async function beginStorageChange() {
+  const opener = storageChangeBtn;
+  storageChangeBtn.disabled = true;
+  try {
+    const result = await invokeStoragePicker();
+    if (!result.available) {
+      openStorageDialog(opener);
+    } else if (result.error) {
+      openStorageDialog(opener, undefined, result.error);
+    } else if (result.selected) {
+      openStorageDialog(opener, result.selected);
+    }
+  } finally {
+    storageChangeBtn.disabled = false;
+  }
+}
+
+async function browseStorageDirectory() {
+  storageBrowseBtn.disabled = true;
+  try {
+    const result = await invokeStoragePicker();
+    if (!result.available) {
+      storageDataDir.focus();
+    } else if (result.error) {
+      setInlineStatus(storageDialogStatus, result.error, "error");
+    } else if (result.selected) {
+      storageDataDir.value = result.selected;
+      setInlineStatus(storageDialogStatus, "");
+      storageDataDir.focus();
+    } else {
       storageDataDir.focus();
     }
-  } catch (error) {
-    storageLocationStatus.textContent = error.message;
-    storageLocationStatus.hidden = false;
+  } finally {
+    storageBrowseBtn.disabled = false;
   }
 }
 
 async function handleStorageLocationSubmit(event) {
   event.preventDefault();
   storageApplyBtn.disabled = true;
-  storageLocationStatus.hidden = true;
+  storageCancelBtn.disabled = true;
+  storageDialogClose.disabled = true;
+  storageApplyBtn.textContent = "应用中";
+  setInlineStatus(storageDialogStatus, "");
   try {
-    const location = await fetch("/api/storage-location", {
+    await fetch("/api/storage-location", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1250,34 +1347,17 @@ async function handleStorageLocationSubmit(event) {
         migrate_existing: storageMigrateExisting.checked,
       }),
     }).then(readJson);
-    renderStorageLocation(location, "已设置新位置，重启应用后生效。");
+    await window.ImageToolsUi.closeDialog(storageDialog);
+    await loadStorageLocation({
+      announce: "已安排数据位置变更，重启应用后生效。",
+    });
   } catch (error) {
-    storageLocationStatus.textContent = error.message;
-    storageLocationStatus.hidden = false;
+    setInlineStatus(storageDialogStatus, error.message, "error");
   } finally {
     storageApplyBtn.disabled = false;
-  }
-}
-
-async function chooseStorageDirectory() {
-  const invoke = window.__TAURI__?.core?.invoke;
-  if (typeof invoke !== "function") {
-    storageLocationStatus.textContent = "目录选择仅在桌面应用中可用。";
-    storageLocationStatus.hidden = false;
-    return;
-  }
-  storageBrowseBtn.disabled = true;
-  try {
-    const selected = await invoke("pick_data_directory");
-    if (selected) {
-      storageDataDir.value = selected;
-      storageDataDir.focus();
-    }
-  } catch (error) {
-    storageLocationStatus.textContent = error.message || "无法打开系统目录选择器。";
-    storageLocationStatus.hidden = false;
-  } finally {
-    storageBrowseBtn.disabled = false;
+    storageCancelBtn.disabled = false;
+    storageDialogClose.disabled = false;
+    storageApplyBtn.textContent = "应用更改";
   }
 }
 
@@ -1446,7 +1526,8 @@ settingsProvidersNav.addEventListener("click", () => {
 });
 settingsStorageNav.addEventListener("click", () => {
   selectSettingsTab("storage");
-  void loadStorageLocation(true);
+  void loadStorageLocation();
+  storageChangeBtn.focus();
 });
 addProviderBtn.addEventListener("click", () => openNewProviderDialog(addProviderBtn));
 providerDialogClose.addEventListener("click", () => void closeProviderDialog());
@@ -1460,8 +1541,12 @@ providerMenu.addEventListener("keydown", handleMenuKeydown);
 providerDeleteCancel.addEventListener("click", () => void closeProviderDeleteDialog());
 providerDeleteDialog.addEventListener("cancel", handleProviderDeleteCancel);
 providerDeleteForm.addEventListener("submit", handleProviderDeleteSubmit);
+storageChangeBtn.addEventListener("click", () => void beginStorageChange());
+storageDialogClose.addEventListener("click", () => void closeStorageDialog());
+storageCancelBtn.addEventListener("click", () => void closeStorageDialog());
+storageDialog.addEventListener("cancel", handleStorageDialogCancel);
 storageLocationForm.addEventListener("submit", handleStorageLocationSubmit);
-storageBrowseBtn.addEventListener("click", chooseStorageDirectory);
+storageBrowseBtn.addEventListener("click", () => void browseStorageDirectory());
 imagePreviewClose.addEventListener("click", closeImagePreview);
 imagePreviewDialog.addEventListener("cancel", cancelImagePreview);
 taskMenuBtn.addEventListener("click", toggleTaskMenu);

@@ -165,33 +165,36 @@ test("settings uses a dedicated workspace view with separate provider and storag
   assert.match(styles, /\.settings-nav/);
 });
 
-test("settings dialog exposes a restart-only local data directory workflow", () => {
+test("storage settings separates current status from the change dialog", () => {
   for (const id of [
     "storageCurrentPath",
+    "storageChangeBtn",
+    "storagePendingState",
+    "storagePendingPath",
+    "storageIdleState",
+    "storagePanelStatus",
+    "storageDialog",
     "storageDataDir",
     "storageMigrateExisting",
     "storageBrowseBtn",
     "storageApplyBtn",
-    "storageLocationStatus",
+    "storageDialogStatus",
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+
+  const storagePanelStart = html.indexOf('<section id="settingsStoragePanel"');
+  const storagePanelEnd = html.indexOf("</main>", storagePanelStart);
+  assert.notEqual(storagePanelStart, -1);
+  assert.ok(storagePanelEnd > storagePanelStart);
+  const storagePanel = html.slice(storagePanelStart, storagePanelEnd);
+  assert.doesNotMatch(storagePanel, /id="storageDataDir"/);
+
   assert.match(html, /id="storageDataDir"[^>]*required/);
-  assert.match(app, /fetch\("\/api\/storage-location"\)/);
-  assert.match(app, /method:\s*"POST"/);
-  assert.match(app, /migrate_existing/);
-  assert.match(app, /重启应用后生效/);
+  assert.match(app, /function beginStorageChange\(/);
+  assert.match(app, /function openStorageDialog\(/);
   assert.match(app, /pick_data_directory/);
   assert.match(html, /data-lucide="folder-open"/);
-  assert.match(styles, /\.storage-location-section/);
-  assert.match(
-    styles,
-    /\.storage-location-form \.checkbox-field input\s*\{[\s\S]*width:\s*16px/,
-  );
-  assert.match(
-    styles,
-    /\.settings-view \.storage-location-form > \.checkbox-field\s*\{[\s\S]*display:\s*flex/,
-  );
 });
 
 test("temporary layers use restrained motion with a reduced-motion fallback", () => {

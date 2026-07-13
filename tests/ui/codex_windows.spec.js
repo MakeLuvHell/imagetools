@@ -405,31 +405,37 @@ test("settings opens as a dedicated view and switches between provider and stora
   await expect(opener).toBeFocused();
 });
 
-test("settings schedules a copied data migration without switching the active path", async ({ page }) => {
+test("storage settings confirms a copied workspace-data change", async ({ page }) => {
   const requests = await installApiMocks(page);
   await page.goto("/");
   await page.getByRole("button", { name: "设置" }).click();
   const settings = page.getByRole("region", { name: "设置" });
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
 
   await expect(settings.getByLabel("当前数据目录")).toHaveText(
     requests.storageLocation.active_data_dir,
   );
-  await settings.getByLabel("新的数据目录").fill("D:\\Image Tools");
-  await settings.getByLabel("复制现有会话和文件").check();
-  await settings.getByRole("button", { name: "应用" }).click();
+  await expect(dialog).toBeHidden();
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("复制现有会话和文件")).toBeChecked();
+  await dialog.getByLabel("新的数据目录").fill("D:\\Image Tools");
+  await dialog.getByRole("button", { name: "应用更改" }).click();
 
   await expect.poll(() => requests.storageRequests).toEqual([
     { data_dir: "D:\\Image Tools", migrate_existing: true },
   ]);
-  await expect(settings.locator("#storageLocationStatus")).toHaveText(
-    "已设置新位置，重启应用后生效。",
-  );
+  await expect(dialog).toBeHidden();
   await expect(settings.getByLabel("当前数据目录")).toHaveText(
-    requests.storageLocation.default_data_dir,
+    requests.storageLocation.active_data_dir,
   );
+  await expect(settings.getByLabel("等待重启的数据目录")).toHaveText(
+    "D:\\Image Tools",
+  );
+  await expect(settings.getByText("等待重启", { exact: true })).toBeVisible();
 });
 
-test("storage directory picker fills the selected native folder", async ({ page }) => {
+test("native storage picker opens confirmation with the selected folder", async ({ page }) => {
   await page.addInitScript(() => {
     window.__TAURI__ = {
       core: {
@@ -445,26 +451,31 @@ test("storage directory picker fills the selected native folder", async ({ page 
   await page.goto("/");
   await page.getByRole("button", { name: "设置" }).click();
   const settings = page.getByRole("region", { name: "设置" });
-  await settings.getByRole("button", { name: "选择目录" }).click();
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
 
-  await expect(settings.getByLabel("新的数据目录")).toHaveValue("D:\\Selected Images");
-  await expect(settings.getByLabel("新的数据目录")).toBeFocused();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("新的数据目录")).toHaveValue(
+    "D:\\Selected Images",
+  );
 });
 
-test("settings displays storage validation errors in the local section", async ({ page }) => {
+test("storage validation errors stay in the change dialog", async ({ page }) => {
   await installApiMocks(page, { storageLocationError: "数据目录必须使用绝对路径。" });
   await page.goto("/");
   await page.getByRole("button", { name: "设置" }).click();
   const settings = page.getByRole("region", { name: "设置" });
-  await settings.getByLabel("新的数据目录").fill("relative-data");
-  await settings.getByRole("button", { name: "应用" }).click();
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
+  await dialog.getByLabel("新的数据目录").fill("relative-data");
+  await dialog.getByRole("button", { name: "应用更改" }).click();
 
-  await expect(settings.locator("#storageLocationStatus")).toHaveText(
-    "数据目录必须使用绝对路径。",
-  );
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("alert")).toHaveText("数据目录必须使用绝对路径。");
+  await expect(dialog.getByLabel("新的数据目录")).toHaveValue("relative-data");
 });
 
-test("storage settings stay contained at desktop target sizes", async ({ page }) => {
+test("storage status stays contained at desktop target sizes", async ({ page }) => {
   await installApiMocks(page);
   for (const viewport of [
     { width: 1280, height: 860 },
@@ -474,12 +485,22 @@ test("storage settings stay contained at desktop target sizes", async ({ page })
     await page.goto("/");
     await page.getByRole("button", { name: "设置" }).click();
     const settings = page.getByRole("region", { name: "设置" });
-    await expect(settings.getByLabel("新的数据目录")).toBeFocused();
     expect(
       await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
       `${viewport.width}x${viewport.height}`,
     ).toBe(true);
   }
+});
+
+test("storage load failures stay in the settings page", async ({ page }) => {
+  await installApiMocks(page, { storageLoadError: "工作区数据位置读取失败。" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  const status = settings.locator("#storagePanelStatus[role=status]");
+
+  await expect(status).toBeVisible();
+  await expect(status).toContainText("工作区数据位置读取失败。");
 });
 
 test("reduced motion opens anchored menus without active animation", async ({ page }) => {

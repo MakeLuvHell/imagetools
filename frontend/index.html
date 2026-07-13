@@ -324,42 +324,46 @@
             <p id="providerActionStatus" class="settings-inline-status" role="status" hidden></p>
             <div id="providerList" class="provider-list" aria-live="polite"></div>
           </section>
-          <section id="settingsStoragePanel" class="settings-panel" aria-label="本地数据">
-            <section class="storage-location-section" aria-labelledby="storageLocationTitle">
-              <div class="storage-location-heading">
-                <h3 id="storageLocationTitle">本地数据</h3>
-                <output id="storageCurrentPath" aria-label="当前数据目录"></output>
+          <section id="settingsStoragePanel" class="settings-panel" aria-labelledby="settingsStorageTitle">
+            <header class="settings-page-heading">
+              <div>
+                <h2 id="settingsStorageTitle">本地数据</h2>
+                <p>管理会话、生成记录和图片文件的保存位置。</p>
               </div>
-              <form id="storageLocationForm" class="storage-location-form">
-                <label>
-                  <span>新的数据目录</span>
-                  <span class="storage-directory-input">
-                    <input
-                      id="storageDataDir"
-                      required
-                      autocomplete="off"
-                      placeholder="D:\\Image Tools"
-                    />
-                    <button
-                      id="storageBrowseBtn"
-                      type="button"
-                      class="icon-button"
-                      aria-label="选择目录"
-                      title="选择目录"
-                    >
-                      <i data-lucide="folder-open"></i>
-                    </button>
-                  </span>
-                </label>
-                <label class="checkbox-field">
-                  <input id="storageMigrateExisting" type="checkbox" />
-                  <span>复制现有会话和文件</span>
-                </label>
-                <footer>
-                  <p id="storageLocationStatus" role="status" hidden></p>
-                  <button id="storageApplyBtn" type="submit" class="dialog-button primary">应用</button>
-                </footer>
-              </form>
+            </header>
+            <section class="settings-section" aria-labelledby="workspaceDataTitle">
+              <h3 id="workspaceDataTitle">工作区数据位置</h3>
+              <div class="storage-current-row">
+                <div class="storage-icon" aria-hidden="true">
+                  <i data-lucide="folder"></i>
+                </div>
+                <div class="storage-current-copy">
+                  <p class="storage-current-label">
+                    当前数据目录
+                    <span class="settings-status-chip">使用中</span>
+                  </p>
+                  <output id="storageCurrentPath" aria-label="当前数据目录"></output>
+                </div>
+                <button id="storageChangeBtn" type="button" class="dialog-button">
+                  <i data-lucide="folder-open"></i>
+                  <span>更改位置</span>
+                </button>
+              </div>
+              <p class="settings-help-copy">
+                Provider、会话、生成记录、参考图和生成图片作为一个工作区数据集存放。
+              </p>
+            </section>
+            <section class="settings-section" aria-labelledby="storageChangeStateTitle">
+              <h3 id="storageChangeStateTitle">变更状态</h3>
+              <div id="storagePendingState" class="storage-pending-state" hidden>
+                <i data-lucide="info" aria-hidden="true"></i>
+                <div>
+                  <strong>等待重启</strong>
+                  <output id="storagePendingPath" aria-label="等待重启的数据目录"></output>
+                </div>
+              </div>
+              <p id="storageIdleState" class="settings-empty-copy">没有等待处理的变更。</p>
+              <p id="storagePanelStatus" class="settings-inline-status" role="status" hidden></p>
             </section>
           </section>
         </main>
@@ -427,6 +431,56 @@
         <footer>
           <button id="providerDeleteCancel" type="button" class="dialog-button">取消</button>
           <button id="providerDeleteConfirm" type="submit" class="dialog-button danger">删除</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="storageDialog" class="app-dialog settings-dialog" aria-labelledby="storageDialogTitle">
+      <header>
+        <div>
+          <h2 id="storageDialogTitle">更改数据位置</h2>
+          <p>选择 Image Tools 下次启动时使用的目录。</p>
+        </div>
+        <button id="storageDialogClose" type="button" class="icon-button" aria-label="关闭">
+          <i data-lucide="x"></i>
+        </button>
+      </header>
+      <form id="storageLocationForm" class="storage-location-form">
+        <p id="storageDialogStatus" class="dialog-status" role="alert" hidden></p>
+        <label>
+          <span>新的数据目录</span>
+          <span class="storage-directory-input">
+            <input
+              id="storageDataDir"
+              required
+              autocomplete="off"
+              placeholder="D:\Image Tools"
+            />
+            <button
+              id="storageBrowseBtn"
+              type="button"
+              class="icon-button"
+              aria-label="选择目录"
+              title="选择目录"
+            >
+              <i data-lucide="folder-open"></i>
+            </button>
+          </span>
+        </label>
+        <label class="checkbox-field">
+          <input id="storageMigrateExisting" type="checkbox" checked />
+          <span>
+            <strong>复制现有会话和文件</strong>
+            <small>下次启动时复制数据；原目录会保留。</small>
+          </span>
+        </label>
+        <div class="storage-impact">
+          <i data-lucide="info" aria-hidden="true"></i>
+          <p>更改仅在下次启动时生效；复制会在切换前完成，当前目录及其内容不会被删除。</p>
+        </div>
+        <footer>
+          <button id="storageCancelBtn" type="button" class="dialog-button">取消</button>
+          <button id="storageApplyBtn" type="submit" class="dialog-button primary">应用更改</button>
         </footer>
       </form>
     </dialog>

@@ -152,6 +152,12 @@ async function installApiMocks(page, overrides = {}) {
   });
   await page.route("**/api/storage-location", async (route) => {
     if (route.request().method() === "GET") {
+      if (overrides.storageLoadError) {
+        return route.fulfill({
+          status: 500,
+          json: { detail: overrides.storageLoadError },
+        });
+      }
       return route.fulfill({ json: state.storageLocation });
     }
     const body = route.request().postDataJSON();
