@@ -425,6 +425,13 @@ test("storage settings confirms a copied workspace-data change", async ({ page }
   await expect.poll(() => requests.storageRequests).toEqual([
     { data_dir: "D:\\Image Tools", migrate_existing: true },
   ]);
+  await expect.poll(() => requests.storagePostResponses).toBe(1);
+  await expect.poll(() => requests.storageGetResponses).toBe(2);
+  expect(requests.storageRequestOrder).toEqual([
+    { method: "GET", ordinal: 1 },
+    { method: "POST", ordinal: 1 },
+    { method: "GET", ordinal: 2 },
+  ]);
   await expect(dialog).toBeHidden();
   await expect(settings.getByLabel("当前数据目录")).toHaveText(
     requests.storageLocation.active_data_dir,
@@ -433,6 +440,193 @@ test("storage settings confirms a copied workspace-data change", async ({ page }
     "D:\\Image Tools",
   );
   await expect(settings.getByText("等待重启", { exact: true })).toBeVisible();
+});
+
+test("storage async latest GET wins after overlapping changes", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    storageGetDelaysMs: [0, 1200, 0],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
+  const changeLocation = settings.getByRole("button", { name: "更改位置" });
+  await expect.poll(() => requests.storageGetResponses).toBe(1);
+
+  await changeLocation.click();
+  await dialog.getByLabel("新的数据目录").fill("D:\\First");
+  await dialog.getByRole("button", { name: "应用更改" }).click();
+  await expect.poll(() => requests.storageGetRequests).toBe(2);
+
+  await changeLocation.click();
+  await dialog.getByLabel("新的数据目录").fill("D:\\Latest");
+  await dialog.getByRole("button", { name: "应用更改" }).click();
+  await expect.poll(() => requests.storageGetRequests).toBe(3);
+  await expect.poll(() => requests.storageGetResponseOrder).toEqual([1, 3, 2]);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+
+  await expect(settings.getByLabel("当前数据目录")).toHaveText(
+    requests.storageLocation.active_data_dir,
+  );
+  await expect(settings.getByLabel("等待重启的数据目录")).toHaveText("D:\\Latest");
+  await expect(settings.getByText("等待重启", { exact: true })).toBeVisible();
+  await expect(settings.locator("#storagePanelStatus")).toHaveText(
+    "已安排数据位置变更，重启应用后生效。",
+  );
+});
+
+test("storage async older submit cannot unlock a newer submit", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    storageGetDelaysMs: [0, 1500, 0],
+    storagePostDelaysMs: [0, 3000],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
+  const changeLocation = settings.getByRole("button", { name: "更改位置" });
+  await expect.poll(() => requests.storageGetResponses).toBe(1);
+
+  await changeLocation.click();
+  await dialog.getByLabel("新的数据目录").fill("D:\\First");
+  await dialog.getByRole("button", { name: "应用更改" }).click();
+  await expect.poll(() => requests.storageGetRequests).toBe(2);
+
+  await changeLocation.click();
+  await dialog.getByLabel("新的数据目录").fill("D:\\Second");
+  await dialog.getByRole("button", { name: "应用更改" }).click();
+  await expect.poll(() => requests.storagePostRequests).toBe(2);
+  expect(requests.storagePostResponses).toBe(1);
+  await expect.poll(() => requests.storageGetResponses).toBe(2);
+  await expect(settings.getByLabel("等待重启的数据目录")).toHaveText("D:\\First");
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("#storageApplyBtn")).toBeDisabled();
+  await expect(dialog.locator("#storageApplyBtn")).toHaveText("应用中");
+  await expect(dialog.locator("#storageCancelBtn")).toBeDisabled();
+  await expect(dialog.locator("#storageDialogClose")).toBeDisabled();
+
+  await expect.poll(() => requests.storagePostResponses).toBe(2);
+  await expect.poll(() => requests.storageGetResponses).toBe(3);
+  await expect(dialog).toBeHidden();
+  await expect(settings.getByLabel("等待重启的数据目录")).toHaveText("D:\\Second");
+});
+
+test("storage async ignores initial picker after settings lifecycle changes", async ({ page }) => {
+  await page.addInitScript(() => {
+    const picker = { calls: 0, settled: 0, resolve: null };
+    window.__storagePickerControl = picker;
+    window.__TAURI__ = {
+      core: {
+        invoke(command) {
+          if (command !== "pick_data_directory") {
+            return Promise.reject(new Error("unexpected command"));
+          }
+          picker.calls += 1;
+          return new Promise((resolve) => {
+            picker.resolve = resolve;
+          }).finally(() => {
+            picker.settled += 1;
+          });
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  await expect.poll(() =>
+    page.evaluate(() => window.__storagePickerControl.calls),
+  ).toBe(1);
+
+  await page.getByRole("button", { name: "返回工作区" }).click();
+  await page.getByRole("button", { name: "Providers" }).click();
+  const addProvider = settings.getByRole("button", { name: "添加 Provider" });
+  await expect(addProvider).toBeFocused();
+  await page.evaluate(() => {
+    window.__storagePickerControl.resolve("D:\\Stale");
+  });
+  await expect.poll(() =>
+    page.evaluate(() => window.__storagePickerControl.settled),
+  ).toBe(1);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+
+  await expect(page.getByRole("dialog", { name: "更改数据位置" })).toBeHidden();
+  await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
+  await expect(addProvider).toBeFocused();
+});
+
+test("storage async ignores browse picker from a closed dialog", async ({ page }) => {
+  await page.addInitScript(() => {
+    const picker = { calls: 0, oldBrowseSettled: 0, resolveOldBrowse: null };
+    window.__storagePickerControl = picker;
+    window.__TAURI__ = {
+      core: {
+        invoke(command) {
+          if (command !== "pick_data_directory") {
+            return Promise.reject(new Error("unexpected command"));
+          }
+          picker.calls += 1;
+          if (picker.calls === 1) return Promise.resolve("D:\\Initial");
+          if (picker.calls === 2) {
+            return new Promise((resolve) => {
+              picker.resolveOldBrowse = resolve;
+            }).finally(() => {
+              picker.oldBrowseSettled += 1;
+            });
+          }
+          if (picker.calls === 3) return Promise.resolve("D:\\New");
+          return Promise.reject(new Error("unexpected picker call"));
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  const dialog = page.getByRole("dialog", { name: "更改数据位置" });
+  const dataDirectory = dialog.getByLabel("新的数据目录");
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  await expect(dataDirectory).toHaveValue("D:\\Initial");
+
+  await dialog.getByRole("button", { name: "选择目录" }).click();
+  await expect.poll(() =>
+    page.evaluate(() => window.__storagePickerControl.calls),
+  ).toBe(2);
+  await dialog.getByRole("button", { name: "关闭" }).click();
+  await expect(dialog).toBeHidden();
+  await settings.getByRole("button", { name: "更改位置" }).click();
+  await expect(dataDirectory).toHaveValue("D:\\New");
+  await expect(dataDirectory).toBeFocused();
+
+  await page.evaluate(() => {
+    window.__storagePickerControl.resolveOldBrowse("D:\\Stale");
+  });
+  await expect.poll(() =>
+    page.evaluate(() => window.__storagePickerControl.oldBrowseSettled),
+  ).toBe(1);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+
+  await expect(dialog).toBeVisible();
+  await expect(dataDirectory).toHaveValue("D:\\New");
+  await expect(dataDirectory).toBeFocused();
+  await expect(dialog.locator("#storageBrowseBtn")).toBeEnabled();
+  await expect(dialog.locator("#storageApplyBtn")).toBeEnabled();
+  await expect(dialog.locator("#storageApplyBtn")).toHaveText("应用更改");
+  await expect(dialog.locator("#storageCancelBtn")).toBeEnabled();
+  await expect(dialog.locator("#storageDialogClose")).toBeEnabled();
 });
 
 test("native storage picker opens confirmation with the selected folder", async ({ page }) => {

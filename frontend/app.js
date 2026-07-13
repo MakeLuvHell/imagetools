@@ -125,6 +125,9 @@ let providerDeleteTarget = null;
 let providerSaveToken = 0;
 let providerLoadToken = 0;
 let storageLocation = null;
+let storageViewGeneration = 0;
+let storageLoadGeneration = 0;
+let storageDialogGeneration = 0;
 let newTaskSubmissionLocked = false;
 let settingsOpener = null;
 const runsBySession = {};
@@ -1196,6 +1199,25 @@ function toggleSearch() {
   }
 }
 
+function isStorageViewCurrent(generation) {
+  return (
+    generation === storageViewGeneration &&
+    !settingsView.hidden &&
+    !settingsStoragePanel.hidden
+  );
+}
+
+function invalidateStorageView() {
+  storageViewGeneration += 1;
+}
+
+function activateStorageView() {
+  storageViewGeneration += 1;
+  storageChangeBtn.disabled = false;
+  void loadStorageLocation();
+  storageChangeBtn.focus();
+}
+
 function selectSettingsTab(tab) {
   const providersActive = tab === "providers";
   settingsProvidersNav.setAttribute("aria-current", providersActive ? "page" : "false");
@@ -1212,15 +1234,16 @@ function openSettingsView(tab, opener) {
   setInlineStatus(providerActionStatus, "");
   renderProviderManager();
   if (tab === "storage") {
-    void loadStorageLocation();
-    storageChangeBtn.focus();
+    activateStorageView();
   } else {
+    invalidateStorageView();
     addProviderBtn.focus();
   }
 }
 
 function closeSettingsView() {
   void closeProviderMenu();
+  invalidateStorageView();
   settingsView.hidden = true;
   workspace.classList.remove("settings-open");
   settingsOpener?.focus();
@@ -1238,18 +1261,34 @@ function renderStorageLocation(location, message = "") {
 }
 
 async function loadStorageLocation({ announce = "" } = {}) {
+  const viewGeneration = storageViewGeneration;
+  if (!isStorageViewCurrent(viewGeneration)) return null;
+  const loadGeneration = ++storageLoadGeneration;
   setInlineStatus(storagePanelStatus, "正在读取工作区数据位置。");
   try {
     const location = await fetch("/api/storage-location").then(readJson);
+    if (
+      loadGeneration !== storageLoadGeneration ||
+      !isStorageViewCurrent(viewGeneration)
+    ) {
+      return null;
+    }
     renderStorageLocation(location, announce);
     return location;
   } catch (error) {
+    if (
+      loadGeneration !== storageLoadGeneration ||
+      !isStorageViewCurrent(viewGeneration)
+    ) {
+      return null;
+    }
     setInlineStatus(storagePanelStatus, error.message, "error");
     return null;
   }
 }
 
 function openStorageDialog(opener, dataDir, error = "") {
+  storageDialogGeneration += 1;
   storageLocationForm.reset();
   storageDataDir.value =
     dataDir !== undefined
@@ -1268,7 +1307,12 @@ function openStorageDialog(opener, dataDir, error = "") {
 
 function closeStorageDialog() {
   if (storageApplyBtn.disabled) return Promise.resolve();
+  storageDialogGeneration += 1;
   return window.ImageToolsUi.closeDialog(storageDialog);
+}
+
+function isStorageDialogCurrent(generation) {
+  return generation === storageDialogGeneration && storageDialog.open;
 }
 
 function handleStorageDialogCancel(event) {
@@ -1295,10 +1339,13 @@ async function invokeStoragePicker() {
 }
 
 async function beginStorageChange() {
+  const viewGeneration = storageViewGeneration;
+  if (!isStorageViewCurrent(viewGeneration) || storageChangeBtn.disabled) return;
   const opener = storageChangeBtn;
   storageChangeBtn.disabled = true;
   try {
     const result = await invokeStoragePicker();
+    if (!isStorageViewCurrent(viewGeneration)) return;
     if (!result.available) {
       openStorageDialog(opener);
     } else if (result.error) {
@@ -1307,14 +1354,24 @@ async function beginStorageChange() {
       openStorageDialog(opener, result.selected);
     }
   } finally {
-    storageChangeBtn.disabled = false;
+    if (isStorageViewCurrent(viewGeneration)) {
+      storageChangeBtn.disabled = false;
+    }
   }
 }
 
 async function browseStorageDirectory() {
+  const dialogGeneration = storageDialogGeneration;
+  if (
+    !isStorageDialogCurrent(dialogGeneration) ||
+    storageBrowseBtn.disabled
+  ) {
+    return;
+  }
   storageBrowseBtn.disabled = true;
   try {
     const result = await invokeStoragePicker();
+    if (!isStorageDialogCurrent(dialogGeneration)) return;
     if (!result.available) {
       storageDataDir.focus();
     } else if (result.error) {
@@ -1328,12 +1385,21 @@ async function browseStorageDirectory() {
       storageDataDir.focus();
     }
   } finally {
-    storageBrowseBtn.disabled = false;
+    if (isStorageDialogCurrent(dialogGeneration)) {
+      storageBrowseBtn.disabled = false;
+    }
   }
 }
 
 async function handleStorageLocationSubmit(event) {
   event.preventDefault();
+  const dialogGeneration = storageDialogGeneration;
+  if (
+    !isStorageDialogCurrent(dialogGeneration) ||
+    storageApplyBtn.disabled
+  ) {
+    return;
+  }
   storageApplyBtn.disabled = true;
   storageCancelBtn.disabled = true;
   storageDialogClose.disabled = true;
@@ -1348,17 +1414,23 @@ async function handleStorageLocationSubmit(event) {
         migrate_existing: storageMigrateExisting.checked,
       }),
     }).then(readJson);
+    if (!isStorageDialogCurrent(dialogGeneration)) return;
+    storageDialogGeneration += 1;
     await window.ImageToolsUi.closeDialog(storageDialog);
     await loadStorageLocation({
       announce: "已安排数据位置变更，重启应用后生效。",
     });
   } catch (error) {
-    setInlineStatus(storageDialogStatus, error.message, "error");
+    if (isStorageDialogCurrent(dialogGeneration)) {
+      setInlineStatus(storageDialogStatus, error.message, "error");
+    }
   } finally {
-    storageApplyBtn.disabled = false;
-    storageCancelBtn.disabled = false;
-    storageDialogClose.disabled = false;
-    storageApplyBtn.textContent = "应用更改";
+    if (isStorageDialogCurrent(dialogGeneration)) {
+      storageApplyBtn.disabled = false;
+      storageCancelBtn.disabled = false;
+      storageDialogClose.disabled = false;
+      storageApplyBtn.textContent = "应用更改";
+    }
   }
 }
 
@@ -1521,14 +1593,14 @@ providersBtn.addEventListener("click", () => openSettingsView("providers", provi
 settingsBtn.addEventListener("click", () => openSettingsView("storage", settingsBtn));
 settingsBackBtn.addEventListener("click", closeSettingsView);
 settingsProvidersNav.addEventListener("click", () => {
+  invalidateStorageView();
   selectSettingsTab("providers");
   renderProviderManager();
   addProviderBtn.focus();
 });
 settingsStorageNav.addEventListener("click", () => {
   selectSettingsTab("storage");
-  void loadStorageLocation();
-  storageChangeBtn.focus();
+  activateStorageView();
 });
 addProviderBtn.addEventListener("click", () => openNewProviderDialog(addProviderBtn));
 providerDialogClose.addEventListener("click", () => void closeProviderDialog());

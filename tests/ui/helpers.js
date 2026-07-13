@@ -49,6 +49,15 @@ async function installApiMocks(page, overrides = {}) {
       is_custom: false,
     },
     storageRequests: [],
+    storageGetRequests: 0,
+    storageGetResponses: 0,
+    storageGetRequestOrder: [],
+    storageGetResponseOrder: [],
+    storagePostRequests: 0,
+    storagePostResponses: 0,
+    storagePostRequestOrder: [],
+    storagePostResponseOrder: [],
+    storageRequestOrder: [],
   };
 
   await page.route("**/api/providers", async (route) => {
@@ -151,26 +160,65 @@ async function installApiMocks(page, overrides = {}) {
     return route.fulfill({ status: 405, json: { detail: "Method not allowed" } });
   });
   await page.route("**/api/storage-location", async (route) => {
-    if (route.request().method() === "GET") {
+    const method = route.request().method();
+    if (method === "GET") {
+      const requestOrdinal = ++state.storageGetRequests;
+      const locationSnapshot = { ...state.storageLocation };
+      state.storageGetRequestOrder.push(requestOrdinal);
+      state.storageRequestOrder.push({ method, ordinal: requestOrdinal });
+      const delayMs = Number(
+        overrides.storageGetDelaysMs?.[requestOrdinal - 1] || 0,
+      );
+      if (delayMs > 0) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, delayMs);
+        });
+      }
       if (overrides.storageLoadError) {
-        return route.fulfill({
+        await route.fulfill({
           status: 500,
           json: { detail: overrides.storageLoadError },
         });
+      } else {
+        await route.fulfill({ json: locationSnapshot });
       }
-      return route.fulfill({ json: state.storageLocation });
+      state.storageGetResponses += 1;
+      state.storageGetResponseOrder.push(requestOrdinal);
+      return;
     }
+    if (method !== "POST") {
+      return route.fulfill({ status: 405, json: { detail: "Method not allowed" } });
+    }
+    const requestOrdinal = ++state.storagePostRequests;
     const body = route.request().postDataJSON();
     state.storageRequests.push(body);
+    state.storagePostRequestOrder.push(requestOrdinal);
+    state.storageRequestOrder.push({ method, ordinal: requestOrdinal });
+    let response;
     if (overrides.storageLocationError) {
-      return route.fulfill({ status: 400, json: { detail: overrides.storageLocationError } });
+      response = {
+        status: 400,
+        json: { detail: overrides.storageLocationError },
+      };
+    } else {
+      state.storageLocation = {
+        ...state.storageLocation,
+        pending_data_dir: body.data_dir,
+        restart_required: true,
+      };
+      response = { json: { ...state.storageLocation } };
     }
-    state.storageLocation = {
-      ...state.storageLocation,
-      pending_data_dir: body.data_dir,
-      restart_required: true,
-    };
-    return route.fulfill({ json: state.storageLocation });
+    const delayMs = Number(
+      overrides.storagePostDelaysMs?.[requestOrdinal - 1] || 0,
+    );
+    if (delayMs > 0) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, delayMs);
+      });
+    }
+    await route.fulfill(response);
+    state.storagePostResponses += 1;
+    state.storagePostResponseOrder.push(requestOrdinal);
   });
   await page.route("**/api/projects", async (route) => {
     if (route.request().method() === "GET") {
