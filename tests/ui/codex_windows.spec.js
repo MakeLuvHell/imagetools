@@ -251,11 +251,17 @@ test("Provider settings adds and edits through a focused dialog", async ({ page 
   expect(requests.providerRequests.at(-1).body.api_key).toBe("");
 });
 
-test("Provider stale reloads do not disable a newer dialog", async ({ page }) => {
-  const requests = await installApiMocks(page, { providerReloadDelayMs: 500 });
+test("newest Provider reload wins when an older response finishes last", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    providerListDelaysMs: [0, 1200, 0],
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Providers" }).click();
   const settings = page.getByRole("region", { name: "设置" });
+  await expect.poll(() => requests.providerListResponses).toBe(1);
+  await expect(
+    settings.getByRole("button", { name: "编辑 Provider Default" }),
+  ).toBeVisible();
   await settings.getByRole("button", { name: "添加 Provider" }).click();
   const dialog = page.getByRole("dialog", { name: "添加 Provider" });
   await dialog.getByLabel("名称").fill("Studio");
@@ -270,6 +276,32 @@ test("Provider stale reloads do not disable a newer dialog", async ({ page }) =>
   await expect(dialog.getByRole("button", { name: "保存", exact: true })).toBeEnabled();
   await expect(dialog.getByRole("button", { name: "取消" })).toBeEnabled();
   await expect(dialog.getByRole("button", { name: "关闭" })).toBeEnabled();
+  await dialog.getByLabel("名称").fill("Latest");
+  await dialog.getByLabel("Base URL").fill("https://latest.example/v1");
+  await dialog.getByLabel("API Key").fill("latest-secret");
+  await dialog.getByLabel("设为默认 Provider").check();
+  await dialog.getByRole("button", { name: "保存", exact: true }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => requests.providerListRequests).toBe(3);
+  await expect.poll(() => requests.providerListResponses).toBe(3);
+  expect(requests.providerListResponseOrder).toEqual([1, 3, 2]);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+
+  const latestEdit = settings.getByRole("button", {
+    name: "编辑 Provider Latest",
+  });
+  await expect(latestEdit).toBeVisible();
+  await expect(settings.locator(".provider-default")).toHaveCount(1);
+  await expect(latestEdit.locator("..").locator(".provider-default")).toHaveText("默认");
+  await expect(page.locator("#providerSelect option")).toHaveText([
+    "Default",
+    "Studio",
+    "Latest",
+  ]);
+  await expect(settings.locator("#providerActionStatus")).toBeHidden();
 });
 
 test("Provider menu sets defaults and confirms deletion", async ({ page }) => {

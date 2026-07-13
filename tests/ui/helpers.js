@@ -38,6 +38,8 @@ async function installApiMocks(page, overrides = {}) {
     providers: initialProviders,
     providerRequests: [],
     providerListRequests: 0,
+    providerListResponses: 0,
+    providerListResponseOrder: [],
     nextProviderId: Math.max(0, ...providerIds) + 1,
     runs: overrides.runs || { 1: [] },
     storageLocation: overrides.storageLocation || {
@@ -52,19 +54,27 @@ async function installApiMocks(page, overrides = {}) {
   await page.route("**/api/providers", async (route) => {
     const method = route.request().method();
     if (method === "GET") {
-      state.providerListRequests += 1;
-      if (overrides.providerReloadDelayMs && state.providerListRequests > 1) {
+      const requestOrdinal = ++state.providerListRequests;
+      const providerSnapshot = state.providers.map((provider) => ({ ...provider }));
+      const delayMs = Number(
+        overrides.providerListDelaysMs?.[requestOrdinal - 1] || 0,
+      );
+      if (delayMs > 0) {
         await new Promise((resolve) => {
-          setTimeout(resolve, overrides.providerReloadDelayMs);
+          setTimeout(resolve, delayMs);
         });
       }
       if (overrides.providerListError) {
-        return route.fulfill({
+        await route.fulfill({
           status: 500,
           json: { detail: overrides.providerListError },
         });
+      } else {
+        await route.fulfill({ json: providerSnapshot });
       }
-      return route.fulfill({ json: state.providers });
+      state.providerListResponses += 1;
+      state.providerListResponseOrder.push(requestOrdinal);
+      return;
     }
     if (method === "POST") {
       if (overrides.providerMutationError) {

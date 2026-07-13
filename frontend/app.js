@@ -115,6 +115,7 @@ let providerMenuTarget = null;
 let providerMenuTrigger = null;
 let providerDeleteTarget = null;
 let providerSaveToken = 0;
+let providerLoadToken = 0;
 let newTaskSubmissionLocked = false;
 let settingsOpener = null;
 const runsBySession = {};
@@ -486,20 +487,24 @@ function renderProviders() {
 }
 
 async function loadProviders({ showLoading = false } = {}) {
+  const token = ++providerLoadToken;
   if (showLoading) {
     providerSettingsStatus = "loading";
     providerSettingsError = "";
     renderProviderManager();
   }
   try {
-    providers = window.ImageToolsWorkbench.normalizeProviders(
+    const loadedProviders = window.ImageToolsWorkbench.normalizeProviders(
       await fetch("/api/providers").then(readJson),
     );
+    if (token !== providerLoadToken) return false;
+    providers = loadedProviders;
     providerSettingsStatus = "ready";
     providerSettingsError = "";
     renderProviders();
     return true;
   } catch (error) {
+    if (token !== providerLoadToken) return false;
     providerSettingsStatus = "error";
     providerSettingsError = error.message;
     renderProviderManager();
