@@ -73,10 +73,11 @@ test("renderProviderSettings renders scan-first provider rows", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   assert.equal(typeof ui.renderProviderSettings, "function");
   const dom = new JSDOM('<div id="providers" aria-live="polite"></div>');
+  const container = dom.window.document.querySelector("#providers");
   const edits = [];
   const menus = [];
   ui.renderProviderSettings(
-    dom.window.document.querySelector("#providers"),
+    container,
     {
       status: "ready",
       providers: [{
@@ -85,6 +86,7 @@ test("renderProviderSettings renders scan-first provider rows", () => {
         defaultModel: "gpt-image-2",
         apiKeySet: true,
         isDefault: true,
+        apiKey: "sk-never-render",
       }],
     },
     {
@@ -98,11 +100,53 @@ test("renderProviderSettings renders scan-first provider rows", () => {
   assert.match(row.textContent, /gpt-image-2/);
   assert.match(row.textContent, /API Key 已配置/);
   assert.match(row.textContent, /默认/);
-  assert.doesNotMatch(row.textContent, /sk-/);
-  row.querySelector(".provider-row-main").click();
-  row.querySelector(".provider-row-menu").click();
+  assert.doesNotMatch(container.innerHTML, /sk-never-render/);
+
+  const main = row.querySelector(".provider-row-main");
+  const menu = row.querySelector(".provider-row-menu");
+  assert.equal(main.tagName, "BUTTON");
+  assert.equal(main.type, "button");
+  assert.equal(main.getAttribute("aria-label"), "编辑 Provider Default");
+  assert.equal(menu.tagName, "BUTTON");
+  assert.equal(menu.type, "button");
+  assert.equal(menu.getAttribute("aria-label"), "管理 Provider Default");
+  assert.equal(menu.getAttribute("aria-haspopup"), "menu");
+  assert.equal(menu.getAttribute("aria-expanded"), "false");
+
+  main.click();
+  menu.click();
   assert.deepEqual(edits, [[2, "provider-row-main"]]);
   assert.deepEqual(menus, [[2, "provider-row-menu icon-button"]]);
+});
+
+test("renderProviderSettings keeps unconfigured provider text inert", () => {
+  assert.ok(ui, "frontend/ui.js must exist");
+  const dom = new JSDOM('<div id="providers" aria-live="polite"></div>');
+  const container = dom.window.document.querySelector("#providers");
+  const hostileName = '<img src=x data-injected="provider-name">';
+  const hostileModel = '<script data-injected="provider-model">alert("xss")</script>';
+
+  ui.renderProviderSettings(container, {
+    status: "ready",
+    providers: [{
+      id: 3,
+      name: hostileName,
+      defaultModel: hostileModel,
+      apiKeySet: false,
+      isDefault: false,
+      api_key: "sk-never-render",
+    }],
+  });
+
+  const row = container.querySelector("[data-provider-id='3']");
+  assert.equal(row.querySelector(".provider-name-line strong").textContent, hostileName);
+  assert.equal(
+    row.querySelector(".provider-detail").textContent,
+    `${hostileModel} · API Key 未配置`,
+  );
+  assert.equal(row.querySelector(".provider-default"), null);
+  assert.equal(row.querySelector("img, script"), null);
+  assert.doesNotMatch(container.innerHTML, /sk-never-render/);
 });
 
 test("renderProviderSettings renders stable loading, empty, and error states", () => {
@@ -123,6 +167,7 @@ test("renderProviderSettings renders stable loading, empty, and error states", (
   );
   const empty = container.querySelector(".settings-empty-state");
   assert.ok(empty);
+  assert.equal(container.hasAttribute("aria-busy"), false);
   empty.querySelector("button").click();
   assert.equal(added, true);
 
