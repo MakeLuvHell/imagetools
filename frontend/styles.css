@@ -1530,12 +1530,26 @@ summary:focus-visible {
 }
 
 .settings-dialog > header p,
-.settings-dialog form > .storage-impact,
 .settings-dialog .checkbox-field small {
   margin: 5px 0 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.settings-dialog form > .storage-impact {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.storage-impact p {
+  margin: 0;
 }
 
 .settings-dialog form > .dialog-status {

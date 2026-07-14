@@ -882,6 +882,9 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       await expect(settings).toHaveScreenshot(
         `settings-provider-${viewport.width}x${viewport.height}-${colorScheme}.png`,
       );
+      expect(
+        await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true);
 
       await settings.getByRole("button", { name: "添加 Provider" }).click();
       const providerDialog = page.getByRole("dialog", { name: "添加 Provider" });
@@ -893,6 +896,8 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       expect(providerBox.y).toBeGreaterThanOrEqual(0);
       expect(providerBox.x + providerBox.width).toBeLessThanOrEqual(viewport.width);
       expect(providerBox.y + providerBox.height).toBeLessThanOrEqual(viewport.height);
+      await expect(providerDialog.locator("#providerIsDefault")).toHaveCSS("width", "16px");
+      await expect(providerDialog.locator("#providerIsDefault")).toHaveCSS("height", "16px");
       await page.keyboard.press("Escape");
 
       await settings.getByRole("button", { name: "本地数据" }).click();
@@ -900,6 +905,9 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       await expect(settings).toHaveScreenshot(
         `settings-storage-${viewport.width}x${viewport.height}-${colorScheme}.png`,
       );
+      expect(
+        await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true);
 
       await settings.getByRole("button", { name: "更改位置" }).click();
       const storageDialog = page.getByRole("dialog", { name: "更改数据位置" });
@@ -911,6 +919,8 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       expect(storageBox.y).toBeGreaterThanOrEqual(0);
       expect(storageBox.x + storageBox.width).toBeLessThanOrEqual(viewport.width);
       expect(storageBox.y + storageBox.height).toBeLessThanOrEqual(viewport.height);
+      await expect(storageDialog.locator("#storageMigrateExisting")).toHaveCSS("width", "16px");
+      await expect(storageDialog.locator("#storageMigrateExisting")).toHaveCSS("height", "16px");
       await page.keyboard.press("Escape");
 
       await page.getByRole("button", { name: "返回工作区" }).click();
