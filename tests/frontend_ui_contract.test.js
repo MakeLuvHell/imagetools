@@ -11,6 +11,39 @@ const styles = fs.readFileSync(
 );
 const app = fs.readFileSync(path.join(root, "frontend", "app.js"), "utf8");
 
+function parseHexColor(value) {
+  const match = /^#([0-9a-f]{6})$/i.exec(value);
+  assert.ok(match, `expected a six-digit hex color, received ${value}`);
+  return [0, 2, 4].map((offset) =>
+    Number.parseInt(match[1].slice(offset, offset + 2), 16),
+  );
+}
+
+function relativeLuminance(value) {
+  const channels = parseHexColor(value).map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(foreground, background) {
+  const values = [relativeLuminance(foreground), relativeLuminance(background)].sort(
+    (left, right) => right - left,
+  );
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
+function lightThemeToken(name) {
+  const lightRoot = styles.match(/^:root\s*\{([^}]*)\}/s);
+  assert.ok(lightRoot, "light theme root is present");
+  const token = lightRoot[1].match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"));
+  assert.ok(token, `light theme --${name} token is present`);
+  return token[1];
+}
+
 test("shell exposes Codex Windows task regions without permanent parameter columns", () => {
   for (const id of [
     "newSessionBtn",
@@ -172,6 +205,17 @@ test("settings navigation uses a restrained neutral active state", () => {
   assert.ok(activeRule, "active settings navigation rule is present");
   assert.match(activeRule[1], /background:\s*var\(--surface-hover\)/);
   assert.doesNotMatch(activeRule[1], /var\(--accent\)/);
+});
+
+test("light theme muted text meets WCAG AA on settings surfaces", () => {
+  const muted = lightThemeToken("muted");
+  for (const background of ["bg", "surface-hover"]) {
+    const ratio = contrastRatio(muted, lightThemeToken(background));
+    assert.ok(
+      ratio >= 4.5,
+      `--muted contrast on --${background} is ${ratio.toFixed(3)}:1; expected at least 4.5:1`,
+    );
+  }
 });
 
 test("storage settings separates current status from the change dialog", () => {

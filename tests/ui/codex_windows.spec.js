@@ -885,6 +885,14 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       expect(
         await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
       ).toBe(true);
+      for (const selector of [".settings-main", ".settings-panel:not([hidden])"]) {
+        expect(
+          await settings.locator(selector).evaluate(
+            (element) => element.scrollWidth <= element.clientWidth,
+          ),
+          selector,
+        ).toBe(true);
+      }
 
       await settings.getByRole("button", { name: "添加 Provider" }).click();
       const providerDialog = page.getByRole("dialog", { name: "添加 Provider" });
@@ -908,6 +916,14 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       expect(
         await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
       ).toBe(true);
+      for (const selector of [".settings-main", ".settings-panel:not([hidden])"]) {
+        expect(
+          await settings.locator(selector).evaluate(
+            (element) => element.scrollWidth <= element.clientWidth,
+          ),
+          selector,
+        ).toBe(true);
+      }
 
       await settings.getByRole("button", { name: "更改位置" }).click();
       const storageDialog = page.getByRole("dialog", { name: "更改数据位置" });
@@ -927,6 +943,25 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       await expect(settings).toBeHidden();
     }
   }
+});
+
+test("settings dialog stays contained and scrolls in a short viewport", async ({ page }) => {
+  await installApiMocks(page);
+  const viewport = { width: 960, height: 420 };
+  await page.setViewportSize(viewport);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "添加 Provider" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+  const box = await dialog.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  expect(
+    await dialog.evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true);
 });
 
 test("running success and failure remain stable in one task stream", async ({ page }) => {
