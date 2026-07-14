@@ -1133,41 +1133,57 @@ summary:focus-visible {
   position: fixed;
   z-index: 25;
   inset: 0;
-  overflow: auto;
-  padding: 30px max(36px, calc((100% - 1080px) / 2)) 56px;
+  overflow: hidden;
   color: var(--text);
   background: var(--bg);
 }
 
-.settings-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.settings-shell {
+  width: min(1080px, 100%);
+  height: 100%;
+  min-height: 100%;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
 }
 
-.settings-header h2 {
-  margin: 0;
-  font-size: 26px;
+.settings-sidebar {
+  padding: 22px 12px;
+  border-right: 1px solid var(--line);
+  background: var(--sidebar);
+}
+
+.settings-back {
+  width: 100%;
+  height: 36px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
   font-weight: 650;
 }
 
-.settings-layout {
-  margin-top: 22px;
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 32px;
+.settings-nav-label {
+  display: block;
+  margin: 24px 9px 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .settings-nav {
   display: grid;
-  align-content: start;
   gap: 3px;
 }
 
 .settings-nav button {
   width: 100%;
-  height: 38px;
-  padding: 0 10px;
+  height: 36px;
+  padding: 0 9px;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1175,85 +1191,247 @@ summary:focus-visible {
   border-radius: 6px;
   color: var(--muted);
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   text-align: left;
 }
 
 .settings-nav button[aria-current="page"] {
-  color: #ffffff;
-  background: var(--accent);
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.settings-back:hover,
+.settings-nav button:hover:not([aria-current="page"]) {
+  color: var(--text);
+  background: var(--surface-subtle);
+}
+
+.settings-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 46px 46px 64px;
 }
 
 .settings-panel {
-  min-width: 0;
+  width: min(100%, 640px);
+  margin: 0 auto;
 }
 
-#settingsStoragePanel .storage-location-section {
-  max-width: 720px;
-  margin-top: 0;
-}
-
-.provider-dialog-grid {
-  min-height: 390px;
-  max-width: 800px;
-  display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  border-top: 1px solid var(--line);
-}
-
-.storage-location-section {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.storage-location-heading {
+.settings-page-heading {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
 }
 
-.storage-location-heading h3 {
+.settings-page-heading h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 23px;
+  font-weight: 650;
 }
 
-.storage-location-heading output {
-  min-width: 0;
-  overflow: hidden;
+.settings-page-heading p,
+.settings-help,
+.settings-empty-copy {
+  margin: 7px 0 0;
   color: var(--muted);
   font-size: 12px;
-  text-align: right;
+  line-height: 1.5;
+}
+
+.settings-page-heading .dialog-button,
+.storage-current-row .dialog-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.provider-list {
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.provider-row {
+  min-width: 0;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.provider-row-main {
+  min-width: 0;
+  min-height: 61px;
+  padding: 9px 4px 9px 2px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  overflow: hidden;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+
+.provider-row-main:hover,
+.provider-row-menu:hover {
+  background: var(--surface-subtle);
+}
+
+.provider-row-menu {
+  width: 32px;
+  height: 32px;
+}
+
+.provider-avatar,
+.storage-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.provider-copy,
+.storage-current-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.provider-name-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.provider-detail,
+.storage-current-copy output,
+.storage-pending-state output {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.storage-location-form {
-  margin-top: 12px;
-  display: grid;
-  gap: 10px;
+.provider-default,
+.settings-status-chip {
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--surface-hover);
+  font-size: 10px;
+  font-weight: 600;
 }
 
-.storage-location-form > label:not(.checkbox-field) {
+.settings-section {
+  margin-top: 34px;
+}
+
+.settings-section + .settings-section {
+  padding-top: 30px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-section h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.storage-current-row {
+  min-height: 72px;
+  padding: 10px 2px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.storage-current-label {
+  margin: 0;
+}
+
+.storage-pending-state {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+}
+
+.storage-pending-state > div {
   min-width: 0;
   display: grid;
-  gap: 5px;
+  gap: 3px;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.settings-inline-status,
+.dialog-status {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-inline-status[data-tone="error"],
+.dialog-status[data-tone="error"] {
+  color: var(--danger);
+}
+
+.settings-empty-state,
+.settings-error-state {
+  margin-top: 32px;
+  padding: 28px 0;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-empty-state p,
+.settings-error-state p {
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
 }
 
-.storage-location-form input:not([type="checkbox"]) {
-  width: 100%;
-  min-width: 0;
-  height: 34px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
-  background: var(--surface);
+.settings-skeleton-row {
+  height: 62px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--surface-subtle),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: settings-loading 1.2s linear infinite;
 }
 
 .storage-directory-input {
@@ -1269,176 +1447,16 @@ summary:focus-visible {
   height: 30px;
 }
 
-.storage-location-form .checkbox-field input {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  margin: 0;
+.provider-menu {
+  position: fixed;
+  z-index: 40;
+  width: 180px;
 }
 
-.storage-location-form footer {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.storage-location-form footer p {
-  min-width: 0;
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.provider-list-pane {
-  min-width: 0;
-  padding: 14px 14px 0 0;
-  border-right: 1px solid var(--line);
-}
-
-.provider-pane-heading {
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.provider-list {
-  display: grid;
-}
-
-.provider-row {
-  min-width: 0;
-  padding: 9px 4px 9px 8px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid var(--line);
-}
-
-.provider-row.selected {
-  background: var(--surface-subtle);
-}
-
-.provider-copy {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 6px;
-}
-
-.provider-copy strong,
-.provider-copy > span:not(.provider-default) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.provider-copy strong {
-  grid-column: 1 / -1;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.provider-copy > span:not(.provider-default) {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.provider-default {
-  padding: 1px 5px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--surface);
-  font-size: 10px;
-}
-
-.provider-actions {
-  display: flex;
-  align-items: center;
-}
-
-.provider-actions .icon-button {
-  width: 26px;
-  height: 26px;
-  flex-basis: 26px;
-}
-
-.provider-delete-button {
-  height: 26px;
-  padding: 0 6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  border-radius: 5px;
-  color: var(--danger);
-  background: transparent;
-  font-size: 11px;
-}
-
-.provider-delete-button:hover {
-  background: var(--danger-soft);
-}
-
-.provider-empty {
-  margin: 16px 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.provider-form {
-  min-width: 0;
-  padding: 16px 0 0 20px;
-  display: grid;
-  align-content: start;
-  gap: 12px;
-}
-
-.provider-form h3 {
-  margin: 0 0 2px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.provider-form > label:not(.checkbox-field) {
-  min-width: 0;
-  display: grid;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.provider-form input:not([type="checkbox"]) {
-  width: 100%;
-  min-width: 0;
-  height: 34px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
-  background: var(--surface);
-}
-
-.checkbox-field {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text);
-  font-size: 12px;
-}
-
-.provider-form footer {
-  margin-top: 4px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+@keyframes settings-loading {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .app-dialog > header {
@@ -1504,25 +1522,74 @@ summary:focus-visible {
   background: var(--danger);
 }
 
-.app-dialog .provider-form > .checkbox-field {
+.settings-dialog {
+  width: min(520px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.settings-dialog > header p,
+.settings-dialog form > .storage-impact,
+.settings-dialog .checkbox-field small {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.settings-dialog form > .dialog-status {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-dialog form > .dialog-status[data-tone="error"] {
+  color: var(--danger);
+}
+
+.settings-dialog .checkbox-field {
   display: flex;
   grid-template-columns: none;
-  align-items: center;
+  align-items: flex-start;
   gap: 7px;
 }
 
-.settings-view .storage-location-form > .checkbox-field {
-  display: flex;
-  grid-template-columns: none;
-  align-items: center;
-  gap: 7px;
+.settings-dialog .checkbox-field > span {
+  display: grid;
+  gap: 2px;
 }
 
-.app-dialog .provider-form > .checkbox-field input {
+.settings-dialog .checkbox-field input[type="checkbox"] {
+  appearance: none;
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
+  padding: 0;
   margin: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.settings-dialog .checkbox-field input[type="checkbox"]::before {
+  content: "\2713";
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  transform: scale(0);
+}
+
+.settings-dialog .checkbox-field input[type="checkbox"]:checked {
+  border-color: var(--text);
+  background: var(--text);
+}
+
+.settings-dialog .checkbox-field input[type="checkbox"]:checked::before {
+  transform: scale(1);
 }
 
 .toast {
@@ -1693,30 +1760,11 @@ summary:focus-visible {
     width: calc(100% - 48px);
   }
 
-  .settings-view {
-    padding: 24px;
-  }
-
-  .settings-layout {
+  .settings-shell {
     grid-template-columns: 148px minmax(0, 1fr);
-    gap: 24px;
-  }
-}
-
-@media (max-width: 680px) {
-  .provider-dialog-grid {
-    grid-template-columns: 1fr;
   }
 
-  .provider-list-pane {
-    max-height: 190px;
-    overflow: auto;
-    padding-right: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .provider-form {
-    padding-left: 0;
+  .settings-main {
+    padding: 32px 28px 48px;
   }
 }

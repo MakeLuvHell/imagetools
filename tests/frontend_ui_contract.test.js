@@ -165,6 +165,15 @@ test("settings uses a dedicated workspace view with separate provider and storag
   assert.match(styles, /\.settings-nav/);
 });
 
+test("settings navigation uses a restrained neutral active state", () => {
+  const activeRule = styles.match(
+    /\.settings-nav button\[aria-current="page"\]\s*\{([^}]*)\}/,
+  );
+  assert.ok(activeRule, "active settings navigation rule is present");
+  assert.match(activeRule[1], /background:\s*var\(--surface-hover\)/);
+  assert.doesNotMatch(activeRule[1], /var\(--accent\)/);
+});
+
 test("storage settings separates current status from the change dialog", () => {
   for (const id of [
     "storageCurrentPath",
