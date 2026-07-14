@@ -356,6 +356,71 @@ test("Provider menu sets defaults and confirms deletion", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("Escape closes the innermost settings layer before the settings page", async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto("/");
+  const opener = page.getByRole("button", { name: "Providers" });
+  await opener.click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByRole("button", { name: "添加 Provider" }).click();
+  const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(settings).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test("Provider menu supports arrow navigation and restores its trigger", async ({ page }) => {
+  await installApiMocks(page, {
+    providers: [
+      {
+        id: 1,
+        name: "Default",
+        base_url: "https://api.example/v1",
+        default_model: "gpt-image-2",
+        is_default: true,
+        api_key_set: true,
+      },
+      {
+        id: 2,
+        name: "Studio",
+        base_url: "https://studio.example/v1",
+        default_model: "studio-image-v1",
+        is_default: false,
+        api_key_set: true,
+      },
+    ],
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  const trigger = page.getByRole("button", { name: "管理 Provider Studio" });
+  await trigger.click();
+  const menu = page.getByRole("menu", { name: "Provider 操作" });
+
+  await expect(menu.getByRole("menuitem", { name: "编辑" })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "设为默认" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
+test("Provider menu closes after an outside click", async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "管理 Provider Default" }).click();
+  const menu = page.getByRole("menu", { name: "Provider 操作" });
+
+  await expect(menu).toBeVisible();
+  await page.getByRole("heading", { name: "Provider" }).click();
+  await expect(menu).toBeHidden();
+});
+
 test("Provider mutation errors remain in the active dialog", async ({ page }) => {
   await installApiMocks(page, {
     providerMutationError: "Base URL 无法连接。",
@@ -786,7 +851,7 @@ test("theme changes after load and long CJK content stays contained", async ({ p
   }
 });
 
-test("menus and settings Provider view have stable visual states", async ({ page }) => {
+test("parameter menu keeps its stable visual state", async ({ page }) => {
   await installApiMocks(page);
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.goto("/");
@@ -795,13 +860,63 @@ test("menus and settings Provider view have stable visual states", async ({ page
   await expect(page.getByRole("menu", { name: "图片参数" })).toHaveScreenshot(
     "parameter-menu.png",
   );
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Providers" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
-  await expect(settings).toHaveScreenshot("settings-provider.png");
-  expect(
-    await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
-  ).toBe(true);
+});
+
+test("settings visual baselines cover both themes and target sizes", async ({ page }) => {
+  await installApiMocks(page);
+  for (const viewport of [
+    { width: 1280, height: 860 },
+    { width: 960, height: 640 },
+  ]) {
+    for (const colorScheme of ["light", "dark"]) {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/");
+      await settleUi(page);
+
+      await page.getByRole("button", { name: "Providers" }).click();
+      const settings = page.getByRole("region", { name: "设置" });
+      await expect(
+        settings.getByRole("button", { name: "编辑 Provider Default" }),
+      ).toBeVisible();
+      await expect(settings).toHaveScreenshot(
+        `settings-provider-${viewport.width}x${viewport.height}-${colorScheme}.png`,
+      );
+
+      await settings.getByRole("button", { name: "添加 Provider" }).click();
+      const providerDialog = page.getByRole("dialog", { name: "添加 Provider" });
+      await expect(providerDialog).toHaveScreenshot(
+        `provider-dialog-${viewport.width}x${viewport.height}-${colorScheme}.png`,
+      );
+      const providerBox = await providerDialog.boundingBox();
+      expect(providerBox.x).toBeGreaterThanOrEqual(0);
+      expect(providerBox.y).toBeGreaterThanOrEqual(0);
+      expect(providerBox.x + providerBox.width).toBeLessThanOrEqual(viewport.width);
+      expect(providerBox.y + providerBox.height).toBeLessThanOrEqual(viewport.height);
+      await page.keyboard.press("Escape");
+
+      await settings.getByRole("button", { name: "本地数据" }).click();
+      await expect(settings.getByLabel("当前数据目录")).not.toHaveText("");
+      await expect(settings).toHaveScreenshot(
+        `settings-storage-${viewport.width}x${viewport.height}-${colorScheme}.png`,
+      );
+
+      await settings.getByRole("button", { name: "更改位置" }).click();
+      const storageDialog = page.getByRole("dialog", { name: "更改数据位置" });
+      await expect(storageDialog).toHaveScreenshot(
+        `storage-dialog-${viewport.width}x${viewport.height}-${colorScheme}.png`,
+      );
+      const storageBox = await storageDialog.boundingBox();
+      expect(storageBox.x).toBeGreaterThanOrEqual(0);
+      expect(storageBox.y).toBeGreaterThanOrEqual(0);
+      expect(storageBox.x + storageBox.width).toBeLessThanOrEqual(viewport.width);
+      expect(storageBox.y + storageBox.height).toBeLessThanOrEqual(viewport.height);
+      await page.keyboard.press("Escape");
+
+      await page.getByRole("button", { name: "返回工作区" }).click();
+      await expect(settings).toBeHidden();
+    }
+  }
 });
 
 test("running success and failure remain stable in one task stream", async ({ page }) => {

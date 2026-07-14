@@ -1436,31 +1436,44 @@ async function handleStorageLocationSubmit(event) {
 
 function handleEscape(event) {
   if (event.key !== "Escape") return;
-  if (providerDialog.open || providerDeleteDialog.open) return;
-  if (window.ImageToolsUi.isLayerOpen(providerMenu)) {
-    void closeProviderMenu({ restoreFocus: true });
+  if (
+    providerDialog.open ||
+    providerDeleteDialog.open ||
+    storageDialog.open ||
+    sessionDialog.open ||
+    imagePreviewDialog.open
+  ) {
     return;
   }
-  if (!settingsView.hidden) {
-    closeSettingsView();
+  if (window.ImageToolsUi.isLayerOpen(providerMenu)) {
+    event.preventDefault();
+    void closeProviderMenu({ restoreFocus: true });
     return;
   }
   if (window.ImageToolsUi.isLayerOpen(taskMenu)) {
     void closeTaskMenu({ restoreFocus: true });
+    return;
   }
   if (window.ImageToolsUi.isLayerOpen(sidebarMenu)) {
     void closeSidebarMenu({ restoreFocus: true });
+    return;
   }
   if (window.ImageToolsUi.isLayerOpen(searchPanel)) {
     void window.ImageToolsUi.closeLayer(searchPanel, searchToggle, {
       restoreFocus: true,
     });
+    return;
   }
   if (window.ImageToolsUi.isLayerOpen(parameterMenu)) {
     void closeParameterMenu({ restoreFocus: true });
+    return;
   }
   if (window.ImageToolsUi.isLayerOpen(referenceMenu)) {
     void closeReferenceMenu({ restoreFocus: true });
+    return;
+  }
+  if (!settingsView.hidden) {
+    closeSettingsView();
   }
 }
 
@@ -1537,6 +1550,13 @@ function handlePromptKeydown(event) {
 }
 
 function handleOutsideClick(event) {
+  if (
+    window.ImageToolsUi.isLayerOpen(providerMenu) &&
+    !providerMenu.contains(event.target) &&
+    !event.target.closest?.(".provider-row-menu")
+  ) {
+    void closeProviderMenu();
+  }
   if (
     window.ImageToolsUi.isLayerOpen(sidebarMenu) &&
     !sidebarMenu.contains(event.target) &&
