@@ -8,7 +8,7 @@ Run `pytest -q` or `mise run test`. Tests cover Provider/session CRUD, generatio
 
 ### Frontend State And DOM
 
-Run `node --test tests/*.test.js`. Pure state tests cover drafts, pending-run isolation, reconciliation, payloads, and Composer rules. jsdom tests cover renderers and focus behavior; static contracts cover shell structure and local assets.
+Run `node --test tests/*.test.js`. Pure state tests cover drafts, pending-run isolation, reconciliation, payloads, and Composer rules. jsdom tests cover renderers and focus behavior; static contracts cover shell structure, local assets, and WCAG AA contrast for light-theme muted text on settings surfaces.
 
 ### Browser Interaction And Visual Regression
 
@@ -21,8 +21,11 @@ Baselines cover:
 - Enter/Shift+Enter, focus restoration, menu arrows, rapid submit, retry, long CJK text, and overflow.
 - Popover-to-trigger geometry before and after viewport resize at both supported viewport sizes.
 - Provider Cancel close/focus behavior, storage-location loading/submission/errors/restart feedback, and the system reduced-motion preference.
+- Scan-first Provider management, storage current/pending state, stale async response guards, and innermost-layer Escape ordering.
+- Sixteen settings baselines: Provider list, Provider dialog, storage status, and storage dialog at both target sizes and themes.
+- Horizontal containment of the settings root, main scroll area, and visible panel, plus viewport-contained dialog scrolling at `960x420`.
 
-Regenerate intentional baselines with `npm run test:ui:update`, then inspect the PNG files before committing.
+Regenerate intentional baselines with `npm run test:ui:update`, then inspect the PNG files before committing. Use Playwright's `--update-snapshots=all` mode when a small token change falls within the default screenshot color threshold but the stored baseline must still reflect the new value.
 
 ### Desktop And Release
 

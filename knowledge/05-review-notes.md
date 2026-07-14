@@ -75,3 +75,25 @@
 ## Accepted Risks
 
 - Local Web/Chromium screenshots validate the implemented UI; Windows font and WebView rendering differences may still require release-time calibration.
+
+## Codex Desktop Settings Redesign Review
+
+### Product And Architecture
+
+- Provider management is scan-first; add and edit use focused dialogs, while default and named deletion live in the row menu.
+- Provider, sessions, generation history, reference images, and generated images remain one `工作区数据目录` with the existing restart-only migration semantics.
+- The redesign changes frontend structure and behavior only. Backend APIs, SQLite schema, storage bootstrap, and relative payload paths remain unchanged.
+
+### Frontend And Accessibility
+
+- The settings shell uses neutral navigation, a constrained reading width, unframed sections, and responsive geometry at `1280x860` and `960x640`.
+- Dialog and menu Escape handling closes the innermost layer first and restores focus to the concrete trigger.
+- Light-theme muted text uses `#656a72`, providing `5.443:1` contrast on white and `4.695:1` on the hover surface.
+
+### Testing Review
+
+- Provider and storage request lifecycles ignore stale reloads, submissions, and directory-picker results after a newer task or closed dialog takes ownership.
+- Browser assertions cover the settings root, main scroll container, visible panel, target-size dialog containment, and actual vertical scrolling at `960x420`.
+- Sixteen settings baselines cover Provider, Provider dialog, storage status, and storage dialog across both target sizes and themes. All were manually inspected after the contrast update.
+- Final specification and quality reviews found no remaining implementation issue.
+- Release verification passed with 101 Python tests, 58 Node tests, 40 Playwright tests, and the Tauri Rust check. A fresh worktree must run `mise run backend-bundle` before `mise run desktop-check` because the generated sidecar is intentionally ignored.
