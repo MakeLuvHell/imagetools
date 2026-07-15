@@ -164,6 +164,21 @@ fn stop_backend(app_handle: &tauri::AppHandle) {
     }
 }
 
+fn theme_override(mode: &str) -> Result<Option<tauri::Theme>, String> {
+    match mode {
+        "system" => Ok(None),
+        "light" => Ok(Some(tauri::Theme::Light)),
+        "dark" => Ok(Some(tauri::Theme::Dark)),
+        unsupported => Err(format!("不支持的主题模式：{unsupported}")),
+    }
+}
+
+#[tauri::command]
+fn set_app_theme(window: tauri::WebviewWindow, mode: String) -> Result<(), String> {
+    let theme = theme_override(&mode)?;
+    window.set_theme(theme).map_err(|error| format!("无法同步窗口主题：{error}"))
+}
+
 #[tauri::command]
 fn pick_data_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (sender, receiver) = std::sync::mpsc::channel();
@@ -182,7 +197,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![pick_data_directory])
+        .invoke_handler(tauri::generate_handler![pick_data_directory, set_app_theme])
         .setup(|app| {
             let port = prepare_backend(app)?;
             let url = Url::parse(&format!("http://127.0.0.1:{port}/"))?;
@@ -205,7 +220,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::health_response_is_ok;
+    use super::{health_response_is_ok, theme_override};
     #[cfg(debug_assertions)]
     use super::health_dev_token;
 
@@ -217,6 +232,21 @@ mod tests {
     #[test]
     fn rejects_health_failure_status() {
         assert!(!health_response_is_ok("HTTP/1.1 503 Service Unavailable\r\n\r\n"));
+    }
+
+    #[test]
+    fn maps_supported_theme_modes() {
+        assert_eq!(theme_override("system"), Ok(None));
+        assert_eq!(theme_override("light"), Ok(Some(tauri::Theme::Light)));
+        assert_eq!(theme_override("dark"), Ok(Some(tauri::Theme::Dark)));
+    }
+
+    #[test]
+    fn rejects_unsupported_theme_modes() {
+        assert_eq!(
+            theme_override("sepia"),
+            Err("不支持的主题模式：sepia".to_string())
+        );
     }
 
     #[cfg(debug_assertions)]
