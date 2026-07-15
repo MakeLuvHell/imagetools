@@ -1697,6 +1697,16 @@ settingsStorageNav.addEventListener("click", () => {
   activateSettingsTab("storage");
 });
 
+themeModeGroup.addEventListener("click", (event) => {
+  if (
+    event.target.matches('input[name="themeMode"]') &&
+    event.target.checked &&
+    document.documentElement.dataset.theme === event.target.value
+  ) {
+    void applyThemeMode(event.target.value);
+  }
+});
+
 themeModeGroup.addEventListener("change", (event) => {
   if (event.target.matches('input[name="themeMode"]')) {
     void applyThemeMode(event.target.value);

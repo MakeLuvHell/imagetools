@@ -587,6 +587,81 @@ test("native theme failures keep content theming and report inline", async ({ pa
   await expect(page.locator("#themeStatus")).toHaveAttribute("data-tone", "error");
 });
 
+test("selected theme activation retries failures without duplicating ordinary changes", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.themeActivity = { writes: [], commands: [] };
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItem(key, value) {
+      if (key === "image-tools-theme") {
+        window.themeActivity.writes.push(value);
+        const darkWrites = window.themeActivity.writes.filter(
+          (mode) => mode === "dark",
+        ).length;
+        if (value === "dark" && darkWrites === 1) {
+          throw new Error("storage blocked once");
+        }
+      }
+      return original.call(this, key, value);
+    };
+    window.__TAURI__ = {
+      core: {
+        invoke: async (command, args) => {
+          if (command !== "set_app_theme") return null;
+          window.themeActivity.commands.push(args);
+          const darkCommands = window.themeActivity.commands.filter(
+            ({ mode }) => mode === "dark",
+          ).length;
+          if (args.mode === "dark" && darkCommands === 1) {
+            throw new Error("native blocked once");
+          }
+          return null;
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const dark = page.getByRole("radio", { name: "深色" });
+
+  await dark.check();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#themeStatus")).toHaveText(
+    "主题偏好无法保存。 native blocked once",
+  );
+  await expect.poll(() => page.evaluate(() => window.themeActivity)).toEqual({
+    writes: ["dark"],
+    commands: [{ mode: "system" }, { mode: "dark" }],
+  });
+
+  await dark.click();
+  await expect.poll(() => page.evaluate(() => window.themeActivity)).toEqual({
+    writes: ["dark", "dark"],
+    commands: [
+      { mode: "system" },
+      { mode: "dark" },
+      { mode: "dark" },
+    ],
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#themeStatus")).toBeHidden();
+  expect(
+    await page.evaluate(() => localStorage.getItem("image-tools-theme")),
+  ).toBe("dark");
+
+  await dark.press("ArrowLeft");
+  await expect(page.getByRole("radio", { name: "浅色" })).toBeChecked();
+  await expect.poll(() => page.evaluate(() => window.themeActivity)).toEqual({
+    writes: ["dark", "dark", "light"],
+    commands: [
+      { mode: "system" },
+      { mode: "dark" },
+      { mode: "dark" },
+      { mode: "light" },
+    ],
+  });
+});
+
 test("storage settings confirms a copied workspace-data change", async ({ page }) => {
   const requests = await installApiMocks(page);
   await page.goto("/");
