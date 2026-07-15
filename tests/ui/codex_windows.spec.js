@@ -1120,8 +1120,22 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       await page.goto("/");
       await settleUi(page);
 
-      await page.getByRole("button", { name: "Providers" }).click();
+      await page.getByRole("button", { name: "设置" }).click();
       const settings = page.getByRole("region", { name: "设置" });
+      await expect(page.locator("#settingsAppearancePanel")).toBeVisible();
+      await expect(settings).toHaveScreenshot(
+        `settings-appearance-${viewport.width}x${viewport.height}-${colorScheme}.png`,
+      );
+      for (const selector of [".settings-view", ".settings-main", ".settings-panel:not([hidden])"]) {
+        expect(
+          await page.locator(selector).evaluate(
+            (element) => element.scrollWidth <= element.clientWidth,
+          ),
+          selector,
+        ).toBe(true);
+      }
+
+      await settings.getByRole("button", { name: "Provider", exact: true }).click();
       await expect(
         settings.getByRole("button", { name: "编辑 Provider Default" }),
       ).toBeVisible();
