@@ -43,7 +43,8 @@ Provide a focused desktop workflow for sustained image creation without cloud ac
 
 - New tasks persist only on first valid submission and remain usable after local failures.
 - Running, successful, and failed runs appear in one stable task stream.
-- Behavior and layouts pass manual light/dark and live system-theme regression tests at `1280x860` and `960x640`.
+- Layout snapshots pass in light and dark at `1280x860` and `960x640`.
+- Behavior tests cover manual light/dark overrides and live system-theme changes.
 - Theme changes immediately update web content and the native titlebar, while the selected mode persists on the current device.
 - Python, Node, Playwright, packaging, and Tauri checks pass.
 - Final Windows WebView2 screenshots confirm content/titlebar synchronization and match the approved Windows visual baseline.

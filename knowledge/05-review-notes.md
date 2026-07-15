@@ -115,4 +115,5 @@
 
 - The segmented-control focus indicator uses an opaque accent outline with `3.598:1` light-theme and `5.802:1` dark-theme non-text contrast against the subtle surface, exceeding the WCAG `3:1` threshold.
 - The settings matrix now contains exactly 20 baselines across Appearance, Provider, Provider dialog, storage status, and storage dialog at two sizes and two themes. Four Appearance baselines were added, eight full-region settings baselines changed, and the eight locator-cropped dialog baselines remain byte-identical.
+- Fresh release verification passed with 102 Python, 69 Node, 47 Playwright, and 5 Rust tests; the backend sidecar bundle and Cargo check also passed. Only the existing Starlette `TestClient`/`httpx` deprecation and Playwright color-environment warnings were emitted.
 - Linux Chromium establishes deterministic behavior and layout, and Cargo establishes native API compilation and mapping. Windows WebView2 remains the final content/native-titlebar synchronization and pixel-fidelity gate for all three modes at `1280x860` and `960x640`.

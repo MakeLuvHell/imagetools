@@ -30,11 +30,13 @@ Regenerate intentional baselines with `npm run test:ui:update`, then inspect the
 
 ### Desktop And Release
 
-Run:
+On a clean worktree, run the bundle before the desktop check because the generated sidecar is intentionally ignored:
 
 ```bash
 mise run desktop-prereqs
+mise run backend-bundle
 mise run desktop-check
+python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo.toml
 mise run desktop-dev
 ```
 

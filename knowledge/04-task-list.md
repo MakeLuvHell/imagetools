@@ -26,7 +26,7 @@
 | SET001 | Settings | Render scan-first Provider management states | Tested loading, empty, error, and Provider row renderer | UI010 | Done |
 | SET002 | Settings | Move Provider mutations into focused dialogs and row menus | Accessible add, edit, default, and named-delete workflows | SET001 | Done |
 | SET003 | Storage | Refocus local data settings on current and pending state | Restart-only change dialog with guarded async lifecycle | UI010, STG001 | Done |
-| SET004 | Settings | Apply the Codex Desktop settings shell and visual contracts | Responsive light/dark shell, WCAG contrast contract, and 20 settings visual baselines | SET002, SET003 | Done |
+| SET004 | Settings | Apply the Codex Desktop settings shell and visual contracts | Responsive light/dark shell, WCAG contrast contract, and 16 settings visual baselines | SET002, SET003 | Done |
 | SET005 | Release | Update settings redesign knowledge and run release-grade verification | Updated project knowledge and verified desktop branch | SET004 | Done |
 | THM001 | State | Add theme state and pre-style bootstrap | Tested system/light/dark preference restored before paint | SET005 | Done |
 | THM002 | Settings | Add the dedicated Appearance category | First-position Appearance UI with Provider shortcut compatibility | THM001 | Done |
@@ -58,7 +58,7 @@
 ## Verification Checklist
 
 - Run each ticket's focused test before advancing it.
-- Run the full Python, Node, Playwright, and Rust suite in UI008.
+- Run the full Python, Node, Playwright, backend bundle, Cargo check, and Rust test sequence when closing release tickets such as UI008, SET005, and THM005.
 - Keep the theme VM/static/Rust contracts and manual/system behavior, persistence failure, native retry, and stale-response checks green.
 - Keep the settings WCAG token contract and all 20 light/dark, target-size visual baselines green.
 - Verify native content/titlebar synchronization for all three modes on Windows WebView2 at both target sizes before release.
