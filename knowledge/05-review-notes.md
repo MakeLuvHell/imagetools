@@ -97,3 +97,22 @@
 - Sixteen settings baselines cover Provider, Provider dialog, storage status, and storage dialog across both target sizes and themes. All were manually inspected after the contrast update.
 - Final specification and quality reviews found no remaining implementation issue.
 - Release verification passed with 101 Python tests, 58 Node tests, 40 Playwright tests, and the Tauri Rust check. A fresh worktree must run `mise run backend-bundle` before `mise run desktop-check` because the generated sidecar is intentionally ignored.
+
+## Three-Mode Appearance Review
+
+### Product And Data Boundary
+
+- A dedicated first-position Appearance category was selected over embedding theme controls in Provider or local-data settings. The settings gear opens Appearance, while the sidebar Provider shortcut still opens Provider directly.
+- The exact modes are `system`, `light`, and `dark`, with `system` as the default. The preference is device-local under `image-tools-theme`; no backend API, SQLite schema, `settings.json`, storage bootstrap, or workspace-data migration change is involved.
+
+### Frontend And Native Resilience
+
+- `frontend/theme.js` restores the root mode before stylesheet evaluation so stored manual modes do not wait for application orchestration to paint correctly. System mode retains live operating-system control; manual modes override it.
+- Content theming remains active when persistence or native titlebar synchronization fails, and the Appearance panel reports the failure inline. Activating the already-selected radio retries both operations.
+- A generation counter gives the newest native synchronization ownership, preventing a late failure or completion from replacing newer status. The Tauri command targets the invoking `WebviewWindow`, maps system to no override, and maps light/dark to explicit native themes.
+
+### Accessibility And Verification
+
+- The segmented-control focus indicator uses an opaque accent outline with `3.598:1` light-theme and `5.802:1` dark-theme non-text contrast against the subtle surface, exceeding the WCAG `3:1` threshold.
+- The settings matrix now contains exactly 20 baselines across Appearance, Provider, Provider dialog, storage status, and storage dialog at two sizes and two themes. Four Appearance baselines were added, eight full-region settings baselines changed, and the eight locator-cropped dialog baselines remain byte-identical.
+- Linux Chromium establishes deterministic behavior and layout, and Cargo establishes native API compilation and mapping. Windows WebView2 remains the final content/native-titlebar synchronization and pixel-fidelity gate for all three modes at `1280x860` and `960x640`.

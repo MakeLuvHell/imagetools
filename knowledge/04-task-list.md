@@ -26,8 +26,13 @@
 | SET001 | Settings | Render scan-first Provider management states | Tested loading, empty, error, and Provider row renderer | UI010 | Done |
 | SET002 | Settings | Move Provider mutations into focused dialogs and row menus | Accessible add, edit, default, and named-delete workflows | SET001 | Done |
 | SET003 | Storage | Refocus local data settings on current and pending state | Restart-only change dialog with guarded async lifecycle | UI010, STG001 | Done |
-| SET004 | Settings | Apply the Codex Desktop settings shell and visual contracts | Responsive light/dark shell, WCAG contrast contract, and 16 visual baselines | SET002, SET003 | Done |
+| SET004 | Settings | Apply the Codex Desktop settings shell and visual contracts | Responsive light/dark shell, WCAG contrast contract, and 20 settings visual baselines | SET002, SET003 | Done |
 | SET005 | Release | Update settings redesign knowledge and run release-grade verification | Updated project knowledge and verified desktop branch | SET004 | Done |
+| THM001 | State | Add theme state and pre-style bootstrap | Tested system/light/dark preference restored before paint | SET005 | Done |
+| THM002 | Settings | Add the dedicated Appearance category | First-position Appearance UI with Provider shortcut compatibility | THM001 | Done |
+| THM003 | Desktop | Synchronize the native window theme | Current-window Tauri command for system/light/dark | THM001, THM002 | Done |
+| THM004 | Testing | Cover theme visuals, failures, retries, and stale responses | Behavior, contrast, Rust, and 20-baseline regression coverage | THM001-THM003 | Done |
+| THM005 | Release | Preserve theme knowledge and run release-grade verification | Updated project knowledge and verified theme branch | THM004 | Done |
 
 ## Recommended Order
 
@@ -42,6 +47,8 @@
 9. UI011 adds durable session grouping without adding Codex-only navigation.
 10. SET001-SET004 replace the interim settings UI with scan-first Provider management, a state-first storage surface, focused dialogs, and visual/accessibility regression contracts.
 11. SET005 records the resolved design and testing boundaries before final branch verification.
+12. THM001-THM004 add the device-local three-mode Appearance preference, pre-paint restoration, native synchronization, and regression coverage.
+13. THM005 records the final theme boundaries and runs release-grade verification.
 
 ## Blockers
 
@@ -52,5 +59,7 @@
 
 - Run each ticket's focused test before advancing it.
 - Run the full Python, Node, Playwright, and Rust suite in UI008.
-- Keep the settings WCAG token contract and all 16 light/dark, target-size visual baselines green.
+- Keep the theme VM/static/Rust contracts and manual/system behavior, persistence failure, native retry, and stale-response checks green.
+- Keep the settings WCAG token contract and all 20 light/dark, target-size visual baselines green.
+- Verify native content/titlebar synchronization for all three modes on Windows WebView2 at both target sizes before release.
 - Keep normal per-ticket Git commits; do not squash.

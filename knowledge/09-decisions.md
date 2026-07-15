@@ -183,3 +183,19 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Durable metadata survives restart and local data-directory migration. A database migration preserves existing workbench history, while project deletion can safely unassign sessions rather than deleting creative records.
 
 **Consequences:** Session JSON now includes `project_id` and `is_pinned`; project CRUD and pin endpoints are local API contracts. Search filters sessions before rendering but preserves their category rules. Future session organization must use these durable fields instead of browser-only state.
+
+### 2026-07-15: Keep Theme Preference Device-Local
+
+**Decision:** Offer exactly `system`, `light`, and `dark` appearance modes, default to `system`, and store the selected mode in device-local localStorage under `image-tools-theme`. Exclude it from workspace migration, SQLite, `settings.json`, storage bootstrap, and backend APIs. Apply the root theme before first paint and synchronize the invoking Tauri window through `set_app_theme`.
+
+**Context:** Creative workspace data may move between local directories as one coherent set, but an installation's appearance is a device preference. System mode must keep following live operating-system changes, while manual light/dark modes must override them for both content and the native titlebar.
+
+**Options Considered:**
+
+- Add theme to `settings.json` and move it with the workspace payload.
+- Store theme in SQLite or expose a backend settings endpoint.
+- Keep theme in browser localStorage and synchronize only the current native window.
+
+**Reasoning:** Provider configuration, sessions, generation history, and image files are creative workspace data that should move together. Installation appearance should stay local so moving a workspace does not unexpectedly restyle another device, and the frontend can restore it before CSS paint without waiting for the backend.
+
+**Consequences:** `frontend/theme.js` owns normalization, guarded localStorage access, and pre-paint root application. `system` maps to no Tauri override, while `light` and `dark` map to explicit themes on the current `WebviewWindow`; content remains themed and reports inline if native synchronization fails. Future workspace migration and schema work must not absorb `image-tools-theme` without revisiting this decision.

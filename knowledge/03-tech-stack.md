@@ -3,7 +3,8 @@
 ## Frontend
 
 - Framework: vanilla HTML and JavaScript modules exposed through browser/CommonJS IIFEs.
-- Styling: one static CSS token system with `prefers-color-scheme` light/dark themes.
+- Theme bootstrap: `frontend/theme.js` is a browser/CommonJS IIFE loaded before the stylesheet so it can restore the root theme before first paint.
+- Styling: one static CSS token system with `prefers-color-scheme` for system mode and explicit `:root[data-theme="light"]` / `:root[data-theme="dark"]` manual overrides.
 - State management: pure helpers in `frontend/workbench.js`; orchestration in `frontend/app.js`.
 - Rendering: DOM-only functions in `frontend/ui.js`.
 - Icons: pinned Lucide 1.24.0 UMD bundle copied into `frontend/vendor/`.
@@ -13,22 +14,22 @@
 
 - Runtime: Python 3.12 and FastAPI/Uvicorn.
 - API style: local JSON and multipart REST endpoints under `/api/`.
-- Desktop integration: PyInstaller sidecar launched and health-checked by Tauri.
+- Desktop integration: PyInstaller sidecar launched and health-checked by Tauri; `set_app_theme` maps system/light/dark to the current `WebviewWindow` theme override.
 - Authentication: Provider bearer keys stored locally; no user authentication.
 
 ## Data
 
 - Database: SQLite through `WorkbenchStore`.
-- Cache: browser localStorage for serializable Composer drafts only.
+- Cache: browser localStorage for serializable Composer drafts plus the device-local `image-tools-theme` preference; the theme key is outside backend, SQLite, `settings.json`, and movable workspace data.
 - File storage: local application data directories for generated images and references.
 
 ## Testing
 
-- Unit tests: Node test runner for preferences, pure state, renderer, and static contracts.
+- Unit tests: Node test runner for preferences, the real theme browser IIFE in a VM, pure state, renderer, and static/CSS contracts.
 - DOM tests: jsdom 29.1.1.
 - API/integration tests: pytest and FastAPI TestClient.
 - End-to-end/visual tests: Playwright 1.61.1 with Chromium, isolated data, mocked APIs, and screenshot baselines.
-- Desktop tests: Cargo check, Tauri development smoke test, and Windows build/screenshots.
+- Desktop tests: Rust theme-mapping tests, Cargo check, Tauri development smoke test, and Windows build/screenshots; Linux compilation does not prove Windows titlebar rendering.
 
 ## Tooling
 
