@@ -47,6 +47,44 @@
   }
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --sidebar: #fbfbfc;
+  --surface: #ffffff;
+  --surface-subtle: #f4f4f5;
+  --surface-hover: #eeeeef;
+  --text: #202124;
+  --muted: #656a72;
+  --line: #e2e3e6;
+  --line-strong: #cfd1d5;
+  --accent: #1685d1;
+  --accent-hover: #0d72b7;
+  --focus: rgb(22 133 209 / 28%);
+  --danger: #b4232d;
+  --danger-soft: #fff0f1;
+  --shadow: 0 5px 16px rgb(0 0 0 / 9%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #202123;
+  --sidebar: #1c1d1f;
+  --surface: #292a2d;
+  --surface-subtle: #252629;
+  --surface-hover: #303236;
+  --text: #f1f2f3;
+  --muted: #a1a4aa;
+  --line: #3a3c40;
+  --line-strong: #4b4e54;
+  --accent: #55a8df;
+  --accent-hover: #6ab5e5;
+  --focus: rgb(85 168 223 / 30%);
+  --danger: #ff8c93;
+  --danger-soft: #3b2427;
+  --shadow: 0 6px 18px rgb(0 0 0 / 28%);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1336,6 +1374,70 @@ summary:focus-visible {
   font-weight: 600;
 }
 
+.theme-mode-fieldset {
+  margin: 34px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.theme-mode-fieldset legend {
+  margin: 0 0 10px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.theme-segmented-control {
+  width: min(100%, 480px);
+  padding: 3px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-subtle);
+}
+
+.theme-segmented-control label {
+  position: relative;
+  min-width: 0;
+}
+
+.theme-segmented-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.theme-segmented-control span {
+  height: 36px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.theme-segmented-control input:checked + span {
+  border-color: var(--line);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+}
+
+.theme-segmented-control input:focus-visible + span {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 .settings-section {
   margin-top: 34px;
 }
@@ -1780,5 +1882,9 @@ summary:focus-visible {
 
   .settings-main {
     padding: 32px 28px 48px;
+  }
+
+  .theme-segmented-control span {
+    padding: 0 6px;
   }
 }

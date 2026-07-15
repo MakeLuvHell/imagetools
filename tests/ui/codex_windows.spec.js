@@ -18,6 +18,14 @@ async function expectTopStartAnchor(page, trigger, layer) {
   expect(layerBox.y + layerBox.height).toBeLessThanOrEqual(viewport.height - 12);
 }
 
+async function openStorageSettings(page) {
+  await page.getByRole("button", { name: "设置" }).click();
+  const settings = page.getByRole("region", { name: "设置" });
+  await settings.getByRole("button", { name: "本地数据" }).click();
+  await expect(page.locator("#settingsStoragePanel")).toBeVisible();
+  return settings;
+}
+
 test("new task creates a session only on first valid submit", async ({ page }) => {
   const requests = await installApiMocks(page);
   await page.goto("/");
@@ -452,7 +460,7 @@ test("Provider list failures render an inline retry state", async ({ page }) => 
   await expect(error.getByRole("button", { name: "重试" })).toBeVisible();
 });
 
-test("settings opens as a dedicated view and switches between provider and storage", async ({ page }) => {
+test("settings opens Appearance and switches between all settings categories", async ({ page }) => {
   await installApiMocks(page);
   await page.goto("/");
   const opener = page.getByRole("button", { name: "设置" });
@@ -461,20 +469,128 @@ test("settings opens as a dedicated view and switches between provider and stora
 
   await expect(settings).toBeVisible();
   await expect(page.locator("#composerForm")).toBeHidden();
-  await expect(page.locator("#settingsStoragePanel")).toBeVisible();
+  await expect(page.locator("#settingsAppearancePanel")).toBeVisible();
   await settings.getByRole("button", { name: "Provider", exact: true }).click();
   await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
+  await settings.getByRole("button", { name: "本地数据" }).click();
+  await expect(page.locator("#settingsStoragePanel")).toBeVisible();
+  await settings.getByRole("button", { name: "外观" }).click();
+  await expect(page.getByRole("radio", { name: "跟随系统" })).toBeFocused();
   await page.getByRole("button", { name: "返回工作区" }).click();
 
   await expect(settings).toBeHidden();
   await expect(opener).toBeFocused();
 });
 
+test("manual theme persists while system mode follows media changes", async ({ page }) => {
+  await installApiMocks(page);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  const shell = page.locator(".app-shell");
+  const lightBackground = await shell.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+
+  await page.getByRole("radio", { name: "深色" }).check();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const manualDark = await shell.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(manualDark).not.toBe(lightBackground);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(shell).toHaveCSS("background-color", manualDark);
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "设置" }).click();
+  await expect(page.getByRole("radio", { name: "深色" })).toBeChecked();
+
+  await page.getByRole("radio", { name: "跟随系统" }).check();
+  await page.emulateMedia({ colorScheme: "light" });
+  const systemLight = await shell.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await page.emulateMedia({ colorScheme: "dark" });
+  const systemDark = await shell.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(systemDark).not.toBe(systemLight);
+});
+
+test("theme persistence failures keep the active content theme and report inline", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItem(key, value) {
+      if (key === "image-tools-theme") throw new Error("storage blocked");
+      return original.call(this, key, value);
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  await page.getByRole("radio", { name: "深色" }).check();
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#themeStatus")).toHaveText("主题偏好无法保存。");
+  await expect(page.locator("#themeStatus")).toHaveAttribute("data-tone", "error");
+});
+
+test("theme startup and changes synchronize through the Tauri bridge", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.themeCommands = [];
+    window.__TAURI__ = {
+      core: {
+        invoke: async (command, args) => {
+          if (command === "set_app_theme") {
+            window.themeCommands.push(args);
+            return null;
+          }
+          return null;
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+
+  await expect.poll(() => page.evaluate(() => window.themeCommands)).toEqual([
+    { mode: "system" },
+  ]);
+  await page.getByRole("button", { name: "设置" }).click();
+  await page.getByRole("radio", { name: "深色" }).check();
+  await expect.poll(() => page.evaluate(() => window.themeCommands)).toEqual([
+    { mode: "system" },
+    { mode: "dark" },
+  ]);
+});
+
+test("native theme failures keep content theming and report inline", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__TAURI__ = {
+      core: {
+        invoke: async (command) => {
+          if (command === "set_app_theme") throw new Error("native unavailable");
+          return null;
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "设置" }).click();
+  await page.getByRole("radio", { name: "深色" }).check();
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#themeStatus")).toContainText("native unavailable");
+  await expect(page.locator("#themeStatus")).toHaveAttribute("data-tone", "error");
+});
+
 test("storage settings confirms a copied workspace-data change", async ({ page }) => {
   const requests = await installApiMocks(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
 
   await expect(settings.getByLabel("当前数据目录")).toHaveText(
@@ -512,8 +628,7 @@ test("storage async latest GET wins after overlapping changes", async ({ page })
     storageGetDelaysMs: [0, 1200, 0],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
   const changeLocation = settings.getByRole("button", { name: "更改位置" });
   await expect.poll(() => requests.storageGetResponses).toBe(1);
@@ -548,8 +663,7 @@ test("storage async older submit cannot unlock a newer submit", async ({ page })
     storagePostDelaysMs: [0, 3000],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
   const changeLocation = settings.getByRole("button", { name: "更改位置" });
   await expect.poll(() => requests.storageGetResponses).toBe(1);
@@ -604,8 +718,7 @@ test("storage async ignores initial picker after settings lifecycle changes", as
   });
   await installApiMocks(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   await settings.getByRole("button", { name: "更改位置" }).click();
   await expect.poll(() =>
     page.evaluate(() => window.__storagePickerControl.calls),
@@ -657,8 +770,7 @@ test("storage async ignores browse picker from a closed dialog", async ({ page }
   });
   await installApiMocks(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
   const dataDirectory = dialog.getByLabel("新的数据目录");
   await settings.getByRole("button", { name: "更改位置" }).click();
@@ -708,8 +820,7 @@ test("native storage picker opens confirmation with the selected folder", async 
   });
   await installApiMocks(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   await settings.getByRole("button", { name: "更改位置" }).click();
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
 
@@ -738,8 +849,7 @@ test("storage picker errors preserve the directory and restore input focus", asy
   });
   await installApiMocks(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   await settings.getByRole("button", { name: "更改位置" }).click();
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
   const dataDirectory = dialog.getByLabel("新的数据目录");
@@ -754,8 +864,7 @@ test("storage picker errors preserve the directory and restore input focus", asy
 test("storage validation errors stay in the change dialog", async ({ page }) => {
   await installApiMocks(page, { storageLocationError: "数据目录必须使用绝对路径。" });
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   await settings.getByRole("button", { name: "更改位置" }).click();
   const dialog = page.getByRole("dialog", { name: "更改数据位置" });
   await dialog.getByLabel("新的数据目录").fill("relative-data");
@@ -774,8 +883,7 @@ test("storage status stays contained at desktop target sizes", async ({ page }) 
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/");
-    await page.getByRole("button", { name: "设置" }).click();
-    const settings = page.getByRole("region", { name: "设置" });
+    const settings = await openStorageSettings(page);
     expect(
       await settings.evaluate((element) => element.scrollWidth <= element.clientWidth),
       `${viewport.width}x${viewport.height}`,
@@ -786,8 +894,7 @@ test("storage status stays contained at desktop target sizes", async ({ page }) 
 test("storage load failures stay in the settings page", async ({ page }) => {
   await installApiMocks(page, { storageLoadError: "工作区数据位置读取失败。" });
   await page.goto("/");
-  await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = await openStorageSettings(page);
   const status = settings.locator("#storagePanelStatus[role=status]");
 
   await expect(status).toBeVisible();
@@ -832,6 +939,7 @@ test("theme changes after load and long CJK content stays contained", async ({ p
   });
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "system");
   const light = await page.locator(".app-shell").evaluate(
     (element) => getComputedStyle(element).backgroundColor,
   );

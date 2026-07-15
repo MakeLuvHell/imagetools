@@ -171,8 +171,10 @@ test("settings uses a dedicated workspace view with separate provider and storag
   for (const id of [
     "settingsView",
     "settingsBackBtn",
+    "settingsAppearanceNav",
     "settingsProvidersNav",
     "settingsStorageNav",
+    "settingsAppearancePanel",
     "settingsProvidersPanel",
     "settingsStoragePanel",
   ]) {
@@ -193,8 +195,9 @@ test("settings uses a dedicated workspace view with separate provider and storag
     assert.match(html, new RegExp(`class="[^"]*${className}[^"]*"`));
   }
   assert.match(html, /class="settings-nav" aria-label="设置分类"/);
+  assert.match(html, /id="settingsAppearanceNav"[^>]*aria-current="page"/);
   assert.match(html, /id="settingsProvidersNav"[^>]*aria-current="false"/);
-  assert.match(html, /id="settingsStorageNav"[^>]*aria-current="page"/);
+  assert.match(html, /id="settingsStorageNav"[^>]*aria-current="false"/);
   assert.match(
     html,
     /id="settingsProvidersPanel" class="settings-panel" aria-labelledby="settingsProvidersTitle"/,
@@ -203,6 +206,38 @@ test("settings uses a dedicated workspace view with separate provider and storag
   assert.match(app, /function closeSettingsView\(\)/);
   assert.match(styles, /\.settings-view/);
   assert.match(styles, /\.settings-nav/);
+});
+
+test("settings exposes an Appearance panel with a three-mode radio group", () => {
+  for (const id of [
+    "settingsAppearanceNav",
+    "settingsAppearancePanel",
+    "settingsAppearanceTitle",
+    "themeModeGroup",
+    "themeStatus",
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  for (const value of ["system", "light", "dark"]) {
+    assert.match(
+      html,
+      new RegExp(`name="themeMode"[^>]*value="${value}"`),
+    );
+  }
+  assert.match(html, /data-lucide="monitor"/);
+  assert.match(html, /data-lucide="sun"/);
+  assert.match(html, /data-lucide="moon"/);
+  assert.match(html, /id="themeStatus"[^>]*role="status"/);
+});
+
+test("manual theme selectors override the system color scheme", () => {
+  assert.match(styles, /:root\[data-theme="light"\]/);
+  assert.match(styles, /:root\[data-theme="dark"\]/);
+  assert.match(styles, /color-scheme:\s*light;/);
+  assert.match(styles, /color-scheme:\s*dark;/);
+  assert.match(styles, /\.theme-segmented-control/);
+  assert.match(styles, /input:checked\s*\+\s*span/);
+  assert.match(styles, /input:focus-visible\s*\+\s*span/);
 });
 
 test("settings navigation uses a restrained neutral active state", () => {
