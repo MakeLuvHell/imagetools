@@ -166,7 +166,7 @@ Use this file to record decisions that future agents should not reopen without a
 
 **Reasoning:** A persistent settings frame gives each category a stable location, leaves room for future settings categories, and follows familiar desktop software conventions without adding unrelated product features.
 
-**Consequences:** The sidebar Provider action opens the Provider navigation item; the workspace settings action opens local data. Returning restores focus to the original opener, while Provider Cancel resets only the current editor.
+**Consequences:** The sidebar Provider action opens the Provider navigation item. The workspace settings action originally opened local data; as of the 2026-07-15 Appearance decision it opens Appearance instead. Returning restores focus to the original opener, while Provider Cancel resets only the current editor.
 
 ### 2026-07-12: Classify Sessions With Local Projects And Pinning
 
@@ -186,16 +186,16 @@ Use this file to record decisions that future agents should not reopen without a
 
 ### 2026-07-15: Keep Theme Preference Device-Local
 
-**Decision:** Offer exactly `system`, `light`, and `dark` appearance modes, default to `system`, and store the selected mode in device-local localStorage under `image-tools-theme`. Exclude it from workspace migration, SQLite, `settings.json`, storage bootstrap, and backend APIs. Apply the root theme before first paint and synchronize the invoking Tauri window through `set_app_theme`.
+**Decision:** Offer exactly `system`, `light`, and `dark` appearance modes, default to `system`, and store the primary per-origin value in localStorage under `image-tools-theme`. Because Tauri release launches use random `127.0.0.1` sidecar ports, mirror the same non-sensitive enum under the same key in a host-only `Path=/`, `Max-Age=31536000`, `SameSite=Strict` cookie only when the injected Tauri global exists. Exclude both layers from workspace migration, SQLite, `settings.json`, storage bootstrap, and backend APIs. Apply the root theme before first paint and synchronize the invoking Tauri window through `set_app_theme`.
 
-**Context:** Creative workspace data may move between local directories as one coherent set, but an installation's appearance is a device preference. System mode must keep following live operating-system changes, while manual light/dark modes must override them for both content and the native titlebar.
+**Context:** Creative workspace data may move between local directories as one coherent set, but an installation's appearance is a device preference. Browser origins include the port, so localStorage alone cannot survive a Tauri release restart on a different random loopback port. System mode must keep following live operating-system changes, while manual light/dark modes must override them for both content and the native titlebar.
 
 **Options Considered:**
 
 - Add theme to `settings.json` and move it with the workspace payload.
 - Store theme in SQLite or expose a backend settings endpoint.
-- Keep theme in browser localStorage and synchronize only the current native window.
+- Keep localStorage as the ordinary web behavior and add a Tauri-only, port-independent host cookie mirror.
 
-**Reasoning:** Provider configuration, sessions, generation history, and image files are creative workspace data that should move together. Installation appearance should stay local so moving a workspace does not unexpectedly restyle another device, and the frontend can restore it before CSS paint without waiting for the backend.
+**Reasoning:** Provider configuration, sessions, generation history, and image files are creative workspace data that should move together. Installation appearance should stay local so moving a workspace does not unexpectedly restyle another device. A host cookie crosses loopback ports and remains available before CSS paint without introducing a backend setting; it contains only the non-sensitive enum and is intentionally visible to loopback requests in the app-local WebView profile.
 
-**Consequences:** `frontend/theme.js` owns normalization, guarded localStorage access, and pre-paint root application. `system` maps to no Tauri override, while `light` and `dark` map to explicit themes on the current `WebviewWindow`; content remains themed and reports inline if native synchronization fails. Future workspace migration and schema work must not absorb `image-tools-theme` without revisiting this decision.
+**Consequences:** `frontend/theme.js` owns normalization, guarded localStorage/cookie access, and pre-paint root application. A valid Tauri cookie wins stale per-port localStorage; a missing/invalid cookie falls back to localStorage/system, while a true localStorage error still returns system with the existing error. Startup is read-only. User saves write localStorage and the requested Tauri mirror, whose failure uses the existing save error; ordinary web use never receives the cookie jar. `system` maps to no Tauri override, while `light` and `dark` map to explicit themes on the current `WebviewWindow`. Linux Chromium proves the cross-port mechanism, but Windows WebView2 must still verify two random-port release launches and all three content/titlebar modes. This focused correction stays within the existing device-local browser/WebView boundary and requires no ADR; future workspace migration and schema work must not absorb `image-tools-theme` without revisiting this decision.

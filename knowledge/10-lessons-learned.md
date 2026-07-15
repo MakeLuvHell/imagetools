@@ -14,6 +14,7 @@ Use this file to feed project experience back into the knowledge base.
 - Parse shared CSS tokens in a static contrast contract; visual snapshots can accept a subtle color regression that falls within their per-pixel threshold.
 - Load a small, dependency-free theme bootstrap before the stylesheet so a persisted manual mode reaches the root before first paint.
 - Give native theme synchronization a generation token so late asynchronous failures cannot overwrite the newest selection's status.
+- Browser storage origins include the port. Desktop shells using random loopback ports need a stable-origin or port-independent device mirror, and their regression test must navigate two actual origins.
 
 ## Mistakes Or Pitfalls
 
@@ -42,6 +43,7 @@ Use this file to feed project experience back into the knowledge base.
 - Playwright uses isolated API mocks, rejects external origins, waits for fonts, and verifies light/dark layouts at `1280x860` and `960x640`.
 - Playwright verifies anchored menus at both viewport sizes, after resize, and with reduced motion enabled.
 - Settings Playwright coverage includes exactly 20 theme/size baselines across five states, inner-container overflow checks, and a `960x420` dialog scrolling case.
+- Theme persistence coverage starts two ephemeral loopback servers and proves the second origin has null localStorage while the Tauri cookie mirror restores dark before paint.
 - The Web entry on port `7860` is sufficient for local UI inspection and hot-reload checks; Tauri is only required for native shell/platform smoke testing.
 - Run Playwright through `scripts/run_playwright_linux_env.py` on Linux; direct `npx playwright test` may miss the repository-managed NSS/NSPR sysroot.
 

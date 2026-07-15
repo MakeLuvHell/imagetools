@@ -3,7 +3,7 @@
 ## Frontend
 
 - Framework: vanilla HTML and JavaScript modules exposed through browser/CommonJS IIFEs.
-- Theme bootstrap: `frontend/theme.js` is a browser/CommonJS IIFE loaded before the stylesheet so it can restore the root theme before first paint.
+- Theme bootstrap: `frontend/theme.js` is a browser/CommonJS IIFE loaded before the stylesheet; it resolves current-origin localStorage plus the Tauri-only cross-port cookie mirror before first paint without writing at startup.
 - Styling: one static CSS token system with `prefers-color-scheme` for system mode and explicit `:root[data-theme="light"]` / `:root[data-theme="dark"]` manual overrides.
 - State management: pure helpers in `frontend/workbench.js`; orchestration in `frontend/app.js`.
 - Rendering: DOM-only functions in `frontend/ui.js`.
@@ -20,15 +20,15 @@
 ## Data
 
 - Database: SQLite through `WorkbenchStore`.
-- Cache: browser localStorage for serializable Composer drafts plus the device-local `image-tools-theme` preference; the theme key is outside backend, SQLite, `settings.json`, and movable workspace data.
+- Cache: browser localStorage for serializable Composer drafts and the primary per-origin `image-tools-theme` preference. Tauri WebViews additionally mirror only that enum to a host-only one-year cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Strict`) because release sidecars use random loopback ports; ordinary web entry does not use the cookie.
 - File storage: local application data directories for generated images and references.
 
 ## Testing
 
-- Unit tests: Node test runner for preferences, the real theme browser IIFE in a VM, pure state, renderer, and static/CSS contracts.
+- Unit tests: Node test runner for preference precedence, Tauri cookie attributes/failures, the real theme browser IIFE in a VM, pure state, renderer, and static/CSS contracts.
 - DOM tests: jsdom 29.1.1.
 - API/integration tests: pytest and FastAPI TestClient.
-- End-to-end/visual tests: Playwright 1.61.1 with Chromium, isolated data, mocked APIs, and screenshot baselines.
+- End-to-end/visual tests: Playwright 1.61.1 with Chromium, isolated data, mocked APIs, screenshot baselines, and two real ephemeral loopback origins for cross-port persistence.
 - Desktop tests: Rust theme-mapping tests, Cargo check, Tauri development smoke test, and Windows build/screenshots; Linux compilation does not prove Windows titlebar rendering.
 
 ## Tooling

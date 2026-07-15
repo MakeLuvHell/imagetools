@@ -8,7 +8,7 @@ Run `pytest -q` or `mise run test`. Tests cover Provider/session CRUD, generatio
 
 ### Frontend State And DOM
 
-Run `node --test tests/*.test.js`. Pure state tests cover drafts, pending-run isolation, reconciliation, payloads, and Composer rules. Theme tests exercise normalization, persistence failures, pre-paint bootstrap, and the real browser IIFE in a VM. jsdom tests cover renderers and focus behavior; static contracts cover shell structure, pre-style script order, explicit manual-theme selectors, local assets, WCAG AA muted text, and WCAG non-text focus contrast.
+Run `node --test tests/*.test.js`. Pure state tests cover drafts, pending-run isolation, reconciliation, payloads, and Composer rules. Theme tests exercise normalization, Tauri-only cookie gating, cookie attributes, cookie/localStorage precedence, read-only pre-paint bootstrap, persistence failures, and the real browser IIFE in a VM. jsdom tests cover renderers and focus behavior; static contracts cover shell structure, pre-style script order, explicit manual-theme selectors, local assets, WCAG AA muted text, and WCAG non-text focus contrast.
 
 ### Browser Interaction And Visual Regression
 
@@ -23,6 +23,7 @@ Baselines cover:
 - Provider Cancel close/focus behavior, storage-location loading/submission/errors/restart feedback, and the system reduced-motion preference.
 - Scan-first Provider management, storage current/pending state, stale async response guards, and innermost-layer Escape ordering.
 - Manual modes overriding operating-system changes, live system-mode changes, reload persistence, storage/native failures, selected-mode retry, and stale native-response ordering.
+- A real two-ephemeral-port Chromium regression where the second origin's localStorage is null but the Tauri cookie mirror restores dark on the root and bootstrap before paint.
 - Exactly 20 settings baselines across five states (Appearance, Provider list, Provider dialog, storage status, and storage dialog), two target sizes, and two themes. Four Appearance baselines were added, eight full-region baselines changed, and eight locator-cropped dialogs remain byte-identical.
 - Horizontal containment of the settings root, main scroll area, and visible panel, plus viewport-contained dialog scrolling at `960x420`.
 
@@ -40,7 +41,7 @@ python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo
 mise run desktop-dev
 ```
 
-Verify the native titlebar, minimum size, system/light/dark changes, manual override behavior, live system restoration, menus, references, session switching, and Python/frontend hot reload. Rust tests verify system-to-`None` and light/dark mapping for `set_app_theme`. On Windows, build with `npm run desktop:build:windows` and capture all three content/titlebar modes at both target sizes.
+Verify the native titlebar, minimum size, system/light/dark changes, manual override behavior, live system restoration, menus, references, session switching, and Python/frontend hot reload. Rust tests verify system-to-`None` and light/dark mapping for `set_app_theme`. On Windows, build with `npm run desktop:build:windows`, launch the release twice with different random sidecar ports, and verify persistence plus all three content/titlebar modes at both target sizes.
 
 For local visual review without launching Tauri, run the reload-enabled web entry and open `http://127.0.0.1:7860`:
 
@@ -50,4 +51,4 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860 --reload
 
 ## Acceptance Boundary
 
-Linux Chromium screenshots are deterministic layout and theme-behavior regression evidence. Cargo verifies native theme API compilation and pure mode mapping, while Linux WebKitGTK is a desktop behavior smoke test. Only Windows WebView2 can provide final content/native-titlebar synchronization and pixel-fidelity evidence for system/light/dark at `1280x860` and `960x640`.
+Linux Chromium provides deterministic layout/theme behavior and proves the cookie-based mechanism across two actual loopback origins. Cargo verifies native theme API compilation and pure mode mapping, while Linux WebKitGTK is a desktop behavior smoke test. Only Windows WebView2 can provide final persistence evidence across two random-port release launches plus content/native-titlebar synchronization and pixel fidelity for system/light/dark at `1280x860` and `960x640`.
