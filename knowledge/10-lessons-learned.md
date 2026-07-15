@@ -12,6 +12,9 @@ Use this file to feed project experience back into the knowledge base.
 - For low-frequency settings, keep the default surface scan-first and move focused create/edit or confirmation work into dialogs.
 - Use lifecycle or request tokens for settings reloads, mutations, and native picker results so late async work cannot overwrite a newer task.
 - Parse shared CSS tokens in a static contrast contract; visual snapshots can accept a subtle color regression that falls within their per-pixel threshold.
+- Load a small, dependency-free theme bootstrap before the stylesheet so a persisted manual mode reaches the root before first paint.
+- Give native theme synchronization a generation token so late asynchronous failures cannot overwrite the newest selection's status.
+- Browser storage origins include the port. Desktop shells using random loopback ports need a stable-origin or port-independent device mirror, and their regression test must navigate two actual origins.
 
 ## Mistakes Or Pitfalls
 
@@ -21,6 +24,10 @@ Use this file to feed project experience back into the knowledge base.
 - A button labeled Cancel must follow dialog-level close semantics unless the UI explicitly labels it as a form reset.
 - Copying a live SQLite database should use `Connection.backup()` rather than a raw filesystem copy.
 - Checking only the fixed settings overlay for horizontal overflow can miss overflow inside its main scroll container or active panel.
+- Testing CommonJS exports alone can miss browser bootstrap failures; execute the real IIFE in a VM with document, storage, inaccessible-storage, and no-document variants.
+- A radio's `change` event does not fire when the already-selected option is activated, so selected-mode retry needs a focused click path without duplicating ordinary changes.
+- Translucent focus shadows can fail WCAG non-text contrast; use an opaque indicator and test its resolved token contrast in every manual theme.
+- Prefer locator-cropped snapshots only for concise, reusable sub-surfaces. Full-region snapshots should own navigation and page-shell changes, while unchanged cropped dialogs can remain byte-identical.
 
 ## Prompts That Worked
 
@@ -35,7 +42,8 @@ Use this file to feed project experience back into the knowledge base.
 - `tests/test_generation_history.py` covers successful, upstream-failed, unexpected-failed, and reference-image generation history.
 - Playwright uses isolated API mocks, rejects external origins, waits for fonts, and verifies light/dark layouts at `1280x860` and `960x640`.
 - Playwright verifies anchored menus at both viewport sizes, after resize, and with reduced motion enabled.
-- Settings Playwright coverage includes 16 theme/size baselines, inner-container overflow checks, and a `960x420` dialog scrolling case.
+- Settings Playwright coverage includes exactly 20 theme/size baselines across five states, inner-container overflow checks, and a `960x420` dialog scrolling case.
+- Theme persistence coverage starts two ephemeral loopback servers and proves the second origin has null localStorage while the Tauri cookie mirror restores dark before paint.
 - The Web entry on port `7860` is sufficient for local UI inspection and hot-reload checks; Tauri is only required for native shell/platform smoke testing.
 - Run Playwright through `scripts/run_playwright_linux_env.py` on Linux; direct `npx playwright test` may miss the repository-managed NSS/NSPR sysroot.
 

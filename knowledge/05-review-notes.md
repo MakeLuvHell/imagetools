@@ -97,3 +97,24 @@
 - Sixteen settings baselines cover Provider, Provider dialog, storage status, and storage dialog across both target sizes and themes. All were manually inspected after the contrast update.
 - Final specification and quality reviews found no remaining implementation issue.
 - Release verification passed with 101 Python tests, 58 Node tests, 40 Playwright tests, and the Tauri Rust check. A fresh worktree must run `mise run backend-bundle` before `mise run desktop-check` because the generated sidecar is intentionally ignored.
+
+## Three-Mode Appearance Review
+
+### Product And Data Boundary
+
+- A dedicated first-position Appearance category was selected over embedding theme controls in Provider or local-data settings. The settings gear opens Appearance, while the sidebar Provider shortcut still opens Provider directly.
+- The exact modes are `system`, `light`, and `dark`, with `system` as the default. Current-origin localStorage remains primary under `image-tools-theme`; Tauri alone mirrors that non-sensitive enum to a host-only `Path=/`, `Max-Age=31536000`, `SameSite=Strict` cookie for random loopback ports. No backend API, SQLite schema, `settings.json`, storage bootstrap, or workspace-data migration change is involved.
+
+### Frontend And Native Resilience
+
+- `frontend/theme.js` restores the root mode before stylesheet evaluation. A valid Tauri cookie wins stale per-port localStorage; missing/invalid cookie data falls back to localStorage/system, while a true localStorage error still returns system with the existing error. Startup remains read-only.
+- User changes write localStorage and the requested Tauri cookie mirror; mirror failure uses the existing save error. The normal web entry never receives the theme cookie jar, while the app-local WebView intentionally exposes the non-sensitive enum to loopback requests.
+- Content theming remains active when persistence or native titlebar synchronization fails, and the Appearance panel reports the failure inline. Activating the already-selected radio retries both operations.
+- A generation counter gives the newest native synchronization ownership, preventing a late failure or completion from replacing newer status. The Tauri command targets the invoking `WebviewWindow`, maps system to no override, and maps light/dark to explicit native themes.
+
+### Accessibility And Verification
+
+- The segmented-control focus indicator uses an opaque accent outline with `3.598:1` light-theme and `5.802:1` dark-theme non-text contrast against the subtle surface, exceeding the WCAG `3:1` threshold.
+- The settings matrix now contains exactly 20 baselines across Appearance, Provider, Provider dialog, storage status, and storage dialog at two sizes and two themes. Four Appearance baselines were added, eight full-region settings baselines changed, and the eight locator-cropped dialog baselines remain byte-identical.
+- Fresh release verification passed with 102 Python, 74 Node, 48 Playwright, and 5 Rust tests; the backend sidecar bundle and Cargo check also passed. Only the existing Starlette `TestClient`/`httpx` deprecation and Playwright color-environment warnings were emitted.
+- Chromium's two-ephemeral-port regression proves the second origin has null localStorage while the pre-paint root/bootstrap restores dark through the Tauri cookie mirror. Windows WebView2 remains the final gate for persistence across two random-port release launches and system/light/dark content/titlebar synchronization at `1280x860` and `960x640`.

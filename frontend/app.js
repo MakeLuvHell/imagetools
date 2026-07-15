@@ -47,6 +47,13 @@ const advancedParamsPanel = document.querySelector("#advancedParamsPanel");
 const workspace = document.querySelector(".workspace");
 const settingsView = document.querySelector("#settingsView");
 const settingsBackBtn = document.querySelector("#settingsBackBtn");
+const settingsAppearanceNav = document.querySelector("#settingsAppearanceNav");
+const settingsAppearancePanel = document.querySelector("#settingsAppearancePanel");
+const themeModeGroup = document.querySelector("#themeModeGroup");
+const themeModeInputs = [
+  ...document.querySelectorAll('input[name="themeMode"]'),
+];
+const themeStatus = document.querySelector("#themeStatus");
 const settingsProvidersNav = document.querySelector("#settingsProvidersNav");
 const settingsStorageNav = document.querySelector("#settingsStorageNav");
 const settingsProvidersPanel = document.querySelector("#settingsProvidersPanel");
@@ -124,6 +131,7 @@ let providerMenuTrigger = null;
 let providerDeleteTarget = null;
 let providerSaveToken = 0;
 let providerLoadToken = 0;
+let themeSyncGeneration = 0;
 let storageLocation = null;
 let storageViewGeneration = 0;
 let storageLoadGeneration = 0;
@@ -1219,26 +1227,94 @@ function activateStorageView() {
 }
 
 function selectSettingsTab(tab) {
-  const providersActive = tab === "providers";
-  settingsProvidersNav.setAttribute("aria-current", providersActive ? "page" : "false");
-  settingsStorageNav.setAttribute("aria-current", providersActive ? "false" : "page");
-  settingsProvidersPanel.hidden = !providersActive;
-  settingsStoragePanel.hidden = providersActive;
+  const tabs = {
+    appearance: [settingsAppearanceNav, settingsAppearancePanel],
+    providers: [settingsProvidersNav, settingsProvidersPanel],
+    storage: [settingsStorageNav, settingsStoragePanel],
+  };
+  for (const [name, [nav, panel]] of Object.entries(tabs)) {
+    const active = name === tab;
+    nav.setAttribute("aria-current", active ? "page" : "false");
+    panel.hidden = !active;
+  }
+}
+
+function checkedThemeInput() {
+  return themeModeInputs.find((input) => input.checked) || themeModeInputs[0];
+}
+
+function renderThemeMode(mode) {
+  const normalized = window.ImageToolsTheme.applyMode(
+    document.documentElement,
+    mode,
+  );
+  for (const input of themeModeInputs) input.checked = input.value === normalized;
+  return normalized;
+}
+
+async function syncNativeTheme(mode) {
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke !== "function") return { error: "" };
+  try {
+    await invoke("set_app_theme", window.ImageToolsTheme.nativeArgs(mode));
+    return { error: "" };
+  } catch (error) {
+    const message = typeof error === "string" ? error : error?.message;
+    return { error: message || "无法同步窗口主题。" };
+  }
+}
+
+async function applyThemeMode(mode, options = {}) {
+  const generation = ++themeSyncGeneration;
+  const normalized = renderThemeMode(mode);
+  const errors = [];
+  if (options.initialError) errors.push(options.initialError);
+  if (options.persist !== false) {
+    const saved = window.ImageToolsTheme.saveMode(
+      window.ImageToolsTheme.storageFrom(window),
+      normalized,
+      window.ImageToolsTheme.cookieJarFrom(window),
+    );
+    if (saved.error) errors.push(saved.error);
+  }
+  const nativeResult = await syncNativeTheme(normalized);
+  if (generation !== themeSyncGeneration) return;
+  if (nativeResult.error) errors.push(nativeResult.error);
+  setInlineStatus(themeStatus, errors.join(" "), errors.length ? "error" : "");
+}
+
+function initializeThemePreference() {
+  const initial = window.ImageToolsThemeBootstrap || {
+    mode: "system",
+    error: "无法读取主题偏好。",
+  };
+  void applyThemeMode(initial.mode, {
+    persist: false,
+    initialError: initial.error,
+  });
+}
+
+function activateSettingsTab(tab) {
+  selectSettingsTab(tab);
+  if (tab === "storage") {
+    activateStorageView();
+    return;
+  }
+  invalidateStorageView();
+  if (tab === "providers") {
+    renderProviderManager();
+    addProviderBtn.focus();
+    return;
+  }
+  checkedThemeInput().focus();
 }
 
 function openSettingsView(tab, opener) {
   settingsOpener = opener;
   settingsView.hidden = false;
   workspace.classList.add("settings-open");
-  selectSettingsTab(tab);
   setInlineStatus(providerActionStatus, "");
-  renderProviderManager();
-  if (tab === "storage") {
-    activateStorageView();
-  } else {
-    invalidateStorageView();
-    addProviderBtn.focus();
-  }
+  activateSettingsTab(tab);
 }
 
 function closeSettingsView() {
@@ -1610,17 +1686,34 @@ newSessionBtn.addEventListener("click", startNewTask);
 newProjectBtn.addEventListener("click", () => openProjectDialog("project-create"));
 searchToggle.addEventListener("click", toggleSearch);
 providersBtn.addEventListener("click", () => openSettingsView("providers", providersBtn));
-settingsBtn.addEventListener("click", () => openSettingsView("storage", settingsBtn));
+settingsBtn.addEventListener("click", () =>
+  openSettingsView("appearance", settingsBtn),
+);
 settingsBackBtn.addEventListener("click", closeSettingsView);
+settingsAppearanceNav.addEventListener("click", () => {
+  activateSettingsTab("appearance");
+});
 settingsProvidersNav.addEventListener("click", () => {
-  invalidateStorageView();
-  selectSettingsTab("providers");
-  renderProviderManager();
-  addProviderBtn.focus();
+  activateSettingsTab("providers");
 });
 settingsStorageNav.addEventListener("click", () => {
-  selectSettingsTab("storage");
-  activateStorageView();
+  activateSettingsTab("storage");
+});
+
+themeModeGroup.addEventListener("click", (event) => {
+  if (
+    event.target.matches('input[name="themeMode"]') &&
+    event.target.checked &&
+    document.documentElement.dataset.theme === event.target.value
+  ) {
+    void applyThemeMode(event.target.value);
+  }
+});
+
+themeModeGroup.addEventListener("change", (event) => {
+  if (event.target.matches('input[name="themeMode"]')) {
+    void applyThemeMode(event.target.value);
+  }
 });
 addProviderBtn.addEventListener("click", () => openNewProviderDialog(addProviderBtn));
 providerDialogClose.addEventListener("click", () => void closeProviderDialog());
@@ -1730,6 +1823,7 @@ modelInput.addEventListener("input", syncTransparentBackground);
 outputFormatSelect.addEventListener("change", syncTransparentBackground);
 window.addEventListener("resize", repositionComposerMenus);
 
+initializeThemePreference();
 render();
 restoreActiveDraft();
 loadSessions();

@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Image Tools</title>
+    <script src="/static/theme.js"></script>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -299,17 +300,51 @@
           </button>
           <p class="settings-nav-label">设置</p>
           <nav class="settings-nav" aria-label="设置分类">
+            <button id="settingsAppearanceNav" type="button" aria-current="page">
+              <i data-lucide="palette"></i>
+              <span>外观</span>
+            </button>
             <button id="settingsProvidersNav" type="button" aria-current="false">
               <i data-lucide="panels-top-left"></i>
               <span>Provider</span>
             </button>
-            <button id="settingsStorageNav" type="button" aria-current="page">
+            <button id="settingsStorageNav" type="button" aria-current="false">
               <i data-lucide="hard-drive"></i>
               <span>本地数据</span>
             </button>
           </nav>
         </aside>
         <main class="settings-main">
+          <section
+            id="settingsAppearancePanel"
+            class="settings-panel"
+            aria-labelledby="settingsAppearanceTitle"
+          >
+            <header class="settings-page-heading">
+              <div>
+                <h2 id="settingsAppearanceTitle">外观</h2>
+                <p>选择 Image Tools 的界面主题。</p>
+              </div>
+            </header>
+            <fieldset id="themeModeGroup" class="theme-mode-fieldset">
+              <legend>主题</legend>
+              <div class="theme-segmented-control">
+                <label>
+                  <input type="radio" name="themeMode" value="system" checked />
+                  <span><i data-lucide="monitor" aria-hidden="true"></i>跟随系统</span>
+                </label>
+                <label>
+                  <input type="radio" name="themeMode" value="light" />
+                  <span><i data-lucide="sun" aria-hidden="true"></i>浅色</span>
+                </label>
+                <label>
+                  <input type="radio" name="themeMode" value="dark" />
+                  <span><i data-lucide="moon" aria-hidden="true"></i>深色</span>
+                </label>
+              </div>
+            </fieldset>
+            <p id="themeStatus" class="settings-inline-status" role="status" hidden></p>
+          </section>
           <section id="settingsProvidersPanel" class="settings-panel" aria-labelledby="settingsProvidersTitle" hidden>
             <header class="settings-page-heading">
               <div>
@@ -324,7 +359,7 @@
             <p id="providerActionStatus" class="settings-inline-status" role="status" hidden></p>
             <div id="providerList" class="provider-list" aria-live="polite"></div>
           </section>
-          <section id="settingsStoragePanel" class="settings-panel" aria-labelledby="settingsStorageTitle">
+          <section id="settingsStoragePanel" class="settings-panel" aria-labelledby="settingsStorageTitle" hidden>
             <header class="settings-page-heading">
               <div>
                 <h2 id="settingsStorageTitle">本地数据</h2>

@@ -44,6 +44,18 @@ function lightThemeToken(name) {
   return token[1];
 }
 
+function manualThemeToken(mode, name) {
+  const manualRoot = styles.match(
+    new RegExp(`:root\\[data-theme="${mode}"\\]\\s*\\{([^}]*)\\}`, "s"),
+  );
+  assert.ok(manualRoot, `${mode} manual theme root is present`);
+  const token = manualRoot[1].match(
+    new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"),
+  );
+  assert.ok(token, `${mode} manual theme --${name} token is present`);
+  return token[1];
+}
+
 test("shell exposes Codex Windows task regions without permanent parameter columns", () => {
   for (const id of [
     "newSessionBtn",
@@ -93,6 +105,7 @@ test("offline icon scripts load before application orchestration", () => {
     (match) => match[1],
   );
   assert.deepEqual(sources, [
+    "/static/theme.js",
     "/static/preferences.js",
     "/static/workbench.js",
     "/static/vendor/lucide.min.js",
@@ -100,6 +113,12 @@ test("offline icon scripts load before application orchestration", () => {
     "/static/ui.js",
     "/static/app.js",
   ]);
+  assert.ok(
+    html.indexOf('<script src="/static/theme.js"></script>') <
+      html.indexOf('<link rel="stylesheet" href="/static/styles.css" />'),
+    "theme bootstrap loads before the stylesheet",
+  );
+  assert.equal(fs.existsSync(path.join(root, "frontend", "theme.js")), true);
   assert.equal(
     fs.existsSync(path.join(root, "frontend", "vendor", "lucide.min.js")),
     true,
@@ -164,8 +183,10 @@ test("settings uses a dedicated workspace view with separate provider and storag
   for (const id of [
     "settingsView",
     "settingsBackBtn",
+    "settingsAppearanceNav",
     "settingsProvidersNav",
     "settingsStorageNav",
+    "settingsAppearancePanel",
     "settingsProvidersPanel",
     "settingsStoragePanel",
   ]) {
@@ -186,8 +207,9 @@ test("settings uses a dedicated workspace view with separate provider and storag
     assert.match(html, new RegExp(`class="[^"]*${className}[^"]*"`));
   }
   assert.match(html, /class="settings-nav" aria-label="设置分类"/);
+  assert.match(html, /id="settingsAppearanceNav"[^>]*aria-current="page"/);
   assert.match(html, /id="settingsProvidersNav"[^>]*aria-current="false"/);
-  assert.match(html, /id="settingsStorageNav"[^>]*aria-current="page"/);
+  assert.match(html, /id="settingsStorageNav"[^>]*aria-current="false"/);
   assert.match(
     html,
     /id="settingsProvidersPanel" class="settings-panel" aria-labelledby="settingsProvidersTitle"/,
@@ -196,6 +218,58 @@ test("settings uses a dedicated workspace view with separate provider and storag
   assert.match(app, /function closeSettingsView\(\)/);
   assert.match(styles, /\.settings-view/);
   assert.match(styles, /\.settings-nav/);
+});
+
+test("settings exposes an Appearance panel with a three-mode radio group", () => {
+  for (const id of [
+    "settingsAppearanceNav",
+    "settingsAppearancePanel",
+    "settingsAppearanceTitle",
+    "themeModeGroup",
+    "themeStatus",
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  for (const value of ["system", "light", "dark"]) {
+    assert.match(
+      html,
+      new RegExp(`name="themeMode"[^>]*value="${value}"`),
+    );
+  }
+  assert.match(html, /data-lucide="monitor"/);
+  assert.match(html, /data-lucide="sun"/);
+  assert.match(html, /data-lucide="moon"/);
+  assert.match(html, /id="themeStatus"[^>]*role="status"/);
+});
+
+test("manual theme selectors override the system color scheme", () => {
+  assert.match(styles, /:root\[data-theme="light"\]/);
+  assert.match(styles, /:root\[data-theme="dark"\]/);
+  assert.match(styles, /color-scheme:\s*light;/);
+  assert.match(styles, /color-scheme:\s*dark;/);
+  assert.match(styles, /\.theme-segmented-control/);
+  assert.match(styles, /input:checked\s*\+\s*span/);
+  assert.match(styles, /input:focus-visible\s*\+\s*span/);
+});
+
+test("Appearance radio focus uses an opaque accent with WCAG non-text contrast", () => {
+  const focusRule = styles.match(
+    /\.theme-segmented-control input:focus-visible\s*\+\s*span\s*\{([^}]*)\}/,
+  );
+  assert.ok(focusRule, "Appearance radio focus rule is present");
+  assert.match(focusRule[1], /outline:\s*2px solid var\(--accent\)/);
+  assert.match(focusRule[1], /outline-offset:\s*1px/);
+
+  for (const mode of ["light", "dark"]) {
+    const ratio = contrastRatio(
+      manualThemeToken(mode, "accent"),
+      manualThemeToken(mode, "surface-subtle"),
+    );
+    assert.ok(
+      ratio >= 3,
+      `${mode} --accent contrast on --surface-subtle is ${ratio.toFixed(3)}:1; expected at least 3:1`,
+    );
+  }
 });
 
 test("settings navigation uses a restrained neutral active state", () => {

@@ -14,6 +14,7 @@ This design supersedes the earlier settings-redesign restriction that excluded a
 - Apply manual light/dark choices to both the web content and native Windows titlebar.
 - In system mode, restore live operating-system control for both surfaces.
 - Persist the preference only on the current device. It is not part of the movable `工作区数据目录`.
+- Keep current-origin localStorage as the primary preference and mirror the non-sensitive enum to a host cookie only inside the Tauri WebView so release launches survive random loopback-port changes.
 - Apply changes immediately without restarting the app.
 
 ## Scope
@@ -78,7 +79,11 @@ Theme values are exactly:
 - `light`
 - `dark`
 
-The preference uses the dedicated localStorage key `image-tools-theme` rather than the Composer draft payload. Missing, malformed, inaccessible, or unsupported stored values resolve to `system`.
+The preference uses the dedicated localStorage key `image-tools-theme` rather than the Composer draft payload. localStorage remains the primary, per-origin preference and the complete persistence behavior for the ordinary web entry.
+
+Tauri release launches use random `127.0.0.1` sidecar ports, and browser origins include the port. When the injected `window.__TAURI__` global exists, the WebView therefore also mirrors the same non-sensitive `system` / `light` / `dark` enum to a host-only cookie named `image-tools-theme` with `Path=/`, `Max-Age=31536000` (one year), and `SameSite=Strict`. No `Domain` attribute is set. The normal browser/web entry receives no theme cookie jar and never reads or writes this mirror.
+
+The cookie is not secret storage. Its enum value is intentionally visible to loopback requests made by the app-local WebView profile so it remains available when the next release launch uses a different port.
 
 The value is device-local browser/WebView state. It is deliberately excluded from:
 
@@ -96,6 +101,7 @@ Add a small `frontend/theme.js` IIFE with independently testable functions for:
 - normalizing a candidate value;
 - reading the stored value safely;
 - persisting a value safely;
+- detecting the injected Tauri environment and reading/writing its cookie mirror;
 - applying the normalized value to the document root;
 - translating the preference for the native window bridge.
 
@@ -129,19 +135,20 @@ At application startup, `app.js` synchronizes the already-restored preference to
 
 ### Startup
 
-1. `theme.js` reads and normalizes the stored preference.
-2. It writes the normalized value to the root element before CSS loads.
-3. CSS resolves light or dark tokens without a WebView-content first-paint flash.
-4. After application orchestration starts, the radio group reflects the normalized value.
-5. If running in Tauri, the same value is sent to the native window command.
+1. `theme.js` accesses and reads current-origin localStorage. A true access or read error resolves to `system` with the existing read error, even if a cookie exists.
+2. If localStorage is readable and the Tauri cookie jar contains a valid mode, the cookie wins stale per-port localStorage. A missing or invalid cookie falls back to normalized localStorage, then `system`.
+3. It writes the resolved value to the root element before CSS loads. Startup does not write localStorage or the cookie.
+4. CSS resolves light or dark tokens without a WebView-content first-paint flash.
+5. After application orchestration starts, the radio group reflects the resolved value.
+6. If running in Tauri, the same value is sent to the native window command.
 
 ### User Change
 
 1. The user selects one radio segment.
 2. The value is normalized and applied to the root immediately.
-3. The preference is written to device-local storage.
-4. If running in Tauri, the native titlebar receives the same mode.
-5. Any persistence or native-sync error is reported inline without discarding the working content theme.
+3. The preference is written to current-origin localStorage.
+4. If running in Tauri, the requested value is also written to the one-year host cookie and the native titlebar receives the same mode. A normal browser performs neither Tauri operation.
+5. Any localStorage, cookie-mirror, or native-sync error is reported inline without discarding the working content theme.
 
 ### System Theme Change
 
@@ -150,9 +157,10 @@ At application startup, `app.js` synchronizes the already-restored preference to
 
 ## Error Handling
 
-- Invalid stored values fall back silently to system mode and the UI selects `跟随系统`.
-- A localStorage read failure falls back to system mode.
+- Missing or invalid Tauri cookie values fall back to localStorage, whose missing or invalid values fall back silently to system mode.
+- A true localStorage access or read failure falls back to system mode with the existing read error instead of accepting the cookie.
 - A localStorage write failure keeps the selected mode for the current page and shows that the preference could not be saved.
+- A requested Tauri cookie-mirror write or readback failure uses the same save error after the localStorage write.
 - In a browser, a missing Tauri bridge is expected and produces no error.
 - In the desktop app, a rejected native synchronization keeps the web content theme and shows an inline titlebar-sync error.
 - Reselecting a mode retries persistence and native synchronization.
@@ -176,6 +184,8 @@ Errors use a named inline status region in the Appearance panel. They do not use
 - Normalize all three valid values.
 - Fall back to system for missing, malformed, and unsupported values.
 - Handle storage read/write exceptions without throwing through application startup.
+- Expose a cookie jar only for the injected Tauri global; parse only the exact key and valid modes.
+- Require cookie precedence, localStorage-error precedence, read-only startup, mirror failure handling, and `Path=/; Max-Age=31536000; SameSite=Strict` writes.
 - Apply the expected root data attribute and color-scheme contract.
 - Require `theme.js` before `styles.css` and before application orchestration.
 - Require the Appearance navigation, panel, radio group, and named status region.
@@ -185,6 +195,7 @@ Errors use a named inline status region in the Appearance panel. They do not use
 - The workspace settings button opens Appearance; Providers still opens Provider.
 - Selecting light or dark immediately overrides the emulated system theme.
 - Reload restores the stored manual choice before the app becomes interactive.
+- Navigate between two real ephemeral `127.0.0.1` origins and prove that the second origin has null localStorage while the root and bootstrap restore the first origin's dark Tauri preference before paint.
 - Selecting system resumes live `prefers-color-scheme` changes.
 - The radio state always matches the persisted normalized preference.
 - Appearance, Provider, and storage panels remain horizontally contained at `1280x860` and `960x640`.
@@ -198,14 +209,15 @@ The resulting settings matrix contains twenty baselines: Appearance, Provider li
 - Rust unit tests cover system/light/dark mapping and invalid input rejection.
 - Static Tauri contracts require the theme command in the generated handler.
 - `desktop-check` proves the native window API compiles.
-- Windows WebView2 manual verification confirms content and titlebar synchronization in all three modes at both target sizes.
+- Linux Chromium proves the cookie-based cross-port mechanism; it does not prove Windows WebView2 persistence.
+- Windows WebView2 manual verification uses two release launches with different random sidecar ports and confirms persistence plus content/titlebar synchronization in all three modes at both target sizes.
 
 ## Documentation Impact
 
 - Add this design as the authoritative exception to the older no-Appearance scope statement.
 - Update `knowledge/01-project-overview.md`, `knowledge/02-requirements.md`, `knowledge/03-tech-stack.md`, `knowledge/04-task-list.md`, `knowledge/05-review-notes.md`, `knowledge/08-testing-strategy.md`, `knowledge/09-decisions.md`, and `knowledge/10-lessons-learned.md` during implementation.
 - No glossary update is required because theme preference is interface language rather than a domain concept.
-- No ADR is required because this is a reversible UI preference using existing platform capabilities and contains no durable architecture trade-off.
+- No ADR is required because the Tauri cookie mirror is a focused correction within the existing device-local browser/WebView persistence boundary, not a workspace architecture change.
 
 ## Acceptance Criteria
 
@@ -214,9 +226,9 @@ The resulting settings matrix contains twenty baselines: Appearance, Provider li
 - Theme changes apply immediately to content and the native titlebar.
 - System mode follows operating-system changes without restart.
 - Manual modes remain stable when the operating-system theme changes.
-- The preference survives app restart on the same device but does not move with workspace data.
+- The preference survives release restart and random loopback-port changes on the same device but does not move with workspace data.
 - Startup restores the content theme before stylesheet evaluation without a visible color flash; the native titlebar synchronizes as soon as the Tauri bridge is available.
 - Preference-storage and native-sync failures degrade explicitly without breaking content theming.
 - All Node, Playwright, Python, and Tauri checks pass.
 - Twenty settings visual baselines are current and manually inspected.
-- Windows WebView2 remains the final native titlebar and pixel-fidelity gate.
+- Windows WebView2 remains the final gate for persistence across two random-port release launches, native titlebar synchronization, and pixel fidelity.

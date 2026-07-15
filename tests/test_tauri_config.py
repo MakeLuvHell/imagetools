@@ -80,8 +80,17 @@ def test_tauri_exposes_a_native_directory_picker_command():
     assert "tauri-plugin-dialog" in cargo
     assert "tauri_plugin_dialog::init()" in main_rs
     assert "pick_data_directory" in main_rs
-    assert "generate_handler![pick_data_directory]" in main_rs
+    assert "generate_handler![pick_data_directory, set_app_theme]" in main_rs
     assert config["app"]["withGlobalTauri"] is True
+
+
+def test_tauri_exposes_native_window_theme_sync():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+
+    assert "fn theme_override" in main_rs
+    assert "fn set_app_theme" in main_rs
+    assert "window.set_theme(theme)" in main_rs
+    assert "generate_handler![pick_data_directory, set_app_theme]" in main_rs
 
 
 def test_tauri_debug_backend_requires_the_launcher_token():

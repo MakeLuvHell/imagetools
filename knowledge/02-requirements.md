@@ -3,7 +3,10 @@
 ## Confirmed Requirements
 
 - Keep Tauri 2, FastAPI, SQLite, and vanilla HTML/CSS/JavaScript.
-- Use the native Windows titlebar and follow the Windows system light/dark theme.
+- Use the native Windows titlebar and provide `system`, `light`, and `dark` appearance modes that synchronize web content and the titlebar immediately.
+- Default to `system`, keep following live operating-system theme changes in that mode, and let manual light/dark modes override operating-system changes.
+- Persist the selected mode primarily under `image-tools-theme` in current-origin localStorage. In Tauri only, mirror the non-sensitive enum under the same key in a host-only `Path=/`, `Max-Age=31536000`, `SameSite=Strict` cookie so random `127.0.0.1` sidecar ports share the device preference.
+- Enable the cookie mirror only when the injected Tauri global exists; the normal browser/web entry uses localStorage alone. Keep both layers outside workspace migration, backend APIs, SQLite, storage bootstrap, and `settings.json`.
 - Keep Image Tools branding and image-creation language.
 - Use a restrained sidebar, unframed task canvas, chronological task stream, and bottom layered Composer.
 - Keep Lucide and brand assets local with no runtime CDN dependency.
@@ -39,12 +42,19 @@
 2. Create, edit, delete, or select the default Provider.
 3. Leave API Key empty during edit to preserve the stored secret.
 
+### Appearance
+
+1. Open the settings gear to the first Appearance category; keep the sidebar Provider shortcut opening Provider directly.
+2. Select follow-system, light, or dark and see the content and native titlebar update immediately.
+3. In system mode, continue following live operating-system changes; in a manual mode, keep the chosen appearance across operating-system changes and app reloads on the same device.
+
 ## Data Requirements
 
 - SQLite stores Providers, sessions, generation runs, and image metadata.
 - Image and uploaded reference bytes remain on local disk.
 - Provider API keys are never returned to or persisted by frontend drafts.
 - Generation parameter, Provider, and model snapshots remain historical.
+- The appearance preference is device-local browser/WebView state, not movable workspace data; current-origin localStorage is primary and Tauri adds only the one-year host cookie mirror. The cookie enum is non-sensitive and intentionally visible to loopback requests in the app-local WebView profile.
 
 ## Edge Cases
 
@@ -54,6 +64,9 @@
 - Late responses cannot remove pending runs belonging to another session.
 - Reference mode forces one result and disables incompatible transparent background options.
 - Empty Provider state opens setup without persisting a session.
+- At Tauri startup, a valid cookie wins stale per-port localStorage before paint; a missing or invalid cookie falls back to localStorage, then `system`. A true localStorage access/read error still falls back to `system` with the existing error, and startup writes neither layer.
+- User changes write localStorage and, when requested by Tauri, the cookie mirror. A localStorage or mirror failure keeps the selected content theme active and reports the existing save error.
+- Native titlebar synchronization failure does not roll back content theming; reselecting the active mode retries failed persistence/native work, and stale native completions cannot replace newer status.
 
 ## Non-Functional Requirements
 

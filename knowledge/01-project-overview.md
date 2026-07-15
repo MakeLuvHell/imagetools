@@ -29,7 +29,7 @@ Provide a focused desktop workflow for sustained image creation without cloud ac
 
 - Tauri Windows desktop shell with a FastAPI sidecar.
 - Local Provider CRUD, sessions, generation history, references, and image files.
-- Codex Desktop Windows-inspired sidebar, task stream, layered Composer, and system themes.
+- Codex Desktop Windows-inspired sidebar, task stream, layered Composer, and device-selectable system/light/dark themes.
 - Deterministic unit, API, Playwright, packaging, and desktop smoke verification.
 
 ## Out Of Scope
@@ -43,10 +43,12 @@ Provide a focused desktop workflow for sustained image creation without cloud ac
 
 - New tasks persist only on first valid submission and remain usable after local failures.
 - Running, successful, and failed runs appear in one stable task stream.
-- Layouts pass light/dark regression tests at `1280x860` and `960x640`.
+- Layout snapshots pass in light and dark at `1280x860` and `960x640`.
+- Behavior tests cover manual light/dark overrides and live system-theme changes.
+- Theme changes immediately update web content and the native titlebar, while the selected mode persists on the current device.
 - Python, Node, Playwright, packaging, and Tauri checks pass.
-- Final Windows WebView2 screenshots match the approved Windows visual baseline.
+- Final Windows WebView2 screenshots confirm content/titlebar synchronization and match the approved Windows visual baseline.
 
 ## Current Status
 
-The Codex Desktop Windows-style redesign is implemented. Automated cross-platform verification is complete; Windows WebView2 screenshot capture remains the final platform-specific fidelity gate.
+The Codex Desktop Windows-style redesign and three-mode Appearance preference are implemented. Linux Chromium and Cargo provide deterministic layout, behavior, and native API evidence; Windows WebView2 content/titlebar synchronization and screenshot capture remain the final platform-specific fidelity gate.
