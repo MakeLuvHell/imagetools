@@ -1273,6 +1273,7 @@ async function applyThemeMode(mode, options = {}) {
     const saved = window.ImageToolsTheme.saveMode(
       window.ImageToolsTheme.storageFrom(window),
       normalized,
+      window.ImageToolsTheme.cookieJarFrom(window),
     );
     if (saved.error) errors.push(saved.error);
   }
