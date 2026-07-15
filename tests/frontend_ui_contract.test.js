@@ -93,6 +93,7 @@ test("offline icon scripts load before application orchestration", () => {
     (match) => match[1],
   );
   assert.deepEqual(sources, [
+    "/static/theme.js",
     "/static/preferences.js",
     "/static/workbench.js",
     "/static/vendor/lucide.min.js",
@@ -100,6 +101,12 @@ test("offline icon scripts load before application orchestration", () => {
     "/static/ui.js",
     "/static/app.js",
   ]);
+  assert.ok(
+    html.indexOf('<script src="/static/theme.js"></script>') <
+      html.indexOf('<link rel="stylesheet" href="/static/styles.css" />'),
+    "theme bootstrap loads before the stylesheet",
+  );
+  assert.equal(fs.existsSync(path.join(root, "frontend", "theme.js")), true);
   assert.equal(
     fs.existsSync(path.join(root, "frontend", "vendor", "lucide.min.js")),
     true,
