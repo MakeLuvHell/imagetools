@@ -445,7 +445,7 @@ Python 路径；RB012-RB014 完成打包、文档和 Windows 发布门禁。
 
 ## RB001: 建立 Rust 后端契约与测试基础
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
@@ -455,7 +455,7 @@ Status: Blocked
 
 ### Blocked by
 
-- `feat/theme-preference` 完成验证并合并到 `main`。
+- None. `feat/theme-preference` 已通过 `50f5e15` 合并到 `main`。
 
 ### Acceptance criteria
 
