@@ -621,6 +621,35 @@ test("native theme failures keep content theming and report inline", async ({ pa
   await expect(page.locator("#themeStatus")).toHaveAttribute("data-tone", "error");
 });
 
+test("a stale native theme failure cannot overwrite a newer success", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.resolveDarkTheme = null;
+    window.__TAURI__ = {
+      core: {
+        invoke: async (command, args) => {
+          if (command !== "set_app_theme" || args.mode !== "dark") return null;
+          return new Promise((resolve, reject) => {
+            window.resolveDarkTheme = () => reject(new Error("stale failure"));
+          });
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "设置" }).click();
+  await page.getByRole("radio", { name: "深色" }).check();
+  await expect.poll(() => page.evaluate(() => typeof window.resolveDarkTheme)).toBe(
+    "function",
+  );
+  await page.getByRole("radio", { name: "浅色" }).check();
+  await page.evaluate(() => window.resolveDarkTheme());
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("#themeStatus")).toBeHidden();
+});
+
 test("selected theme activation retries failures without duplicating ordinary changes", async ({ page }) => {
   await page.addInitScript(() => {
     window.themeActivity = { writes: [], commands: [] };

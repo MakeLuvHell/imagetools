@@ -131,6 +131,7 @@ let providerMenuTrigger = null;
 let providerDeleteTarget = null;
 let providerSaveToken = 0;
 let providerLoadToken = 0;
+let themeSyncGeneration = 0;
 let storageLocation = null;
 let storageViewGeneration = 0;
 let storageLoadGeneration = 0;
@@ -1264,6 +1265,7 @@ async function syncNativeTheme(mode) {
 }
 
 async function applyThemeMode(mode, options = {}) {
+  const generation = ++themeSyncGeneration;
   const normalized = renderThemeMode(mode);
   const errors = [];
   if (options.initialError) errors.push(options.initialError);
@@ -1275,6 +1277,7 @@ async function applyThemeMode(mode, options = {}) {
     if (saved.error) errors.push(saved.error);
   }
   const nativeResult = await syncNativeTheme(normalized);
+  if (generation !== themeSyncGeneration) return;
   if (nativeResult.error) errors.push(nativeResult.error);
   setInlineStatus(themeStatus, errors.join(" "), errors.length ? "error" : "");
 }
