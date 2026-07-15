@@ -566,6 +566,40 @@ test("theme startup and changes synchronize through the Tauri bridge", async ({ 
   ]);
 });
 
+test("stored manual theme synchronizes once at startup without rewriting persistence", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("image-tools-theme", "dark");
+    window.themeCommands = [];
+    window.themeWrites = [];
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function setItem(key, value) {
+      if (key === "image-tools-theme") window.themeWrites.push(value);
+      return original.call(this, key, value);
+    };
+    window.__TAURI__ = {
+      core: {
+        invoke: async (command, args) => {
+          if (command === "set_app_theme") window.themeCommands.push(args);
+          return null;
+        },
+      },
+    };
+  });
+  await installApiMocks(page);
+  await page.goto("/");
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect.poll(() => page.evaluate(() => window.themeCommands)).toEqual([
+    { mode: "dark" },
+  ]);
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  expect(await page.evaluate(() => window.themeWrites)).toEqual([]);
+  await page.getByRole("button", { name: "设置" }).click();
+  await expect(page.getByRole("radio", { name: "深色" })).toBeChecked();
+});
+
 test("native theme failures keep content theming and report inline", async ({ page }) => {
   await page.addInitScript(() => {
     window.__TAURI__ = {

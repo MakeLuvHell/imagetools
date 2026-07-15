@@ -1434,7 +1434,7 @@ summary:focus-visible {
 }
 
 .theme-segmented-control input:focus-visible + span {
-  outline: 2px solid var(--focus);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 

@@ -1284,7 +1284,6 @@ function initializeThemePreference() {
     mode: "system",
     error: "无法读取主题偏好。",
   };
-  renderThemeMode(initial.mode);
   void applyThemeMode(initial.mode, {
     persist: false,
     initialError: initial.error,

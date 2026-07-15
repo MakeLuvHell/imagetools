@@ -44,6 +44,18 @@ function lightThemeToken(name) {
   return token[1];
 }
 
+function manualThemeToken(mode, name) {
+  const manualRoot = styles.match(
+    new RegExp(`:root\\[data-theme="${mode}"\\]\\s*\\{([^}]*)\\}`, "s"),
+  );
+  assert.ok(manualRoot, `${mode} manual theme root is present`);
+  const token = manualRoot[1].match(
+    new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"),
+  );
+  assert.ok(token, `${mode} manual theme --${name} token is present`);
+  return token[1];
+}
+
 test("shell exposes Codex Windows task regions without permanent parameter columns", () => {
   for (const id of [
     "newSessionBtn",
@@ -238,6 +250,26 @@ test("manual theme selectors override the system color scheme", () => {
   assert.match(styles, /\.theme-segmented-control/);
   assert.match(styles, /input:checked\s*\+\s*span/);
   assert.match(styles, /input:focus-visible\s*\+\s*span/);
+});
+
+test("Appearance radio focus uses an opaque accent with WCAG non-text contrast", () => {
+  const focusRule = styles.match(
+    /\.theme-segmented-control input:focus-visible\s*\+\s*span\s*\{([^}]*)\}/,
+  );
+  assert.ok(focusRule, "Appearance radio focus rule is present");
+  assert.match(focusRule[1], /outline:\s*2px solid var\(--accent\)/);
+  assert.match(focusRule[1], /outline-offset:\s*1px/);
+
+  for (const mode of ["light", "dark"]) {
+    const ratio = contrastRatio(
+      manualThemeToken(mode, "accent"),
+      manualThemeToken(mode, "surface-subtle"),
+    );
+    assert.ok(
+      ratio >= 3,
+      `${mode} --accent contrast on --surface-subtle is ${ratio.toFixed(3)}:1; expected at least 3:1`,
+    );
+  }
 });
 
 test("settings navigation uses a restrained neutral active state", () => {
