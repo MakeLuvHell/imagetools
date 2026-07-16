@@ -1,0 +1,26 @@
+{
+  "provider_input": {
+    "name": "Primary",
+    "base_url": "https://api.example.com/v1",
+    "api_key": "sk-fixture-secret",
+    "default_model": "gpt-image-2",
+    "is_default": true
+  },
+  "provider_public": {
+    "id": 1,
+    "name": "Primary",
+    "base_url": "https://api.example.com/v1",
+    "api_key": "",
+    "api_key_set": true,
+    "default_model": "gpt-image-2",
+    "is_default": true,
+    "created_at": "2026-07-15T00:00:00.000000+00:00",
+    "updated_at": "2026-07-15T00:00:00.000000+00:00"
+  },
+  "settings_public": {
+    "base_url": "https://api.example.com/v1",
+    "api_key": "",
+    "api_key_set": true,
+    "model": "gpt-image-2"
+  }
+}

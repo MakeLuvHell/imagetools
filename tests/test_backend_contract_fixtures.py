@@ -2,6 +2,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from backend import main
 from backend.storage_location import resolve_storage_location, schedule_storage_location
 from backend.workbench_db import WorkbenchStore
 
@@ -168,3 +169,16 @@ def test_python_storage_bootstrap_uses_the_shared_pending_shape(tmp_path):
     assert json.loads(bootstrap_path.read_text(encoding="utf-8")) == {
         "active_data_dir": str(target.resolve())
     }
+
+
+def test_python_provider_helpers_match_the_shared_public_contract(tmp_path):
+    contract = json.loads((FIXTURE_DIR / "public-contract.json").read_text(encoding="utf-8"))
+    store = install_fixture(tmp_path, "schema-v2.sql")
+    provider = store.get_provider(1)
+    assert provider is not None
+
+    clean_input = main.clean_provider_payload(main.ProviderPayload(**contract["provider_input"]))
+
+    assert clean_input.model_dump() == contract["provider_input"]
+    assert main.public_provider(provider) == contract["provider_public"]
+    assert main.public_settings(main.provider_to_settings(provider)) == contract["settings_public"]

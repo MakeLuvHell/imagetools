@@ -514,7 +514,7 @@ Status: Done
 
 ## RB004: 移植 Provider、Settings 与密钥语义
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -559,7 +559,7 @@ Status: Ready
 
 ## RB006: 移植生成校验与 Provider HTTP 客户端
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
