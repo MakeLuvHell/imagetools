@@ -445,7 +445,7 @@ Python 路径；RB012-RB014 完成打包、文档和 Windows 发布门禁。
 
 ## RB001: 建立 Rust 后端契约与测试基础
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -468,7 +468,7 @@ Status: Ready
 
 ## RB002: 证明 SQLite schema v1/v2 原地兼容
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
@@ -491,7 +491,7 @@ fixtures。Rust 与 Python 分别对等打开 fixtures，升级过程中不创�
 
 ## RB003: 移植工作区数据目录引导与复制迁移
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 

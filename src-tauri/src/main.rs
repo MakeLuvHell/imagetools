@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+pub mod workbench;
+
 use std::{
     io::{Read, Write},
     net::TcpStream,
@@ -20,7 +22,10 @@ struct BackendProcess(Mutex<Option<CommandChild>>);
 const DEV_BACKEND_PORT: u16 = 7860;
 
 #[cfg(debug_assertions)]
-const DEV_BACKEND_TOKEN_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../build/desktop-dev-backend.json");
+const DEV_BACKEND_TOKEN_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../build/desktop-dev-backend.json"
+);
 
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
@@ -110,8 +115,14 @@ fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
         .sidecar("imagetools-backend")?
         .env("IMAGE_TOOLS_HOST", "127.0.0.1")
         .env("IMAGE_TOOLS_PORT", port.to_string())
-        .env("IMAGE_TOOLS_DATA_DIR", data_dir.to_string_lossy().to_string())
-        .env("IMAGE_TOOLS_CONFIG_DIR", config_dir.to_string_lossy().to_string())
+        .env(
+            "IMAGE_TOOLS_DATA_DIR",
+            data_dir.to_string_lossy().to_string(),
+        )
+        .env(
+            "IMAGE_TOOLS_CONFIG_DIR",
+            config_dir.to_string_lossy().to_string(),
+        )
         .spawn()?;
     app.manage(BackendProcess(Mutex::new(Some(child))));
     wait_for_backend(port)?;
@@ -176,7 +187,8 @@ fn theme_override(mode: &str) -> Result<Option<tauri::Theme>, String> {
 #[tauri::command]
 fn set_app_theme(window: tauri::WebviewWindow, mode: String) -> Result<(), String> {
     let theme = theme_override(&mode)?;
-    window.set_theme(theme).map_err(|error| format!("无法同步窗口主题：{error}"))
+    let result = window.set_theme(theme);
+    result.map_err(|error| format!("无法同步窗口主题：{error}"))
 }
 
 #[tauri::command]
@@ -220,18 +232,22 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{health_response_is_ok, theme_override};
     #[cfg(debug_assertions)]
     use super::health_dev_token;
+    use super::{health_response_is_ok, theme_override};
 
     #[test]
     fn accepts_http_11_health_success() {
-        assert!(health_response_is_ok("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\n{}"));
+        assert!(health_response_is_ok(
+            "HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\n{}"
+        ));
     }
 
     #[test]
     fn rejects_health_failure_status() {
-        assert!(!health_response_is_ok("HTTP/1.1 503 Service Unavailable\r\n\r\n"));
+        assert!(!health_response_is_ok(
+            "HTTP/1.1 503 Service Unavailable\r\n\r\n"
+        ));
     }
 
     #[test]
