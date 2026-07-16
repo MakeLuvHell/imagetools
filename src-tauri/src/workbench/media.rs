@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf, sync::Arc};
+use std::{
+    fs,
+    path::{Component, PathBuf},
+    sync::Arc,
+};
 
 use rusqlite::OptionalExtension;
 use tauri::{
@@ -43,7 +47,10 @@ impl MediaResolver {
         })?;
         let (local_path, mime_type) = stored.ok_or_else(media_not_found)?;
         let relative = std::path::Path::new(&local_path);
-        if !relative.starts_with("images") || relative.is_absolute() {
+        let mut components = relative.components();
+        if !matches!(components.next(), Some(Component::Normal(root)) if root == "images")
+            || components.any(|component| !matches!(component, Component::Normal(_)))
+        {
             return Err(path_outside_workspace());
         }
 
@@ -251,6 +258,22 @@ mod tests {
             fixture.resolver.resolve(image_id).unwrap_err().code,
             "media.path_outside_workspace"
         );
+    }
+
+    #[test]
+    fn rejects_parent_components_even_when_the_canonical_target_stays_in_images() {
+        let fixture = MediaFixture::new();
+        fs::create_dir(fixture.data_root.join("images/sub")).unwrap();
+        fs::write(fixture.data_root.join("images/result.png"), b"png").unwrap();
+
+        for local_path in ["images/sub/../result.png", "images/../images/result.png"] {
+            let image_id = fixture.insert_image(local_path, "image/png");
+            assert_eq!(
+                fixture.resolver.resolve(image_id).unwrap_err().code,
+                "media.path_outside_workspace",
+                "accepted stored path containing ParentDir: {local_path}"
+            );
+        }
     }
 
     #[cfg(unix)]
