@@ -3,12 +3,15 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, SystemTime},
 };
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use chrono::Local;
+use chrono::{Local, Utc};
 use reqwest::header::CONTENT_TYPE;
 use uuid::Uuid;
 
@@ -125,10 +128,9 @@ impl ResultFileStore {
         let token = Uuid::new_v4();
         let temporary_path = self.image_dir.join(format!(".{token}.tmp"));
         let filename = format!(
-            "image_{}_{}_{}.{}",
-            Local::now().format("%Y%m%d_%H%M%S"),
+            "image_{}_{}.{}",
+            unique_result_timestamp(),
             index,
-            token,
             extension
         );
         let final_path = self.image_dir.join(&filename);
@@ -296,11 +298,18 @@ impl ReferenceStore {
     }
 
     pub fn consume(&self, token: &str) -> Result<ConsumedReference, CommandError> {
-        let staged = self
-            .entries
-            .lock()
-            .map_err(reference_unavailable)?
-            .remove(token)
+        self.consume_with_move(token, |from, to| fs::rename(from, to))
+    }
+
+    fn consume_with_move(
+        &self,
+        token: &str,
+        move_file: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+    ) -> Result<ConsumedReference, CommandError> {
+        let mut entries = self.entries.lock().map_err(reference_unavailable)?;
+        let staged = entries
+            .get(token)
+            .cloned()
             .ok_or_else(reference_not_found)?;
         let extension = extension_for_mime(&staged.mime_type).ok_or_else(|| {
             CommandError::new(
@@ -315,12 +324,8 @@ impl ReferenceStore {
             extension
         );
         let path = self.upload_dir.join(filename);
-        if let Err(error) = fs::rename(&staged.path, &path) {
-            if let Ok(mut entries) = self.entries.lock() {
-                entries.insert(token.to_string(), staged);
-            }
-            return Err(reference_write_failed(error));
-        }
+        move_file(&staged.path, &path).map_err(reference_write_failed)?;
+        entries.remove(token);
         Ok(ConsumedReference {
             path,
             original_name: staged.original_name,
@@ -404,6 +409,26 @@ fn extension_from_url(url: &reqwest::Url) -> Option<&'static str> {
         "webp" => Some("webp"),
         _ => None,
     }
+}
+
+fn unique_result_timestamp() -> String {
+    static LAST_TIMESTAMP_MICROS: AtomicI64 = AtomicI64::new(0);
+
+    let now = Utc::now().timestamp_micros();
+    let unique = loop {
+        let previous = LAST_TIMESTAMP_MICROS.load(Ordering::Relaxed);
+        let candidate = now.max(previous.saturating_add(1));
+        if LAST_TIMESTAMP_MICROS
+            .compare_exchange_weak(previous, candidate, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            break candidate;
+        }
+    };
+    chrono::DateTime::<Utc>::from_timestamp_micros(unique)
+        .unwrap_or_else(Utc::now)
+        .format("%Y%m%d_%H%M%S%6f")
+        .to_string()
 }
 
 fn normalized_extension(value: &str) -> &'static str {
@@ -580,6 +605,61 @@ mod tests {
     }
 
     #[test]
+    fn consumption_keeps_metadata_locked_until_the_move_succeeds() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ReferenceStore::new(temporary.path().join("uploads")).unwrap();
+        let staged = store.stage("reference.png", "image/png", PNG_1X1).unwrap();
+
+        let error = store
+            .consume_with_move(&staged.token, |_, _| {
+                assert!(store.entries.try_lock().is_err());
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "fixture move rejected",
+                ))
+            })
+            .unwrap_err();
+
+        assert_eq!(error.code, "reference.write_failed");
+        assert!(store.lookup(&staged.token).is_ok());
+    }
+
+    #[test]
+    fn concurrent_consumers_cannot_move_the_same_token_twice() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ReferenceStore::new(temporary.path().join("uploads")).unwrap();
+        let staged = store.stage("reference.png", "image/png", PNG_1X1).unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let consumers = (0..2)
+            .map(|_| {
+                let store = store.clone();
+                let token = staged.token.clone();
+                let barrier = barrier.clone();
+                thread::spawn(move || {
+                    barrier.wait();
+                    store.consume(&token)
+                })
+            })
+            .collect::<Vec<_>>();
+        barrier.wait();
+
+        let results = consumers
+            .into_iter()
+            .map(|consumer| consumer.join().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results
+                .iter()
+                .filter_map(|result| result.as_ref().err())
+                .map(|error| error.code.as_str())
+                .collect::<Vec<_>>(),
+            ["reference.not_found"]
+        );
+    }
+
+    #[test]
     fn startup_removes_staging_files_older_than_twenty_four_hours() {
         let temporary = tempfile::tempdir().unwrap();
         let staging = temporary.path().join("uploads/.staging");
@@ -678,5 +758,44 @@ mod tests {
             .unwrap()
             .next()
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn result_names_end_with_index_and_remain_unique_across_persists() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ResultFileStore::new(temporary.path().to_path_buf());
+        let mut names = std::collections::HashSet::new();
+
+        for _ in 0..16 {
+            let images = store
+                .persist(
+                    ProviderResponse {
+                        data: vec![ProviderImage {
+                            b64_json: Some(STANDARD.encode(b"image")),
+                            url: None,
+                        }],
+                    },
+                    "png",
+                    1024,
+                    1024,
+                )
+                .await
+                .unwrap();
+            let filename = &images[0].metadata.filename;
+            let stem = filename.strip_suffix(".png").unwrap();
+            let parts = stem.split('_').collect::<Vec<_>>();
+            assert_eq!(parts.len(), 4, "unexpected result filename: {filename}");
+            assert_eq!(parts[0], "image");
+            assert_eq!(parts[1].len(), 8);
+            assert_eq!(parts[2].len(), 12);
+            assert_eq!(parts[3], "1");
+            assert!(parts[1..]
+                .iter()
+                .all(|part| part.bytes().all(|byte| byte.is_ascii_digit())));
+            assert!(
+                names.insert(filename.clone()),
+                "duplicate result filename: {filename}"
+            );
+        }
     }
 }
