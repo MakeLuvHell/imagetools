@@ -491,7 +491,7 @@ fixtures。Rust 与 Python 分别对等打开 fixtures，升级过程中不创�
 
 ## RB003: 移植工作区数据目录引导与复制迁移
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -514,7 +514,7 @@ Status: Ready
 
 ## RB004: 移植 Provider、Settings 与密钥语义
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 

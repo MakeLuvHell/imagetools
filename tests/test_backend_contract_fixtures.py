@@ -1,6 +1,8 @@
+import json
 import sqlite3
 from pathlib import Path
 
+from backend.storage_location import resolve_storage_location, schedule_storage_location
 from backend.workbench_db import WorkbenchStore
 
 
@@ -135,3 +137,34 @@ def test_python_preserves_shared_v2_fixture_workspace_rows(tmp_path):
         864,
         "2026-07-15T00:00:01.000000+00:00",
     )
+
+
+def test_python_storage_bootstrap_uses_the_shared_pending_shape(tmp_path):
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    config = tmp_path / "config"
+    source.mkdir()
+
+    schedule_storage_location(
+        current_data_dir=source,
+        config_dir=config,
+        data_dir=target,
+        migrate_existing=False,
+    )
+
+    bootstrap_path = config / "storage-location.json"
+    assert json.loads(bootstrap_path.read_text(encoding="utf-8")) == {
+        "active_data_dir": str(source.resolve()),
+        "pending": {
+            "data_dir": str(target.resolve()),
+            "source_data_dir": str(source.resolve()),
+            "migrate_existing": False,
+        },
+    }
+
+    location = resolve_storage_location(source, config)
+
+    assert location.active_data_dir == target.resolve()
+    assert json.loads(bootstrap_path.read_text(encoding="utf-8")) == {
+        "active_data_dir": str(target.resolve())
+    }
