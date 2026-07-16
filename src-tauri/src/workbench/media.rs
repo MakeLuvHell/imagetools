@@ -1,37 +1,60 @@
 use std::{
-    fs,
+    io::Read,
     path::{Component, PathBuf},
     sync::Arc,
 };
 
+use cap_std::{ambient_authority, fs::Dir};
 use rusqlite::OptionalExtension;
 use tauri::{
     http::{header, Method, Request, Response, StatusCode},
     Runtime,
 };
 
-use crate::workbench::{database::Database, error::CommandError};
+use crate::workbench::{
+    database::Database, error::CommandError, generation::files::MAX_RESULT_IMAGE_BYTES,
+};
 
 const MEDIA_SCHEME: &str = "imagetools-media";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ResolvedMedia {
     pub path: PathBuf,
-    pub mime_type: String,
+    pub file: cap_std::fs::File,
 }
 
 #[derive(Clone)]
 pub struct MediaResolver {
     database: Arc<Database>,
-    data_root: PathBuf,
+    image_root: PathBuf,
+    image_dir: Arc<Dir>,
 }
 
 impl MediaResolver {
-    pub fn new(database: Arc<Database>, data_root: PathBuf) -> Self {
-        Self {
-            database,
-            data_root,
+    pub fn open(database: Arc<Database>, data_root: PathBuf) -> Result<Self, CommandError> {
+        let data_root = data_root.canonicalize().map_err(|_| media_unavailable())?;
+        let data_dir = Dir::open_ambient_dir(&data_root, ambient_authority())
+            .map_err(|_| media_unavailable())?;
+        match data_dir.create_dir("images") {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => return Err(media_unavailable()),
         }
+        let image_dir = data_dir
+            .open_dir("images")
+            .map_err(|_| path_outside_workspace())?;
+        let image_root = data_root
+            .join("images")
+            .canonicalize()
+            .map_err(|_| media_unavailable())?;
+        if image_root == data_root || !image_root.starts_with(&data_root) {
+            return Err(path_outside_workspace());
+        }
+        Ok(Self {
+            database,
+            image_root,
+            image_dir: Arc::new(image_dir),
+        })
     }
 
     pub fn resolve(&self, image_id: i64) -> Result<ResolvedMedia, CommandError> {
@@ -45,39 +68,40 @@ impl MediaResolver {
                 .optional()
                 .map_err(|_| CommandError::new("database.query_failed", "无法读取工作区数据库。"))
         })?;
-        let (local_path, mime_type) = stored.ok_or_else(media_not_found)?;
+        let (local_path, _stored_mime_type) = stored.ok_or_else(media_not_found)?;
         let relative = std::path::Path::new(&local_path);
         let mut components = relative.components();
-        if !matches!(components.next(), Some(Component::Normal(root)) if root == "images")
-            || components.any(|component| !matches!(component, Component::Normal(_)))
-        {
+        let filename = match (components.next(), components.next(), components.next()) {
+            (Some(Component::Normal(root)), Some(Component::Normal(filename)), None)
+                if root == "images" =>
+            {
+                filename
+            }
+            _ => return Err(path_outside_workspace()),
+        };
+
+        let target = self
+            .image_root
+            .join(filename)
+            .canonicalize()
+            .map_err(|_| media_not_found())?;
+        if !target.starts_with(&self.image_root) {
             return Err(path_outside_workspace());
         }
 
-        let image_root = self
-            .data_root
-            .join("images")
-            .canonicalize()
+        let file = self
+            .image_dir
+            .open(filename)
             .map_err(|_| media_not_found())?;
-        let target = self
-            .data_root
-            .join(relative)
-            .canonicalize()
-            .map_err(|_| media_not_found())?;
-        if target == image_root || !target.starts_with(&image_root) {
-            return Err(path_outside_workspace());
-        }
-        if !fs::metadata(&target)
-            .map(|metadata| metadata.is_file())
-            .unwrap_or(false)
-        {
+        let metadata = file.metadata().map_err(|_| media_not_found())?;
+        if !metadata.is_file() {
             return Err(media_not_found());
         }
+        if metadata.len() > MAX_RESULT_IMAGE_BYTES as u64 {
+            return Err(media_too_large());
+        }
 
-        Ok(ResolvedMedia {
-            path: target,
-            mime_type,
-        })
+        Ok(ResolvedMedia { path: target, file })
     }
 }
 
@@ -119,16 +143,51 @@ pub fn media_response(resolver: &MediaResolver, request: Request<Vec<u8>>) -> Re
         }
         Err(_) => return empty_response(StatusCode::NOT_FOUND),
     };
-    let body = match fs::read(&resolved.path) {
-        Ok(body) => body,
+    let (body, mime_type) = match read_resolved_media(resolved) {
+        Ok(media) => media,
         Err(_) => return empty_response(StatusCode::NOT_FOUND),
     };
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, resolved.mime_type)
+        .header(header::CONTENT_TYPE, mime_type)
+        .header("x-content-type-options", "nosniff")
         .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .body(body)
         .unwrap_or_else(|_| empty_response(StatusCode::NOT_FOUND))
+}
+
+fn read_resolved_media(
+    mut resolved: ResolvedMedia,
+) -> Result<(Vec<u8>, &'static str), CommandError> {
+    let bytes = read_resolved_media_with_limit(&mut resolved.file, MAX_RESULT_IMAGE_BYTES)?;
+    let mime_type = detect_image_mime(&bytes).ok_or_else(media_not_found)?;
+    Ok((bytes, mime_type))
+}
+
+fn read_resolved_media_with_limit(
+    file: &mut cap_std::fs::File,
+    limit: usize,
+) -> Result<Vec<u8>, CommandError> {
+    let mut bytes = Vec::new();
+    file.take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| media_not_found())?;
+    if bytes.len() > limit {
+        return Err(media_too_large());
+    }
+    Ok(bytes)
+}
+
+fn detect_image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(b"\xff\xd8\xff") {
+        Some("image/jpeg")
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else {
+        None
+    }
 }
 
 fn parse_image_id(path: &str) -> Option<i64> {
@@ -150,6 +209,14 @@ fn media_not_found() -> CommandError {
     CommandError::new("media.not_found", "图片不存在。")
 }
 
+fn media_too_large() -> CommandError {
+    CommandError::new("media.too_large", "图片文件过大。")
+}
+
+fn media_unavailable() -> CommandError {
+    CommandError::new("media.unavailable", "图片目录暂时不可用。")
+}
+
 fn path_outside_workspace() -> CommandError {
     CommandError::new("media.path_outside_workspace", "图片不在当前工作区中。")
 }
@@ -160,7 +227,10 @@ mod tests {
 
     use tauri::http::{Method, Request, StatusCode};
 
-    use super::{media_response, media_url_for_platform, register_media_protocol, MediaResolver};
+    use super::{
+        detect_image_mime, media_response, media_url_for_platform, read_resolved_media,
+        read_resolved_media_with_limit, register_media_protocol, MediaResolver,
+    };
     use crate::workbench::{database::Database, models::utc_now};
 
     struct MediaFixture {
@@ -176,7 +246,7 @@ mod tests {
             let data_root = temporary.path().join("data");
             fs::create_dir_all(data_root.join("images")).unwrap();
             let database = Arc::new(Database::open(&data_root.join("workbench.sqlite3")).unwrap());
-            let resolver = MediaResolver::new(database.clone(), data_root.clone());
+            let resolver = MediaResolver::open(database.clone(), data_root.clone()).unwrap();
             Self {
                 _temporary: temporary,
                 data_root,
@@ -344,7 +414,7 @@ mod tests {
     #[test]
     fn protocol_returns_mime_cors_and_bytes_for_an_existing_image() {
         let fixture = MediaFixture::new();
-        let bytes = b"stored image";
+        let bytes = b"\x89PNG\r\n\x1a\nstored image";
         fs::write(fixture.data_root.join("images/result.png"), bytes).unwrap();
         let image_id = fixture.insert_image("images/result.png", "image/png");
 
@@ -352,8 +422,142 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()["content-type"], "image/png");
+        assert_eq!(response.headers()["x-content-type-options"], "nosniff");
         assert_eq!(response.headers()["access-control-allow-origin"], "*");
         assert_eq!(response.body(), bytes);
+    }
+
+    #[test]
+    fn protocol_detects_image_mime_instead_of_trusting_the_database() {
+        let fixture = MediaFixture::new();
+        fs::write(
+            fixture.data_root.join("images/result.png"),
+            b"\x89PNG\r\n\x1a\nimage",
+        )
+        .unwrap();
+        let image_id = fixture.insert_image("images/result.png", "text/html");
+
+        let response = fixture.request(Method::GET, &format!("/image/{image_id}"));
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "image/png");
+        assert_eq!(response.headers()["x-content-type-options"], "nosniff");
+    }
+
+    #[test]
+    fn protocol_rejects_non_image_content_even_when_the_database_claims_png() {
+        let fixture = MediaFixture::new();
+        fs::write(
+            fixture.data_root.join("images/result.png"),
+            b"<html>not an image</html>",
+        )
+        .unwrap();
+        let image_id = fixture.insert_image("images/result.png", "image/png");
+
+        assert_eq!(
+            fixture
+                .request(Method::GET, &format!("/image/{image_id}"))
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[test]
+    fn resolver_rejects_files_larger_than_the_result_limit_before_reading() {
+        let fixture = MediaFixture::new();
+        let path = fixture.data_root.join("images/result.png");
+        let file = fs::File::create(path).unwrap();
+        file.set_len(crate::workbench::generation::files::MAX_RESULT_IMAGE_BYTES as u64 + 1)
+            .unwrap();
+        let image_id = fixture.insert_image("images/result.png", "image/png");
+
+        assert_eq!(
+            fixture.resolver.resolve(image_id).unwrap_err().code,
+            "media.too_large"
+        );
+    }
+
+    #[test]
+    fn resolver_rejects_subdirectories_outside_the_flat_stored_contract() {
+        let fixture = MediaFixture::new();
+        fs::create_dir(fixture.data_root.join("images/nested")).unwrap();
+        fs::write(
+            fixture.data_root.join("images/nested/result.png"),
+            b"\x89PNG\r\n\x1a\n",
+        )
+        .unwrap();
+        let image_id = fixture.insert_image("images/nested/result.png", "image/png");
+
+        assert_eq!(
+            fixture.resolver.resolve(image_id).unwrap_err().code,
+            "media.path_outside_workspace"
+        );
+    }
+
+    #[test]
+    fn opened_handle_enforces_the_limit_again_if_the_file_grows_after_resolve() {
+        use std::io::Write;
+
+        let fixture = MediaFixture::new();
+        let path = fixture.data_root.join("images/result.png");
+        fs::write(&path, b"\x89PNG\r\n\x1a\n").unwrap();
+        let image_id = fixture.insert_image("images/result.png", "image/png");
+        let mut resolved = fixture.resolver.resolve(image_id).unwrap();
+        fs::OpenOptions::new()
+            .append(true)
+            .open(path)
+            .unwrap()
+            .write_all(b"growth")
+            .unwrap();
+
+        assert_eq!(
+            read_resolved_media_with_limit(&mut resolved.file, 8)
+                .unwrap_err()
+                .code,
+            "media.too_large"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opened_handle_is_used_after_the_stored_name_is_replaced() {
+        use std::os::unix::fs::symlink;
+
+        let fixture = MediaFixture::new();
+        let path = fixture.data_root.join("images/result.png");
+        let original = b"\x89PNG\r\n\x1a\noriginal";
+        fs::write(&path, original).unwrap();
+        let outside = fixture._temporary.path().join("outside.html");
+        fs::write(&outside, b"<html>secret</html>").unwrap();
+        let image_id = fixture.insert_image("images/result.png", "image/png");
+        let resolved = fixture.resolver.resolve(image_id).unwrap();
+        fs::remove_file(&path).unwrap();
+        symlink(outside, path).unwrap();
+
+        let (bytes, mime_type) = read_resolved_media(resolved).unwrap();
+
+        assert_eq!(bytes, original);
+        assert_eq!(mime_type, "image/png");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolver_initialization_rejects_an_image_root_symlink_outside_data() {
+        use std::os::unix::fs::symlink;
+
+        let temporary = tempfile::tempdir().unwrap();
+        let data_root = temporary.path().join("data");
+        let outside = temporary.path().join("outside");
+        fs::create_dir_all(&data_root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        symlink(outside, data_root.join("images")).unwrap();
+        let database = Arc::new(Database::open(&data_root.join("workbench.sqlite3")).unwrap());
+
+        let error = match MediaResolver::open(database, data_root) {
+            Ok(_) => panic!("accepted image root symlink outside data"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "media.path_outside_workspace");
     }
 
     #[test]
@@ -381,6 +585,23 @@ mod tests {
             media_url_for_platform(42, false),
             "imagetools-media://localhost/image/42"
         );
+    }
+
+    #[test]
+    fn detects_only_supported_image_signatures_for_protocol_content_types() {
+        assert_eq!(
+            detect_image_mime(b"\x89PNG\r\n\x1a\ncontent"),
+            Some("image/png")
+        );
+        assert_eq!(
+            detect_image_mime(b"\xff\xd8\xffcontent"),
+            Some("image/jpeg")
+        );
+        assert_eq!(
+            detect_image_mime(b"RIFF\x04\x00\x00\x00WEBPcontent"),
+            Some("image/webp")
+        );
+        assert_eq!(detect_image_mime(b"<html>content</html>"), None);
     }
 
     #[test]

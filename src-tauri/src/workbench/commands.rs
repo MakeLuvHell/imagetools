@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use percent_encoding::percent_decode_str;
-use tauri::{http::HeaderMap, ipc::InvokeBody, Runtime};
+use tauri::{http::HeaderMap, ipc::InvokeBody};
 
 use crate::workbench::{
     database::{history::HistoryRepository, providers::ProviderRepository, Database},
@@ -17,6 +17,9 @@ use crate::workbench::{
     sessions::HistoryService,
     storage::{resolve_storage_location, StorageManager},
 };
+
+const MAX_ENCODED_REFERENCE_NAME_BYTES: usize = 1024;
+const MAX_REFERENCE_NAME_CHARS: usize = 255;
 
 pub struct WorkbenchState {
     database: Arc<Database>,
@@ -44,21 +47,27 @@ impl WorkbenchState {
         let data_root = location.active_data_dir.clone();
         let provider_repository = ProviderRepository::new(database.clone());
         let history = HistoryService::new(HistoryRepository::new(database.clone()));
+        let storage = StorageManager::new(location)?;
         let references = ReferenceStore::new(data_root.join("uploads"))?;
+        let media = MediaResolver::open(database.clone(), data_root.clone())?;
+        let providers =
+            ProviderService::new(provider_repository.clone(), data_root.join("settings.json"));
+        providers.prepare_startup()?;
+        history.recover_interrupted_runs()?;
         let generation = GenerationService::new(
-            provider_repository.clone(),
+            provider_repository,
             history.clone(),
             references.clone(),
             data_root.clone(),
         );
         Ok(Self {
-            database: database.clone(),
-            storage: StorageManager::new(location)?,
-            providers: ProviderService::new(provider_repository, data_root.join("settings.json")),
+            database,
+            storage,
+            providers,
             history,
             references,
             generation,
-            media: MediaResolver::new(database, data_root),
+            media,
         })
     }
 
@@ -252,12 +261,17 @@ pub fn stage_reference_image(
         ));
     };
     let encoded_name = required_header(request.headers(), "x-image-name")?;
-    if !valid_percent_encoding(encoded_name) {
+    if encoded_name.len() > MAX_ENCODED_REFERENCE_NAME_BYTES
+        || !valid_percent_encoding(encoded_name)
+    {
         return Err(invalid_reference_name());
     }
     let name = percent_decode_str(encoded_name)
         .decode_utf8()
         .map_err(|_| invalid_reference_name())?;
+    if name.chars().count() > MAX_REFERENCE_NAME_CHARS || name.chars().any(char::is_control) {
+        return Err(invalid_reference_name());
+    }
     let mime_type = required_header(request.headers(), "content-type")?;
     state.references.stage(&name, mime_type, bytes)
 }
@@ -270,32 +284,36 @@ pub async fn generate_image(
     state.generation.generate(input).await
 }
 
-pub fn register_workbench_commands<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![
-        get_settings,
-        update_settings,
-        get_storage_location,
-        update_storage_location,
-        list_providers,
-        create_provider,
-        get_provider,
-        update_provider,
-        delete_provider,
-        set_default_provider,
-        list_projects,
-        create_project,
-        update_project,
-        delete_project,
-        list_sessions,
-        create_session,
-        get_session,
-        update_session,
-        delete_session,
-        set_session_pinned,
-        list_session_runs,
-        stage_reference_image,
-        generate_image,
-    ])
+#[macro_export]
+macro_rules! generate_workbench_handler {
+    ($($extra:path),* $(,)?) => {
+        tauri::generate_handler![
+            $($extra,)*
+            $crate::workbench::commands::get_settings,
+            $crate::workbench::commands::update_settings,
+            $crate::workbench::commands::get_storage_location,
+            $crate::workbench::commands::update_storage_location,
+            $crate::workbench::commands::list_providers,
+            $crate::workbench::commands::create_provider,
+            $crate::workbench::commands::get_provider,
+            $crate::workbench::commands::update_provider,
+            $crate::workbench::commands::delete_provider,
+            $crate::workbench::commands::set_default_provider,
+            $crate::workbench::commands::list_projects,
+            $crate::workbench::commands::create_project,
+            $crate::workbench::commands::update_project,
+            $crate::workbench::commands::delete_project,
+            $crate::workbench::commands::list_sessions,
+            $crate::workbench::commands::create_session,
+            $crate::workbench::commands::get_session,
+            $crate::workbench::commands::update_session,
+            $crate::workbench::commands::delete_session,
+            $crate::workbench::commands::set_session_pinned,
+            $crate::workbench::commands::list_session_runs,
+            $crate::workbench::commands::stage_reference_image,
+            $crate::workbench::commands::generate_image,
+        ]
+    };
 }
 
 fn required_header<'a>(headers: &'a HeaderMap, name: &str) -> Result<&'a str, CommandError> {
@@ -331,7 +349,7 @@ fn invalid_reference_name() -> CommandError {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::PathBuf};
+    use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
     use serde_json::{json, Value};
     use tauri::{
@@ -342,7 +360,12 @@ mod tests {
         Manager, WebviewUrl, WebviewWindow,
     };
 
-    use super::{register_workbench_commands, WorkbenchState};
+    use super::WorkbenchState;
+    use crate::workbench::{
+        database::{history::HistoryRepository, Database},
+        models::{GenerateInput, SessionCreateInput},
+        sessions::{HistoryService, NewRunInput},
+    };
 
     const PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
 
@@ -359,7 +382,8 @@ mod tests {
             let default_data_dir = temporary.path().join("data");
             let config_dir = temporary.path().join("config");
             let state = WorkbenchState::initialize(&default_data_dir, &config_dir).unwrap();
-            let app = register_workbench_commands(mock_builder())
+            let app = mock_builder()
+                .invoke_handler(crate::generate_workbench_handler![])
                 .manage(state)
                 .build(mock_context(noop_assets()))
                 .unwrap();
@@ -398,6 +422,151 @@ mod tests {
             self.json(cmd, body)
                 .unwrap_or_else(|error| panic!("{cmd} returned an unexpected error: {error}"))
         }
+    }
+
+    #[tauri::command]
+    fn extra_ping() -> &'static str {
+        "pong"
+    }
+
+    #[tauri::command]
+    fn extra_version() -> u8 {
+        8
+    }
+
+    #[test]
+    fn unified_handler_composes_extra_and_workbench_commands() {
+        let temporary = tempfile::tempdir().unwrap();
+        let state = WorkbenchState::initialize(
+            &temporary.path().join("data"),
+            &temporary.path().join("config"),
+        )
+        .unwrap();
+        let app = mock_builder()
+            .invoke_handler(crate::generate_workbench_handler![
+                extra_ping,
+                extra_version,
+            ])
+            .manage(state)
+            .build(mock_context(noop_assets()))
+            .unwrap();
+        let webview = WebviewWindow::builder(&app, "composition", WebviewUrl::default())
+            .build()
+            .unwrap();
+        let request = |cmd: &str| InvokeRequest {
+            cmd: cmd.into(),
+            callback: CallbackFn(0),
+            error: CallbackFn(1),
+            url: "tauri://localhost".parse().unwrap(),
+            body: InvokeBody::Json(json!({})),
+            headers: HeaderMap::new(),
+            invoke_key: tauri::test::INVOKE_KEY.into(),
+        };
+
+        assert_ipc_response(&webview, request("extra_ping"), Ok("pong"));
+        assert_ipc_response(&webview, request("extra_version"), Ok(8));
+        assert!(get_ipc_response(&webview, request("get_settings")).is_ok());
+    }
+
+    #[tokio::test]
+    async fn state_initialization_imports_legacy_settings_before_generation_is_exposed() {
+        let temporary = tempfile::tempdir().unwrap();
+        let data_root = temporary.path().join("data");
+        std::fs::create_dir(&data_root).unwrap();
+        std::fs::write(
+            data_root.join("settings.json"),
+            serde_json::to_vec(&json!({
+                "base_url": "https://legacy.example/v1",
+                "api_key": "legacy-secret",
+                "model": "gpt-image-2"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let state =
+            WorkbenchState::initialize(&data_root, &temporary.path().join("config")).unwrap();
+        let provider_count = state
+            .database()
+            .with_connection(|connection| {
+                connection
+                    .query_row("SELECT COUNT(*) FROM providers", [], |row| {
+                        row.get::<_, i64>(0)
+                    })
+                    .map_err(crate::workbench::database::schema::database_error)
+            })
+            .unwrap();
+        assert_eq!(provider_count, 1);
+
+        let session_id = state
+            .history
+            .create_session(SessionCreateInput {
+                title: "startup".into(),
+            })
+            .unwrap()
+            .id;
+        let error = state
+            .generation
+            .generate(GenerateInput {
+                session_id,
+                provider_id: None,
+                prompt: "test".into(),
+                model: "".into(),
+                width: 1,
+                height: 1,
+                ratio: "1:1".into(),
+                resolution: "1K".into(),
+                count: 1,
+                quality: "auto".into(),
+                output_format: "png".into(),
+                output_compression: 100,
+                background: "auto".into(),
+                moderation: "auto".into(),
+                reference_token: None,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "generation.invalid_size");
+    }
+
+    #[test]
+    fn state_initialization_recovers_running_rows_before_exposing_services() {
+        let temporary = tempfile::tempdir().unwrap();
+        let data_root = temporary.path().join("data");
+        std::fs::create_dir(&data_root).unwrap();
+        let database = Arc::new(Database::open(&data_root.join("workbench.sqlite3")).unwrap());
+        let history = HistoryService::new(HistoryRepository::new(database));
+        let session_id = history
+            .create_session(SessionCreateInput {
+                title: "interrupted".into(),
+            })
+            .unwrap()
+            .id;
+        let run_id = history
+            .create_run(NewRunInput {
+                session_id,
+                status: "running".into(),
+                prompt: "pending".into(),
+                parameters: json!({}),
+                provider_id: None,
+                provider_name: "Primary".into(),
+                model: "gpt-image-2".into(),
+                reference_image_path: None,
+                error_message: None,
+            })
+            .unwrap()
+            .id;
+        drop(history);
+
+        let state =
+            WorkbenchState::initialize(&data_root, &temporary.path().join("config")).unwrap();
+
+        let recovered = state.history.get_run(run_id).unwrap();
+        assert_eq!(recovered.status, "failed");
+        assert_eq!(
+            recovered.error_message.as_deref(),
+            Some("应用在生成完成前退出。")
+        );
     }
 
     #[test]
@@ -679,6 +848,39 @@ mod tests {
             )
             .unwrap_err();
             assert_eq!(error["code"], "reference.invalid_name");
+        }
+    }
+
+    #[test]
+    fn stage_reference_rejects_oversized_names_and_encoded_controls() {
+        let fixture = CommandFixture::new();
+        for encoded_name in [
+            "a".repeat(1025),
+            format!("{}.png", "a".repeat(256)),
+            "%0D%0Ainjected.png".into(),
+            "%00hidden.png".into(),
+        ] {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                "x-image-name",
+                HeaderValue::from_str(&encoded_name).unwrap(),
+            );
+            headers.insert("content-type", HeaderValue::from_static("image/png"));
+
+            let error = get_ipc_response(
+                &fixture.webview,
+                fixture.request(
+                    "stage_reference_image",
+                    InvokeBody::Raw(PNG.to_vec()),
+                    headers,
+                ),
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                error["code"], "reference.invalid_name",
+                "accepted unsafe encoded name: {encoded_name:?}"
+            );
         }
     }
 }

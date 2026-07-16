@@ -647,11 +647,10 @@ mod tests {
         drop(connection);
         let database = Arc::new(Database::open(&database_path).unwrap());
         let service = HistoryService::new(HistoryRepository::new(database));
-        let mut contract: serde_json::Value = serde_json::from_str(
+        let contract: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(fixture_dir.join("public-contract.json")).unwrap(),
         )
         .unwrap();
-        contract["run_public"]["images"][0]["url"] = crate::workbench::media::media_url(1).into();
 
         assert_eq!(
             serde_json::to_value(service.list_projects().unwrap().remove(0)).unwrap(),
@@ -661,9 +660,22 @@ mod tests {
             serde_json::to_value(service.list_sessions().unwrap().remove(0)).unwrap(),
             contract["session_public"]
         );
+        let mut desktop_run =
+            serde_json::to_value(service.list_runs(1).unwrap().remove(0)).unwrap();
+        let mut python_run = contract["run_public"].clone();
+        assert_eq!(python_run["images"][0]["url"], "/files/images/result.png");
         assert_eq!(
-            serde_json::to_value(service.list_runs(1).unwrap().remove(0)).unwrap(),
-            contract["run_public"]
+            desktop_run["images"][0]["url"],
+            crate::workbench::media::media_url(1)
         );
+        desktop_run["images"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("url");
+        python_run["images"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("url");
+        assert_eq!(desktop_run, python_run);
     }
 }

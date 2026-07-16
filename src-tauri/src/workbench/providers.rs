@@ -28,6 +28,10 @@ impl ProviderService {
         &self.settings_path
     }
 
+    pub fn prepare_startup(&self) -> Result<(), CommandError> {
+        self.migrate_legacy_settings()
+    }
+
     pub fn list(&self) -> Result<Vec<ProviderDto>, CommandError> {
         self.migrate_legacy_settings()?;
         self.repository
@@ -494,6 +498,8 @@ mod tests {
         )
         .unwrap();
 
+        fixture.service.prepare_startup().unwrap();
+        fixture.service.prepare_startup().unwrap();
         let first = fixture.service.list().unwrap();
         let second = fixture.service.list().unwrap();
 

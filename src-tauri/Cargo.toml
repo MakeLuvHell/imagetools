@@ -29,6 +29,7 @@ mime_guess = "2"
 futures-util = "0.3"
 atomic-write-file = "0.3"
 percent-encoding = "2"
+cap-std = "4"
 
 [dev-dependencies]
 tempfile = "3"
