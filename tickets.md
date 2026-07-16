@@ -559,7 +559,7 @@ Status: Done
 
 ## RB006: 移植生成校验与 Provider HTTP 客户端
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -582,7 +582,7 @@ Status: Ready
 
 ## RB007: 实现参考图暂存和持久化生成闭环
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
