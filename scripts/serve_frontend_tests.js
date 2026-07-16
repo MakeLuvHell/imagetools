@@ -19,6 +19,7 @@ function resolveRequestPath(requestUrl) {
   } catch (_error) {
     return null;
   }
+  if (pathname.includes("\0")) return null;
   const relative = pathname === "/"
     ? "index.html"
     : pathname.replace(/^\/static\//, "/").replace(/^\/+/, "");
@@ -31,26 +32,41 @@ const server = http.createServer((request, response) => {
     response.writeHead(405).end();
     return;
   }
-  const target = resolveRequestPath(request.url);
+  let target;
+  try {
+    target = resolveRequestPath(request.url);
+  } catch (_error) {
+    response.writeHead(400).end();
+    return;
+  }
   if (!target) {
     response.writeHead(403).end();
     return;
   }
-  fs.stat(target, (statError, stat) => {
-    if (statError || !stat.isFile()) {
-      response.writeHead(404).end();
-      return;
-    }
-    response.writeHead(200, {
-      "content-type": contentTypes[path.extname(target)] || "application/octet-stream",
-      "x-content-type-options": "nosniff",
+  try {
+    fs.stat(target, (statError, stat) => {
+      if (statError || !stat.isFile()) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, {
+        "content-type": contentTypes[path.extname(target)] || "application/octet-stream",
+        "x-content-type-options": "nosniff",
+      });
+      if (request.method === "HEAD") {
+        response.end();
+        return;
+      }
+      const stream = fs.createReadStream(target);
+      stream.on("error", () => {
+        if (!response.headersSent) response.writeHead(500);
+        response.end();
+      });
+      stream.pipe(response);
     });
-    if (request.method === "HEAD") {
-      response.end();
-      return;
-    }
-    fs.createReadStream(target).pipe(response);
-  });
+  } catch (_error) {
+    response.writeHead(400).end();
+  }
 });
 
 server.listen(8765, "127.0.0.1");

@@ -363,14 +363,19 @@ async function copyImageLink(url) {
 }
 
 async function setReferenceFromImage(image) {
-  referenceInput.value = "";
-  referenceSource = {
+  const nextReference = window.ImageToolsWorkbench.normalizeResultReference({
     kind: "result",
     imageId: image.id,
     url: image.url,
     filename: image.filename,
     mimeType: image.mime_type,
-  };
+  });
+  if (!nextReference) {
+    showToast("无法使用这个历史结果作为参考图");
+    return;
+  }
+  referenceInput.value = "";
+  referenceSource = nextReference;
   referencePreview.hidden = false;
   referenceName.textContent = image.filename || "历史结果图";
   syncReferenceState();

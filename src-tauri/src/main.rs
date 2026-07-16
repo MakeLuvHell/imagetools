@@ -56,12 +56,31 @@ fn is_allowed_navigation(url: &Url) -> bool {
     }
 }
 
-fn report_startup_error(
+fn schedule_startup_failure(
     error: &workbench::error::CommandError,
-    display: impl FnOnce(&str),
-) -> std::io::Error {
-    display(&error.message);
-    std::io::Error::other(error.message.clone())
+    show: impl FnOnce(String, Box<dyn FnOnce() + Send>),
+    exit: impl FnOnce(i32) + Send + 'static,
+) {
+    show(error.message.clone(), Box::new(move || exit(1)));
+}
+
+enum StartupOutcome<T> {
+    Ready(T),
+    FailureScheduled,
+}
+
+fn resolve_startup<T>(
+    result: Result<T, workbench::error::CommandError>,
+    show: impl FnOnce(String, Box<dyn FnOnce() + Send>),
+    exit: impl FnOnce(i32) + Send + 'static,
+) -> StartupOutcome<T> {
+    match result {
+        Ok(value) => StartupOutcome::Ready(value),
+        Err(error) => {
+            schedule_startup_failure(&error, show, exit);
+            StartupOutcome::FailureScheduled
+        }
+    }
 }
 
 fn empty_media_response(status: StatusCode) -> tauri::http::Response<Vec<u8>> {
@@ -129,14 +148,16 @@ fn main() {
             let state = directories.and_then(|(data_dir, config_dir)| {
                 workbench::commands::WorkbenchState::initialize(&data_dir, &config_dir)
             });
-            let state = match state {
-                Ok(state) => state,
-                Err(error) => {
-                    let setup_error = report_startup_error(&error, |message| {
-                        app.dialog().message(message).show(|_| {});
-                    });
-                    return Err(setup_error.into());
-                }
+            let app_handle = app.handle().clone();
+            let state = resolve_startup(
+                state,
+                |message, on_closed| {
+                    app.dialog().message(message).show(move |_| on_closed());
+                },
+                move |code| app_handle.exit(code),
+            );
+            let StartupOutcome::Ready(state) = state else {
+                return Ok(());
             };
             app.manage(state);
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
@@ -154,7 +175,9 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::theme_override;
-    use super::{is_allowed_navigation, report_startup_error, resolve_workspace_directories};
+    use super::{
+        is_allowed_navigation, resolve_startup, resolve_workspace_directories, StartupOutcome,
+    };
     use crate::workbench::error::CommandError;
     use std::{ffi::OsString, path::PathBuf};
     use url::Url;
@@ -226,14 +249,31 @@ mod tests {
 
     #[test]
     fn startup_dialog_uses_only_the_safe_command_message() {
+        use std::sync::{Arc, Mutex};
+
         let error = CommandError::new("database.open_failed", "无法打开工作区数据库。")
             .with_diagnostic("secret path and sqlite details");
-        let mut displayed = String::new();
+        let displayed = Arc::new(Mutex::new(String::new()));
+        let completion = Arc::new(Mutex::new(None));
+        let exit_codes = Arc::new(Mutex::new(Vec::new()));
+        let displayed_for_show = displayed.clone();
+        let completion_for_show = completion.clone();
+        let exit_codes_for_callback = exit_codes.clone();
 
-        let setup_error = report_startup_error(&error, |message| displayed = message.to_string());
+        let outcome = resolve_startup::<()>(
+            Err(error),
+            move |message, on_closed| {
+                *displayed_for_show.lock().unwrap() = message;
+                *completion_for_show.lock().unwrap() = Some(on_closed);
+            },
+            move |code| exit_codes_for_callback.lock().unwrap().push(code),
+        );
 
-        assert_eq!(displayed, "无法打开工作区数据库。");
-        assert_eq!(setup_error.to_string(), "无法打开工作区数据库。");
+        assert!(matches!(outcome, StartupOutcome::FailureScheduled));
+        assert_eq!(*displayed.lock().unwrap(), "无法打开工作区数据库。");
+        assert!(exit_codes.lock().unwrap().is_empty());
+        completion.lock().unwrap().take().unwrap()();
+        assert_eq!(*exit_codes.lock().unwrap(), [1]);
     }
 
     #[test]

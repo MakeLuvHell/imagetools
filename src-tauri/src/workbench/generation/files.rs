@@ -324,6 +324,24 @@ impl ReferenceStore {
         self.consume_with_move(token, |from, to| fs::rename(from, to))
     }
 
+    pub fn discard(&self, token: &str) -> Result<(), CommandError> {
+        self.discard_with_remove(token, |path| fs::remove_file(path))
+    }
+
+    fn discard_with_remove(
+        &self,
+        token: &str,
+        remove: impl FnMut(&Path) -> std::io::Result<()>,
+    ) -> Result<(), CommandError> {
+        let mut entries = self.entries.lock().map_err(reference_unavailable)?;
+        let Some(staged) = entries.get(token).cloned() else {
+            return Ok(());
+        };
+        remove_files_with_retry(&[staged.path], remove)?;
+        entries.remove(token);
+        Ok(())
+    }
+
     fn consume_with_move(
         &self,
         token: &str,
@@ -681,6 +699,64 @@ mod tests {
             store.consume(&staged.token).unwrap_err().code,
             "reference.not_found"
         );
+    }
+
+    #[test]
+    fn discard_is_idempotent_and_retries_without_losing_failed_entries() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ReferenceStore::new(temporary.path().join("uploads")).unwrap();
+        let transient = store.stage("transient.png", "image/png", PNG_1X1).unwrap();
+        let transient_path = store.lookup(&transient.token).unwrap().path;
+        let mut attempts = 0;
+
+        store
+            .discard_with_remove(&transient.token, |path| {
+                attempts += 1;
+                if attempts == 1 {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "locked",
+                    ))
+                } else {
+                    fs::remove_file(path)
+                }
+            })
+            .unwrap();
+        assert_eq!(attempts, 2);
+        assert!(!transient_path.exists());
+        assert_eq!(
+            store.lookup(&transient.token).unwrap_err().code,
+            "reference.not_found"
+        );
+        store.discard(&transient.token).unwrap();
+
+        let permanent = store.stage("permanent.png", "image/png", PNG_1X1).unwrap();
+        let permanent_path = store.lookup(&permanent.token).unwrap().path;
+        let error = store
+            .discard_with_remove(&permanent.token, |_| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "private path locked",
+                ))
+            })
+            .unwrap_err();
+
+        assert_eq!(error.code, "generation.file_cleanup_failed");
+        assert!(permanent_path.exists());
+        assert!(store.lookup(&permanent.token).is_ok());
+        assert!(!serde_json::to_string(&error).unwrap().contains("private"));
+    }
+
+    #[test]
+    fn discard_after_consumption_is_a_no_op() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ReferenceStore::new(temporary.path().join("uploads")).unwrap();
+        let staged = store.stage("reference.png", "image/png", PNG_1X1).unwrap();
+
+        let consumed = store.consume(&staged.token).unwrap();
+        store.discard(&staged.token).unwrap();
+
+        assert!(consumed.path.exists());
     }
 
     #[test]

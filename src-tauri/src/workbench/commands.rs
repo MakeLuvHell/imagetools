@@ -6,7 +6,10 @@ use tauri::{http::HeaderMap, ipc::InvokeBody};
 use crate::workbench::{
     database::{history::HistoryRepository, providers::ProviderRepository, Database},
     error::CommandError,
-    generation::{files::ReferenceStore, GenerationService},
+    generation::{
+        files::{merge_cleanup_error, ReferenceStore},
+        GenerationService,
+    },
     media::MediaResolver,
     models::{
         GenerateInput, GenerateResultDto, GenerationRunDto, ProjectDto, ProjectInput, ProviderDto,
@@ -286,29 +289,64 @@ fn prepare_generation_reference(
     state: &WorkbenchState,
     reference_token: Option<String>,
     reference_image_id: Option<i64>,
-) -> Result<Option<String>, CommandError> {
+) -> Result<PreparedGenerationReference, CommandError> {
     match (reference_token, reference_image_id) {
         (Some(_), Some(_)) => Err(CommandError::new(
             "reference.conflicting_sources",
             "只能选择一种参考图来源。",
         )),
-        (token @ Some(_), None) => Ok(token),
-        (None, Some(image_id)) => Ok(Some(state.stage_existing_reference(image_id)?.token)),
-        (None, None) => Ok(None),
+        (token @ Some(_), None) => Ok(PreparedGenerationReference {
+            token,
+            internally_staged_token: None,
+        }),
+        (None, Some(image_id)) => {
+            let token = state.stage_existing_reference(image_id)?.token;
+            Ok(PreparedGenerationReference {
+                token: Some(token.clone()),
+                internally_staged_token: Some(token),
+            })
+        }
+        (None, None) => Ok(PreparedGenerationReference {
+            token: None,
+            internally_staged_token: None,
+        }),
+    }
+}
+
+#[derive(Debug)]
+struct PreparedGenerationReference {
+    token: Option<String>,
+    internally_staged_token: Option<String>,
+}
+
+async fn generate_image_with_state(
+    mut input: GenerateInput,
+    state: &WorkbenchState,
+) -> Result<GenerateResultDto, CommandError> {
+    let prepared = prepare_generation_reference(
+        state,
+        input.reference_token.take(),
+        input.reference_image_id.take(),
+    )?;
+    input.reference_token = prepared.token;
+    match state.generation.generate(input).await {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            let cleanup = prepared
+                .internally_staged_token
+                .as_deref()
+                .map_or(Ok(()), |token| state.references.discard(token));
+            Err(merge_cleanup_error(error, cleanup))
+        }
     }
 }
 
 #[tauri::command]
 pub async fn generate_image(
-    mut input: GenerateInput,
+    input: GenerateInput,
     state: tauri::State<'_, WorkbenchState>,
 ) -> Result<GenerateResultDto, CommandError> {
-    input.reference_token = prepare_generation_reference(
-        &state,
-        input.reference_token.take(),
-        input.reference_image_id.take(),
-    )?;
-    state.generation.generate(input).await
+    generate_image_with_state(input, &state).await
 }
 
 #[macro_export]
@@ -387,7 +425,7 @@ mod tests {
         Manager, WebviewUrl, WebviewWindow,
     };
 
-    use super::{prepare_generation_reference, WorkbenchState};
+    use super::{generate_image_with_state, prepare_generation_reference, WorkbenchState};
     use crate::workbench::{
         database::{history::HistoryRepository, Database},
         models::{GenerateInput, SessionCreateInput},
@@ -521,6 +559,69 @@ mod tests {
         assert_eq!(missing.code, "media.not_found");
         assert_eq!(oversized.code, "reference.too_large");
         assert_eq!(run_count, 0);
+    }
+
+    fn invalid_prompt_input(
+        reference_token: Option<String>,
+        reference_image_id: Option<i64>,
+    ) -> GenerateInput {
+        GenerateInput {
+            session_id: 1,
+            provider_id: None,
+            prompt: String::new(),
+            model: "gpt-image-2".into(),
+            width: 1024,
+            height: 1024,
+            ratio: "1:1".into(),
+            resolution: "standard".into(),
+            count: 1,
+            quality: "auto".into(),
+            output_format: "png".into(),
+            output_compression: 100,
+            background: "auto".into(),
+            moderation: "auto".into(),
+            reference_token,
+            reference_image_id,
+        }
+    }
+
+    #[tokio::test]
+    async fn internal_reference_is_discarded_on_preconsume_validation_failure() {
+        let fixture = CommandFixture::new();
+        let image_id = fixture.insert_image("source.png", PNG, "image/png");
+        let state = fixture.app.state::<WorkbenchState>();
+
+        let error = generate_image_with_state(invalid_prompt_input(None, Some(image_id)), &state)
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.code, "generation.prompt_required");
+        assert_eq!(
+            std::fs::read_dir(fixture.default_data_dir.join("uploads/.staging"))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn uploaded_reference_survives_preconsume_validation_failure() {
+        let fixture = CommandFixture::new();
+        let state = fixture.app.state::<WorkbenchState>();
+        let staged = state
+            .references
+            .stage("upload.png", "image/png", PNG)
+            .unwrap();
+
+        let error = generate_image_with_state(
+            invalid_prompt_input(Some(staged.token.clone()), None),
+            &state,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, "generation.prompt_required");
+        assert!(state.references.lookup(&staged.token).is_ok());
     }
 
     #[tauri::command]

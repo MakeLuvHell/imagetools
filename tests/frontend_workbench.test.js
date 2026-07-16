@@ -121,7 +121,7 @@ test("pending runs stay isolated by session and submission id", () => {
   assert.equal(workbench.pendingRunsForSession(state, 4)[0].submissionId, "b");
 });
 
-test("parseDraft rejects corrupt storage and keeps only serializable fields", () => {
+test("parseDraft rejects corrupt storage and clears legacy URL-only references", () => {
   assert.equal(workbench.parseDraft("not-json"), null);
   assert.deepEqual(
     workbench.parseDraft(
@@ -133,9 +133,32 @@ test("parseDraft rejects corrupt storage and keeps only serializable fields", ()
     ),
     {
       prompt: "海报",
-      referenceSource: { kind: "result", url: "/files/images/1.png" },
     },
   );
+});
+
+test("parseDraft keeps only result references with a positive integer image id", () => {
+  const valid = {
+    kind: "result",
+    imageId: 42,
+    url: "imagetools-media://localhost/image/42",
+    filename: "result.png",
+    mimeType: "image/png",
+  };
+  assert.deepEqual(
+    workbench.parseDraft(JSON.stringify({ prompt: "继续", referenceSource: valid })),
+    { prompt: "继续", referenceSource: valid },
+  );
+  for (const imageId of [0, -1, 1.5, "42", null]) {
+    assert.deepEqual(
+      workbench.parseDraft(JSON.stringify({ prompt: "继续", referenceSource: {
+        kind: "result",
+        imageId,
+        url: "imagetools-media://localhost/image/42",
+      } })),
+      { prompt: "继续" },
+    );
+  }
 });
 
 test("parameterSummary uses localized resolution and count labels", () => {

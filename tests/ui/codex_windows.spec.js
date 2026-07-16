@@ -143,7 +143,7 @@ test("historical result references submit an image id without refetching bytes",
         parameters: { count: 1 },
         images: [{
           id: 42,
-          url: "/assets/app-icon.png",
+          url: "imagetools-media://localhost/image/42",
           filename: "result.png",
           mime_type: "image/png",
         }],
@@ -182,6 +182,23 @@ test("uploaded references stage raw bytes before generation", async ({ page }) =
   expect(requests.stagedReferences[0].name).toBe("reference.png");
   expect(requests.generateBodies[0].reference_token).toBe("reference-token-1");
   expect(requests.generateBodies[0].reference_image_id).toBeNull();
+});
+
+test("legacy URL-only drafts restore without a reference constraint", async ({ page }) => {
+  await installApiMocks(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("imagetools:draft:new", JSON.stringify({
+      prompt: "保留其他草稿字段",
+      count: 3,
+      referenceSource: { kind: "result", url: "/files/images/legacy.png" },
+    }));
+  });
+  await page.goto("/");
+
+  await expect(page.getByPlaceholder("描述你想创作的图片")).toHaveValue("保留其他草稿字段");
+  await expect(page.locator("#referencePreview")).toBeHidden();
+  await expect(page.locator("#countSelect")).toBeEnabled();
+  await expect(page.locator("#countSelect")).toHaveValue("3");
 });
 
 test("bundled shell and Lucide are served locally", async ({ page, request }) => {

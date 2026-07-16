@@ -156,12 +156,56 @@
       if (!value || typeof value !== "object" || Array.isArray(value)) {
         return null;
       }
-      return Object.fromEntries(
+      const draft = Object.fromEntries(
         DRAFT_FIELDS.filter((key) => value[key] !== undefined).map((key) => [
           key,
           value[key],
         ]),
       );
+      const referenceSource = normalizeResultReference(draft.referenceSource);
+      if (referenceSource) {
+        draft.referenceSource = referenceSource;
+      } else {
+        delete draft.referenceSource;
+      }
+      return draft;
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeResultReference(reference) {
+    if (
+      reference?.kind !== "result" ||
+      !Number.isInteger(reference.imageId) ||
+      reference.imageId <= 0 ||
+      typeof reference.url !== "string"
+    ) {
+      return null;
+    }
+    try {
+      const url = new URL(reference.url);
+      const isMediaOrigin =
+        (url.protocol === "imagetools-media:" && url.hostname === "localhost") ||
+        (url.protocol === "http:" && url.hostname === "imagetools-media.localhost");
+      if (
+        !isMediaOrigin ||
+        url.username ||
+        url.password ||
+        url.port ||
+        url.search ||
+        url.hash ||
+        url.pathname !== `/image/${reference.imageId}`
+      ) {
+        return null;
+      }
+      return {
+        kind: "result",
+        imageId: reference.imageId,
+        url: reference.url,
+        filename: typeof reference.filename === "string" ? reference.filename : "",
+        mimeType: typeof reference.mimeType === "string" ? reference.mimeType : "",
+      };
     } catch {
       return null;
     }
@@ -363,6 +407,7 @@
     deriveSessionTitle,
     draftStorageKey,
     parseDraft,
+    normalizeResultReference,
     parameterSummary,
     shouldSubmitComposer,
     normalizeComposerForReference,
