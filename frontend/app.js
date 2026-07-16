@@ -1,3 +1,4 @@
+const desktopApi = window.ImageToolsDesktopApi.current();
 const sessionList = document.querySelector("#sessionList");
 const sessionFilter = document.querySelector("#sessionFilter");
 const searchToggle = document.querySelector("#searchToggle");
@@ -159,14 +160,6 @@ function showToast(message) {
   }, 2400);
 }
 
-async function readJson(response) {
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.detail || "请求失败");
-  }
-  return payload;
-}
-
 function filteredSessions() {
   const query = sessionFilter.value.trim().toLowerCase();
   if (!query) {
@@ -319,10 +312,10 @@ function renderTimelineRuns(runs) {
     onPreview: openImagePreview,
     onDownload: downloadImage,
     onCopyLink: (image) => copyImageLink(image.url),
-    onSetReference: (image) => setReferenceFromUrl(image.url),
+    onSetReference: (image) => setReferenceFromImage(image),
     onContinue: async (image, run) => {
       applyRunToComposer(run);
-      await setReferenceFromUrl(image.url);
+      await setReferenceFromImage(image);
       promptInput.focus();
     },
     onRetry: (run) => {
@@ -369,25 +362,20 @@ async function copyImageLink(url) {
   showToast("图片链接已复制");
 }
 
-async function setReferenceFromUrl(url) {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const file = new File([blob], `reference_${Date.now()}.png`, {
-      type: blob.type || "image/png",
-    });
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    referenceInput.files = transfer.files;
-    referenceSource = { kind: "result", url };
-    referencePreview.hidden = false;
-    referenceName.textContent = file.name;
-    syncReferenceState();
-    saveActiveDraft();
-    showToast("已设为参考图");
-  } catch (error) {
-    showToast(`设置参考图失败：${error.message}`);
-  }
+async function setReferenceFromImage(image) {
+  referenceInput.value = "";
+  referenceSource = {
+    kind: "result",
+    imageId: image.id,
+    url: image.url,
+    filename: image.filename,
+    mimeType: image.mime_type,
+  };
+  referencePreview.hidden = false;
+  referenceName.textContent = image.filename || "历史结果图";
+  syncReferenceState();
+  saveActiveDraft();
+  showToast("已设为参考图");
 }
 
 function applyRunToComposer(run) {
@@ -414,7 +402,7 @@ async function loadTimeline(sessionId) {
     return;
   }
   try {
-    const runs = await fetch(`/api/sessions/${sessionId}/runs`).then(readJson);
+    const runs = await desktopApi.listSessionRuns(sessionId);
     runsBySession[sessionId] = runs;
     if (sessionId === state.selectedSessionId) {
       renderTimelineRuns([
@@ -464,8 +452,8 @@ function render() {
 async function loadSessions() {
   try {
     const [sessions, loadedProjects] = await Promise.all([
-      fetch("/api/sessions").then(readJson),
-      fetch("/api/projects").then(readJson),
+      desktopApi.listSessions(),
+      desktopApi.listProjects(),
     ]);
     projects = window.ImageToolsWorkbench.normalizeProjects(loadedProjects);
     state = window.ImageToolsWorkbench.applySessionList(state, sessions);
@@ -515,7 +503,7 @@ async function loadProviders({ showLoading = false } = {}) {
   }
   try {
     const loadedProviders = window.ImageToolsWorkbench.normalizeProviders(
-      await fetch("/api/providers").then(readJson),
+      await desktopApi.listProviders(),
     );
     if (token !== providerLoadToken) return false;
     providers = loadedProviders;
@@ -646,9 +634,7 @@ async function setDefaultProviderFromMenu() {
   if (providerId == null) return;
   setInlineStatus(providerActionStatus, "");
   try {
-    await fetch(`/api/providers/${providerId}/default`, {
-      method: "POST",
-    }).then(readJson);
+    await desktopApi.setDefaultProvider(providerId);
     await loadProviders();
     (providerRowMain(providerId) || addProviderBtn).focus();
   } catch (error) {
@@ -694,7 +680,7 @@ async function handleProviderDeleteSubmit(event) {
   providerDeleteConfirm.disabled = true;
   setInlineStatus(providerDeleteStatus, "");
   try {
-    await fetch(`/api/providers/${providerId}`, { method: "DELETE" }).then(readJson);
+    await desktopApi.deleteProvider(providerId);
     await window.ImageToolsUi.closeDialog(providerDeleteDialog);
     providerDeleteTarget = null;
     await loadProviders();
@@ -718,22 +704,15 @@ async function handleProviderSubmit(event) {
     defaultModel: providerDefaultModel.value,
     isDefault: providerIsDefault.checked,
   });
-  const method = providerId == null ? "POST" : "PATCH";
-  const url =
-    providerId == null
-      ? "/api/providers"
-      : `/api/providers/${providerId}`;
   setInlineStatus(providerDialogStatus, "");
   providerSaveBtn.disabled = true;
   providerCancelBtn.disabled = true;
   providerDialogClose.disabled = true;
   providerSaveBtn.textContent = "保存中";
   try {
-    const saved = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then(readJson);
+    const saved = providerId == null
+      ? await desktopApi.createProvider(payload)
+      : await desktopApi.updateProvider(providerId, payload);
     if (token !== providerSaveToken || !providerDialog.open) return;
     const savedId = Number(saved.id ?? providerId);
     await window.ImageToolsUi.closeDialog(providerDialog);
@@ -782,13 +761,9 @@ async function ensureSessionForSubmit(prompt) {
     return state.selectedSessionId;
   }
   const draft = currentDraft();
-  const session = await fetch("/api/sessions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: window.ImageToolsWorkbench.deriveSessionTitle(prompt),
-    }),
-  }).then(readJson);
+  const session = await desktopApi.createSession({
+    title: window.ImageToolsWorkbench.deriveSessionTitle(prompt),
+  });
   await loadSessions();
   state = window.ImageToolsWorkbench.selectSession(state, session.id);
   writeDraft(session.id, draft);
@@ -931,11 +906,7 @@ async function renameSession(title) {
   const session = window.ImageToolsWorkbench.selectedSession(state);
   if (!session) return;
   try {
-    await fetch(`/api/sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim() }),
-    }).then(readJson);
+    await desktopApi.updateSession(session.id, { title: title.trim() });
     await loadSessions();
     return true;
   } catch (error) {
@@ -948,7 +919,7 @@ async function deleteSession() {
   const session = window.ImageToolsWorkbench.selectedSession(state);
   if (!session) return;
   try {
-    await fetch(`/api/sessions/${session.id}`, { method: "DELETE" });
+    await desktopApi.deleteSession(session.id);
     localStorage.removeItem(window.ImageToolsWorkbench.draftStorageKey(session.id));
     state = window.ImageToolsWorkbench.selectNewTask(state);
     await loadSessions();
@@ -964,11 +935,7 @@ async function deleteSession() {
 
 async function updateSessionProject(session, projectId) {
   try {
-    await fetch(`/api/sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_id: projectId }),
-    }).then(readJson);
+    await desktopApi.updateSession(session.id, { project_id: projectId });
     await loadSessions();
     return true;
   } catch (error) {
@@ -979,9 +946,7 @@ async function updateSessionProject(session, projectId) {
 
 async function setSessionPinned(session) {
   try {
-    await fetch(`/api/sessions/${session.id}/pin`, {
-      method: session.isPinned ? "DELETE" : "POST",
-    }).then(readJson);
+    await desktopApi.setSessionPinned(session.id, !session.isPinned);
     await loadSessions();
     return true;
   } catch (error) {
@@ -992,12 +957,11 @@ async function setSessionPinned(session) {
 
 async function saveProject(mode, project, name) {
   try {
-    const url = mode === "project-create" ? "/api/projects" : `/api/projects/${project.id}`;
-    await fetch(url, {
-      method: mode === "project-create" ? "POST" : "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    }).then(readJson);
+    if (mode === "project-create") {
+      await desktopApi.createProject({ name });
+    } else {
+      await desktopApi.updateProject(project.id, { name });
+    }
     await loadSessions();
     return true;
   } catch (error) {
@@ -1008,7 +972,7 @@ async function saveProject(mode, project, name) {
 
 async function deleteProject(project) {
   try {
-    await fetch(`/api/projects/${project.id}`, { method: "DELETE" }).then(readJson);
+    await desktopApi.deleteProject(project.id);
     await loadSessions();
     return true;
   } catch (error) {
@@ -1098,20 +1062,36 @@ async function handleComposerSubmit(event) {
       },
       window.ImageToolsPreferences,
     );
-    const formData = new FormData();
-    Object.entries(fields).forEach(([key, value]) => formData.append(key, value));
+    let referenceToken = null;
+    let referenceImageId = referenceSource?.imageId || null;
     if (referenceInput.files[0]) {
-      formData.append("reference", referenceInput.files[0]);
+      const file = referenceInput.files[0];
+      const staged = await desktopApi.stageReference({
+        name: file.name,
+        type: file.type,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      });
+      referenceToken = staged.token;
+      referenceImageId = null;
     }
-    await fetch("/api/generate", { method: "POST", body: formData }).then(readJson);
+    await desktopApi.generate({
+      ...fields,
+      session_id: Number(fields.session_id),
+      provider_id: Number(fields.provider_id),
+      width: Number(fields.width),
+      height: Number(fields.height),
+      count: Number(fields.count),
+      output_compression: Number(fields.output_compression),
+      reference_token: referenceToken,
+      reference_image_id: referenceImageId,
+    });
     showToast("生成完成");
   } catch (error) {
     requestError = error.message;
     showToast(error.message);
   } finally {
     if (sessionId && pendingRun) {
-      const serverRuns = await fetch(`/api/sessions/${sessionId}/runs`)
-        .then(readJson)
+      const serverRuns = await desktopApi.listSessionRuns(sessionId)
         .catch(() => runsBySession[sessionId] || []);
       runsBySession[sessionId] = serverRuns;
       const reconciled = window.ImageToolsWorkbench.reconcileSubmission(
@@ -1342,7 +1322,7 @@ async function loadStorageLocation({ announce = "" } = {}) {
   const loadGeneration = ++storageLoadGeneration;
   setInlineStatus(storagePanelStatus, "正在读取工作区数据位置。");
   try {
-    const location = await fetch("/api/storage-location").then(readJson);
+    const location = await desktopApi.getStorageLocation();
     if (
       loadGeneration !== storageLoadGeneration ||
       !isStorageViewCurrent(viewGeneration)
@@ -1482,14 +1462,10 @@ async function handleStorageLocationSubmit(event) {
   storageApplyBtn.textContent = "应用中";
   setInlineStatus(storageDialogStatus, "");
   try {
-    await fetch("/api/storage-location", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        data_dir: storageDataDir.value.trim(),
-        migrate_existing: storageMigrateExisting.checked,
-      }),
-    }).then(readJson);
+    await desktopApi.updateStorageLocation({
+      data_dir: storageDataDir.value.trim(),
+      migrate_existing: storageMigrateExisting.checked,
+    });
     if (!isStorageDialogCurrent(dialogGeneration)) return;
     storageDialogGeneration += 1;
     await window.ImageToolsUi.closeDialog(storageDialog);

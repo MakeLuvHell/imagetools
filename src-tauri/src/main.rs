@@ -2,177 +2,73 @@
 
 pub mod workbench;
 
-use std::{
-    io::{Read, Write},
-    net::TcpStream,
-    sync::Mutex,
-    time::{Duration, Instant},
-};
+use std::{ffi::OsString, path::PathBuf};
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{http::StatusCode, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_shell::process::CommandChild;
-#[cfg(not(debug_assertions))]
-use tauri_plugin_shell::ShellExt;
 use url::Url;
 
-struct BackendProcess(Mutex<Option<CommandChild>>);
-
-#[cfg(debug_assertions)]
-const DEV_BACKEND_PORT: u16 = 7860;
-
-#[cfg(debug_assertions)]
-const DEV_BACKEND_TOKEN_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../build/desktop-dev-backend.json"
-);
-
-#[cfg(not(debug_assertions))]
-use std::net::TcpListener;
-
-#[cfg(not(debug_assertions))]
-fn find_available_port() -> Result<u16, Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("127.0.0.1:0")?;
-    let port = listener.local_addr()?.port();
-    drop(listener);
-    Ok(port)
-}
-
-fn health_response_is_ok(response: &str) -> bool {
-    response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200")
-}
-
-#[cfg(not(debug_assertions))]
-fn request_health(port: u16) -> bool {
-    let address = format!("127.0.0.1:{port}");
-    let Ok(mut stream) = TcpStream::connect(address) else {
-        return false;
-    };
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-    let request = "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    if stream.write_all(request.as_bytes()).is_err() {
-        return false;
+fn resolve_workspace_directories(
+    default_data_dir: PathBuf,
+    default_config_dir: PathBuf,
+    data_override: Option<OsString>,
+    config_override: Option<OsString>,
+) -> Result<(PathBuf, PathBuf), workbench::error::CommandError> {
+    fn resolve(
+        default: PathBuf,
+        override_value: Option<OsString>,
+        code: &str,
+        message: &str,
+    ) -> Result<PathBuf, workbench::error::CommandError> {
+        let path = override_value.map(PathBuf::from).unwrap_or(default);
+        if !path.is_absolute() {
+            return Err(workbench::error::CommandError::new(code, message));
+        }
+        Ok(path)
     }
-    let mut response = String::new();
-    if stream.read_to_string(&mut response).is_err() {
+
+    let data_dir = resolve(
+        default_data_dir,
+        data_override,
+        "startup.relative_data_dir",
+        "工作区数据目录必须使用绝对路径。",
+    )?;
+    let config_dir = resolve(
+        default_config_dir,
+        config_override,
+        "startup.relative_config_dir",
+        "工作区配置目录必须使用绝对路径。",
+    )?;
+    Ok((data_dir, config_dir))
+}
+
+fn is_allowed_navigation(url: &Url) -> bool {
+    if !url.username().is_empty() || url.password().is_some() || url.port().is_some() {
         return false;
     }
-    health_response_is_ok(&response)
-}
-
-#[cfg(debug_assertions)]
-fn health_dev_token(response: &str) -> Option<String> {
-    if !health_response_is_ok(response) {
-        return None;
+    #[cfg(windows)]
+    {
+        url.scheme() == "http" && url.host_str() == Some("tauri.localhost")
     }
-    let (_, body) = response.split_once("\r\n\r\n")?;
-    serde_json::from_str::<serde_json::Value>(body)
-        .ok()?
-        .get("desktop_dev_token")?
-        .as_str()
-        .map(ToOwned::to_owned)
-}
-
-#[cfg(debug_assertions)]
-fn request_dev_backend_token(port: u16) -> Option<String> {
-    let address = format!("127.0.0.1:{port}");
-    let Ok(mut stream) = TcpStream::connect(address) else {
-        return None;
-    };
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-    let request = "GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    if stream.write_all(request.as_bytes()).is_err() {
-        return None;
+    #[cfg(not(windows))]
+    {
+        url.scheme() == "tauri" && url.host_str() == Some("localhost")
     }
-    let mut response = String::new();
-    if stream.read_to_string(&mut response).is_err() {
-        return None;
-    }
-    health_dev_token(&response)
 }
 
-#[cfg(not(debug_assertions))]
-fn wait_for_backend(port: u16) -> Result<(), Box<dyn std::error::Error>> {
-    let deadline = Instant::now() + Duration::from_secs(20);
-    while Instant::now() < deadline {
-        if request_health(port) {
-            return Ok(());
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    Err("backend did not become ready before timeout".into())
+fn report_startup_error(
+    error: &workbench::error::CommandError,
+    display: impl FnOnce(&str),
+) -> std::io::Error {
+    display(&error.message);
+    std::io::Error::other(error.message.clone())
 }
 
-#[cfg(not(debug_assertions))]
-fn start_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
-    let port = find_available_port()?;
-    let data_dir = app.path().app_data_dir()?;
-    let config_dir = app.path().app_local_data_dir()?;
-    std::fs::create_dir_all(&data_dir)?;
-    std::fs::create_dir_all(&config_dir)?;
-    let (_events, child) = app
-        .shell()
-        .sidecar("imagetools-backend")?
-        .env("IMAGE_TOOLS_HOST", "127.0.0.1")
-        .env("IMAGE_TOOLS_PORT", port.to_string())
-        .env(
-            "IMAGE_TOOLS_DATA_DIR",
-            data_dir.to_string_lossy().to_string(),
-        )
-        .env(
-            "IMAGE_TOOLS_CONFIG_DIR",
-            config_dir.to_string_lossy().to_string(),
-        )
-        .spawn()?;
-    app.manage(BackendProcess(Mutex::new(Some(child))));
-    wait_for_backend(port)?;
-    Ok(port)
-}
-
-#[cfg(debug_assertions)]
-fn read_dev_backend_token() -> Result<String, Box<dyn std::error::Error>> {
-    let payload = std::fs::read_to_string(DEV_BACKEND_TOKEN_PATH)?;
-    let parsed_payload = serde_json::from_str::<serde_json::Value>(&payload)?;
-    let token = parsed_payload
-        .get("token")
-        .and_then(serde_json::Value::as_str)
-        .filter(|token| !token.is_empty())
-        .ok_or("desktop development backend token is missing")?;
-    Ok(token.to_owned())
-}
-
-#[cfg(debug_assertions)]
-fn wait_for_dev_backend() -> Result<(), Box<dyn std::error::Error>> {
-    let expected_token = read_dev_backend_token()?;
-    let deadline = Instant::now() + Duration::from_secs(20);
-    while Instant::now() < deadline {
-        if request_dev_backend_token(DEV_BACKEND_PORT).as_deref() == Some(expected_token.as_str()) {
-            return Ok(());
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    Err("desktop development backend did not match this launch before timeout".into())
-}
-
-#[cfg(debug_assertions)]
-fn prepare_backend(_app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
-    wait_for_dev_backend()?;
-    Ok(DEV_BACKEND_PORT)
-}
-
-#[cfg(not(debug_assertions))]
-fn prepare_backend(app: &tauri::App) -> Result<u16, Box<dyn std::error::Error>> {
-    start_backend(app)
-}
-
-fn stop_backend(app_handle: &tauri::AppHandle) {
-    if let Some(state) = app_handle.try_state::<BackendProcess>() {
-        if let Ok(mut child) = state.0.lock() {
-            if let Some(child) = child.take() {
-                let _ = child.kill();
-            }
-        }
-    }
+fn empty_media_response(status: StatusCode) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(status)
+        .body(Vec::new())
+        .expect("empty media response is valid")
 }
 
 fn theme_override(mode: &str) -> Result<Option<tauri::Theme>, String> {
@@ -209,22 +105,47 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![pick_data_directory, set_app_theme])
+        .invoke_handler(generate_workbench_handler![
+            pick_data_directory,
+            set_app_theme
+        ])
+        .register_uri_scheme_protocol("imagetools-media", |context, request| {
+            let Some(state) = context
+                .app_handle()
+                .try_state::<workbench::commands::WorkbenchState>()
+            else {
+                return empty_media_response(StatusCode::SERVICE_UNAVAILABLE);
+            };
+            workbench::media::media_response(&state.media_resolver(), request)
+        })
         .setup(|app| {
-            let port = prepare_backend(app)?;
-            let url = Url::parse(&format!("http://127.0.0.1:{port}/"))?;
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+            let defaults = (app.path().app_data_dir()?, app.path().app_local_data_dir()?);
+            let directories = resolve_workspace_directories(
+                defaults.0,
+                defaults.1,
+                std::env::var_os("IMAGE_TOOLS_DATA_DIR"),
+                std::env::var_os("IMAGE_TOOLS_CONFIG_DIR"),
+            );
+            let state = directories.and_then(|(data_dir, config_dir)| {
+                workbench::commands::WorkbenchState::initialize(&data_dir, &config_dir)
+            });
+            let state = match state {
+                Ok(state) => state,
+                Err(error) => {
+                    let setup_error = report_startup_error(&error, |message| {
+                        app.dialog().message(message).show(|_| {});
+                    });
+                    return Err(setup_error.into());
+                }
+            };
+            app.manage(state);
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Image Tools")
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(960.0, 640.0)
+                .on_navigation(is_allowed_navigation)
                 .build()?;
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                let app_handle = window.app_handle();
-                stop_backend(&app_handle);
-            }
         })
         .run(tauri::generate_context!())
         .expect("failed to run Image Tools desktop app");
@@ -232,22 +153,87 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(debug_assertions)]
-    use super::health_dev_token;
-    use super::{health_response_is_ok, theme_override};
+    use super::theme_override;
+    use super::{is_allowed_navigation, report_startup_error, resolve_workspace_directories};
+    use crate::workbench::error::CommandError;
+    use std::{ffi::OsString, path::PathBuf};
+    use url::Url;
 
     #[test]
-    fn accepts_http_11_health_success() {
-        assert!(health_response_is_ok(
-            "HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\n{}"
+    fn rejects_relative_workspace_overrides_before_initialization() {
+        let defaults = (
+            PathBuf::from("/default/data"),
+            PathBuf::from("/default/config"),
+        );
+
+        let data_error = resolve_workspace_directories(
+            defaults.0.clone(),
+            defaults.1.clone(),
+            Some(OsString::from("relative-data")),
+            None,
+        )
+        .unwrap_err();
+        let config_error = resolve_workspace_directories(
+            defaults.0,
+            defaults.1,
+            None,
+            Some(OsString::from("relative-config")),
+        )
+        .unwrap_err();
+
+        assert_eq!(data_error.code, "startup.relative_data_dir");
+        assert_eq!(config_error.code, "startup.relative_config_dir");
+    }
+
+    #[test]
+    fn accepts_absolute_workspace_overrides() {
+        let data = std::env::temp_dir().join("image-tools-data");
+        let config = std::env::temp_dir().join("image-tools-config");
+        let resolved = resolve_workspace_directories(
+            PathBuf::from("/default/data"),
+            PathBuf::from("/default/config"),
+            Some(data.clone().into_os_string()),
+            Some(config.clone().into_os_string()),
+        )
+        .unwrap();
+
+        assert_eq!(resolved, (data, config));
+    }
+
+    #[test]
+    fn allows_only_the_bundled_application_origin() {
+        #[cfg(windows)]
+        let bundled = Url::parse("http://tauri.localhost/index.html").unwrap();
+        #[cfg(not(windows))]
+        let bundled = Url::parse("tauri://localhost/index.html").unwrap();
+
+        assert!(is_allowed_navigation(&bundled));
+        assert!(!is_allowed_navigation(
+            &Url::parse("https://provider.example/v1/images").unwrap()
+        ));
+        assert!(!is_allowed_navigation(
+            &Url::parse("file:///tmp/provider.html").unwrap()
+        ));
+        #[cfg(windows)]
+        assert!(!is_allowed_navigation(
+            &Url::parse("http://tauri.localhost:8080/index.html").unwrap()
+        ));
+        #[cfg(not(windows))]
+        assert!(!is_allowed_navigation(
+            &Url::parse("tauri://localhost:8080/index.html").unwrap()
         ));
     }
 
     #[test]
-    fn rejects_health_failure_status() {
-        assert!(!health_response_is_ok(
-            "HTTP/1.1 503 Service Unavailable\r\n\r\n"
-        ));
+    fn startup_dialog_uses_only_the_safe_command_message() {
+        let error = CommandError::new("database.open_failed", "无法打开工作区数据库。")
+            .with_diagnostic("secret path and sqlite details");
+        let mut displayed = String::new();
+
+        let setup_error = report_startup_error(&error, |message| displayed = message.to_string());
+
+        assert_eq!(displayed, "无法打开工作区数据库。");
+        assert_eq!(setup_error.to_string(), "无法打开工作区数据库。");
     }
 
     #[test]
@@ -262,15 +248,6 @@ mod tests {
         assert_eq!(
             theme_override("sepia"),
             Err("不支持的主题模式：sepia".to_string())
-        );
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    fn extracts_desktop_dev_token_from_health_response() {
-        assert_eq!(
-            health_dev_token("HTTP/1.1 200 OK\r\n\r\n{\"desktop_dev_token\":\"launch-token\"}"),
-            Some("launch-token".to_string())
         );
     }
 }

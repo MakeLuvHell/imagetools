@@ -1,5 +1,4 @@
 const { defineConfig } = require("@playwright/test");
-const path = require("node:path");
 
 module.exports = defineConfig({
   testDir: "tests/ui",
@@ -14,16 +13,9 @@ module.exports = defineConfig({
   snapshotPathTemplate:
     "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}-{platform}{ext}",
   webServer: {
-    command: "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765",
-    url: "http://127.0.0.1:8765/api/health",
+    command: "node scripts/serve_frontend_tests.js",
+    url: "http://127.0.0.1:8765/",
     reuseExistingServer: false,
-    env: {
-      ...process.env,
-      IMAGE_TOOLS_DATA_DIR: path.join(
-        __dirname,
-        "test-results/playwright-data",
-      ),
-    },
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
 });

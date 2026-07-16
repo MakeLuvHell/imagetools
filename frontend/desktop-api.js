@@ -25,6 +25,7 @@
     "background",
     "moderation",
     "reference_token",
+    "reference_image_id",
   ];
 
   class DesktopApiError extends Error {

@@ -82,6 +82,12 @@ impl WorkbenchState {
     pub fn media_resolver(&self) -> MediaResolver {
         self.media.clone()
     }
+
+    fn stage_existing_reference(&self, image_id: i64) -> Result<StagedReferenceDto, CommandError> {
+        let (bytes, mime_type) = self.media.read(image_id)?;
+        self.references
+            .stage(&format!("reference-{image_id}"), mime_type, &bytes)
+    }
 }
 
 #[tauri::command]
@@ -276,11 +282,32 @@ pub fn stage_reference_image(
     state.references.stage(&name, mime_type, bytes)
 }
 
+fn prepare_generation_reference(
+    state: &WorkbenchState,
+    reference_token: Option<String>,
+    reference_image_id: Option<i64>,
+) -> Result<Option<String>, CommandError> {
+    match (reference_token, reference_image_id) {
+        (Some(_), Some(_)) => Err(CommandError::new(
+            "reference.conflicting_sources",
+            "只能选择一种参考图来源。",
+        )),
+        (token @ Some(_), None) => Ok(token),
+        (None, Some(image_id)) => Ok(Some(state.stage_existing_reference(image_id)?.token)),
+        (None, None) => Ok(None),
+    }
+}
+
 #[tauri::command]
 pub async fn generate_image(
-    input: GenerateInput,
+    mut input: GenerateInput,
     state: tauri::State<'_, WorkbenchState>,
 ) -> Result<GenerateResultDto, CommandError> {
+    input.reference_token = prepare_generation_reference(
+        &state,
+        input.reference_token.take(),
+        input.reference_image_id.take(),
+    )?;
     state.generation.generate(input).await
 }
 
@@ -360,7 +387,7 @@ mod tests {
         Manager, WebviewUrl, WebviewWindow,
     };
 
-    use super::WorkbenchState;
+    use super::{prepare_generation_reference, WorkbenchState};
     use crate::workbench::{
         database::{history::HistoryRepository, Database},
         models::{GenerateInput, SessionCreateInput},
@@ -422,6 +449,78 @@ mod tests {
             self.json(cmd, body)
                 .unwrap_or_else(|error| panic!("{cmd} returned an unexpected error: {error}"))
         }
+
+        fn insert_image(&self, filename: &str, bytes: &[u8], mime_type: &str) -> i64 {
+            let image_dir = self.default_data_dir.join("images");
+            std::fs::create_dir_all(&image_dir).unwrap();
+            std::fs::write(image_dir.join(filename), bytes).unwrap();
+            let state = self.app.state::<WorkbenchState>();
+            state.database.with_connection(|connection| {
+                let now = crate::workbench::models::utc_now();
+                connection.execute(
+                    "INSERT INTO sessions (title, is_pinned, created_at, updated_at) VALUES ('reference', 0, ?1, ?1)",
+                    [&now],
+                ).unwrap();
+                let session_id = connection.last_insert_rowid();
+                connection.execute(
+                    "INSERT INTO generation_runs (session_id, status, prompt, parameters_json, provider_name, model, created_at) VALUES (?1, 'succeeded', 'reference', '{}', 'test', 'test', ?2)",
+                    rusqlite::params![session_id, now],
+                ).unwrap();
+                let run_id = connection.last_insert_rowid();
+                connection.execute(
+                    "INSERT INTO images (generation_run_id, local_path, filename, mime_type, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![run_id, format!("images/{filename}"), filename, mime_type, crate::workbench::models::utc_now()],
+                ).unwrap();
+                Ok(connection.last_insert_rowid())
+            }).unwrap()
+        }
+    }
+
+    #[test]
+    fn existing_image_reference_is_bounded_read_and_staged_for_single_use() {
+        let fixture = CommandFixture::new();
+        let image_id = fixture.insert_image("source.png", PNG, "image/png");
+        let state = fixture.app.state::<WorkbenchState>();
+
+        let staged = state.stage_existing_reference(image_id).unwrap();
+        let reference = state.references.lookup(&staged.token).unwrap();
+
+        assert_eq!(reference.mime_type, "image/png");
+        assert_eq!(std::fs::read(reference.path).unwrap(), PNG);
+    }
+
+    #[test]
+    fn existing_reference_rejects_conflicts_and_safe_media_errors_before_a_run() {
+        let fixture = CommandFixture::new();
+        let image_id = fixture.insert_image("invalid.png", b"not an image", "image/png");
+        let state = fixture.app.state::<WorkbenchState>();
+        let conflict =
+            prepare_generation_reference(&state, Some("uploaded-token".into()), Some(image_id))
+                .unwrap_err();
+        let invalid = state.stage_existing_reference(image_id).unwrap_err();
+        let missing = state.stage_existing_reference(999_999).unwrap_err();
+        let mut oversized_bytes = PNG.to_vec();
+        oversized_bytes.resize(25 * 1024 * 1024 + 1, 0);
+        let oversized_id = fixture.insert_image("oversized.png", &oversized_bytes, "image/png");
+        let oversized = state.stage_existing_reference(oversized_id).unwrap_err();
+        let run_count = state
+            .database
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM generation_runs WHERE status = 'running'",
+                        [],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .map_err(crate::workbench::database::schema::database_error)
+            })
+            .unwrap();
+
+        assert_eq!(conflict.code, "reference.conflicting_sources");
+        assert_eq!(invalid.code, "media.not_found");
+        assert_eq!(missing.code, "media.not_found");
+        assert_eq!(oversized.code, "reference.too_large");
+        assert_eq!(run_count, 0);
     }
 
     #[tauri::command]
@@ -523,6 +622,7 @@ mod tests {
                 background: "auto".into(),
                 moderation: "auto".into(),
                 reference_token: None,
+                reference_image_id: None,
             })
             .await
             .unwrap_err();

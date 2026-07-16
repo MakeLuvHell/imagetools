@@ -256,7 +256,7 @@
     const empty = document.createElement("div");
     empty.className = "empty-workspace";
     const image = document.createElement("img");
-    image.src = "/static/assets/app-icon.png";
+    image.src = "/assets/app-icon.png";
     image.alt = "";
     const title = document.createElement("h2");
     title.textContent = "今天想创作什么？";

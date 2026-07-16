@@ -142,9 +142,11 @@ test("generate sends the Rust JSON DTO with a reference token and no image data"
     background: "opaque",
     moderation: "auto",
     reference_token: "ref-token",
+    reference_image_id: 42,
     bytes: new Uint8Array([1, 2, 3]),
     reference: { bytes: [1, 2, 3] },
     reference_base64: "c2Vuc2l0aXZl",
+    reference_url: "imagetools-media://localhost/image/42",
   };
 
   await api.generate(input);
@@ -165,8 +167,12 @@ test("generate sends the Rust JSON DTO with a reference token and no image data"
     background: "opaque",
     moderation: "auto",
     reference_token: "ref-token",
+    reference_image_id: 42,
   } }]]);
-  assert.doesNotMatch(JSON.stringify(calls), /c2Vuc2l0aXZl|reference_base64/);
+  assert.doesNotMatch(
+    JSON.stringify(calls),
+    /c2Vuc2l0aXZl|reference_base64|imagetools-media|reference_url/,
+  );
 });
 
 test("normalizes structured command errors and preserves only safe fields", async () => {

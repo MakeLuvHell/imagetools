@@ -163,6 +163,8 @@ pub struct GenerateInput {
     pub background: String,
     pub moderation: String,
     pub reference_token: Option<String>,
+    #[serde(default)]
+    pub reference_image_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -184,7 +186,32 @@ pub fn utc_now() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{utc_now, Patch, ProviderDto, ProviderInput, SessionUpdateInput};
+    use super::{utc_now, GenerateInput, Patch, ProviderDto, ProviderInput, SessionUpdateInput};
+
+    #[test]
+    fn generation_input_accepts_an_existing_image_id_without_a_token() {
+        let input: GenerateInput = serde_json::from_value(serde_json::json!({
+            "session_id": 1,
+            "provider_id": 2,
+            "prompt": "continue",
+            "model": "gpt-image-2",
+            "width": 1024,
+            "height": 1024,
+            "ratio": "1:1",
+            "resolution": "standard",
+            "count": 1,
+            "quality": "auto",
+            "output_format": "png",
+            "output_compression": 100,
+            "background": "auto",
+            "moderation": "auto",
+            "reference_image_id": 42
+        }))
+        .unwrap();
+
+        assert_eq!(input.reference_image_id, Some(42));
+        assert_eq!(input.reference_token, None);
+    }
 
     #[test]
     fn provider_input_uses_current_snake_case_fields_and_defaults() {

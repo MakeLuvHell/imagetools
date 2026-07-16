@@ -914,6 +914,7 @@ mod tests {
                 background: "opaque".into(),
                 moderation: "low".into(),
                 reference_token: None,
+                reference_image_id: None,
             }
         }
     }

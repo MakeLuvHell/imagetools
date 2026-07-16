@@ -109,6 +109,10 @@ impl MediaResolver {
             file,
         })
     }
+
+    pub fn read(&self, image_id: i64) -> Result<(Vec<u8>, &'static str), CommandError> {
+        read_resolved_media(self.resolve(image_id)?)
+    }
 }
 
 pub fn media_url(image_id: i64) -> String {

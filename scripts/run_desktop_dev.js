@@ -7,7 +7,7 @@ if (args.includes("--release")) {
   process.exitCode = 2;
 } else {
   const tauri = process.platform === "win32" ? "tauri.cmd" : "tauri";
-  const child = spawn(tauri, ["dev", "--config", "src-tauri/tauri.dev.conf.json", ...args], {
+  const child = spawn(tauri, ["dev", ...args], {
     stdio: "inherit",
   });
 

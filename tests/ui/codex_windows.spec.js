@@ -37,7 +37,7 @@ test("new task creates a session only on first valid submit", async ({ page }) =
   await expect.poll(() => requests.sessionsCreated).toBe(1);
   await expect.poll(() => requests.requestLog).toEqual(["session", "generate"]);
   expect(requests.requestLog).toEqual(["session", "generate"]);
-  expect(requests.generateBodies[0]).toContain('name="session_id"\r\n\r\n2');
+  expect(requests.generateBodies[0].session_id).toBe(2);
 });
 
 test("sidebar renders pinned, project, and ordinary session groups", async ({ page }) => {
@@ -131,13 +131,65 @@ test("retry after a network failure reuses the created session", async ({ page }
   expect(requests.requestLog).toEqual(["session", "generate", "generate"]);
 });
 
-test("Lucide is served locally and health identifies the app", async ({ request }) => {
-  const icons = await request.get("/static/vendor/lucide.min.js");
+test("historical result references submit an image id without refetching bytes", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    runs: {
+      1: [{
+        id: 10,
+        status: "succeeded",
+        prompt: "初稿",
+        provider_name: "Default",
+        model: "gpt-image-2",
+        parameters: { count: 1 },
+        images: [{
+          id: 42,
+          url: "/assets/app-icon.png",
+          filename: "result.png",
+          mime_type: "image/png",
+        }],
+      }],
+    },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图" }).click();
+  await page.getByRole("button", { name: "设为参考图" }).click();
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("继续优化");
+  await prompt.press("Enter");
+
+  await expect.poll(() => requests.generateBodies.length).toBe(1);
+  expect(requests.generateBodies[0].reference_image_id).toBe(42);
+  expect(requests.generateBodies[0].reference_token).toBeNull();
+  expect(requests.stagedReferences).toEqual([]);
+});
+
+test("uploaded references stage raw bytes before generation", async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "添加参考图" }).click();
+  await page.getByRole("menuitem", { name: "上传参考图" }).click();
+  await page.locator("#referenceInput").setInputFiles({
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("89504e470d0a1a0a", "hex"),
+  });
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("参考这个构图");
+  await prompt.press("Enter");
+
+  await expect.poll(() => requests.generateBodies.length).toBe(1);
+  expect(requests.stagedReferences).toHaveLength(1);
+  expect(requests.stagedReferences[0].name).toBe("reference.png");
+  expect(requests.generateBodies[0].reference_token).toBe("reference-token-1");
+  expect(requests.generateBodies[0].reference_image_id).toBeNull();
+});
+
+test("bundled shell and Lucide are served locally", async ({ page, request }) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle("Image Tools");
+  const icons = await request.get("/vendor/lucide.min.js");
   expect(icons.status()).toBe(200);
   expect(await icons.text()).toContain("createIcons");
-  await expect(await request.get("/api/health").then((response) => response.json())).toMatchObject({
-    app: "Image Tools",
-  });
 });
 
 test("desktop shell has no horizontal overflow at the minimum size", async ({ page }) => {
@@ -1247,8 +1299,8 @@ test("running success and failure remain stable in one task stream", async ({ pa
       ...running,
       status: "succeeded",
       images: [
-        { url: "/files/images/result.png", filename: "result.png" },
-        { url: "/files/images/result.png", filename: "result-2.png" },
+        { url: "/assets/app-icon.png", filename: "result.png" },
+        { url: "/assets/app-icon.png", filename: "result-2.png" },
       ],
     },
   ];

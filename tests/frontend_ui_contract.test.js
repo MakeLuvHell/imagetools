@@ -10,6 +10,13 @@ const styles = fs.readFileSync(
   "utf8",
 );
 const app = fs.readFileSync(path.join(root, "frontend", "app.js"), "utf8");
+const tauriConfig = JSON.parse(
+  fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"),
+);
+const desktopDevLauncher = fs.readFileSync(
+  path.join(root, "scripts", "run_desktop_dev.js"),
+  "utf8",
+);
 
 function parseHexColor(value) {
   const match = /^#([0-9a-f]{6})$/i.exec(value);
@@ -105,18 +112,18 @@ test("offline icon scripts load before application orchestration", () => {
     (match) => match[1],
   );
   assert.deepEqual(sources, [
-    "/static/theme.js",
-    "/static/preferences.js",
-    "/static/workbench.js",
-    "/static/vendor/lucide.min.js",
-    "/static/icons.js",
-    "/static/ui.js",
-    "/static/desktop-api.js",
-    "/static/app.js",
+    "/theme.js",
+    "/preferences.js",
+    "/workbench.js",
+    "/vendor/lucide.min.js",
+    "/icons.js",
+    "/ui.js",
+    "/desktop-api.js",
+    "/app.js",
   ]);
   assert.ok(
-    html.indexOf('<script src="/static/theme.js"></script>') <
-      html.indexOf('<link rel="stylesheet" href="/static/styles.css" />'),
+    html.indexOf('<script src="/theme.js"></script>') <
+      html.indexOf('<link rel="stylesheet" href="/styles.css" />'),
     "theme bootstrap loads before the stylesheet",
   );
   assert.equal(fs.existsSync(path.join(root, "frontend", "theme.js")), true);
@@ -132,6 +139,25 @@ test("offline icon scripts load before application orchestration", () => {
     fs.existsSync(path.join(root, "frontend", "assets", "app-icon.png")),
     true,
   );
+});
+
+test("production frontend uses only the desktop API and bundled media DTO URLs", () => {
+  assert.doesNotMatch(app, /fetch\s*\(/);
+  assert.doesNotMatch(app, /\/api\//);
+  assert.doesNotMatch(app, /\/files\//);
+  assert.match(app, /ImageToolsDesktopApi\.current\(\)/);
+  assert.match(app, /image\.url/);
+  assert.match(app, /reference_image_id/);
+  assert.doesNotMatch(app, /referenceToken\s*=\s*referenceSource\?\.url/);
+  assert.doesNotMatch(html, /\/static\//);
+});
+
+test("Tauri loads bundled assets without a sidecar or development URL", () => {
+  assert.equal(tauriConfig.build.frontendDist, "../frontend");
+  assert.equal(Object.hasOwn(tauriConfig.build, "devUrl"), false);
+  assert.equal(Object.hasOwn(tauriConfig.bundle, "externalBin"), false);
+  assert.equal(fs.existsSync(path.join(root, "src-tauri", "tauri.dev.conf.json")), false);
+  assert.doesNotMatch(desktopDevLauncher, /tauri\.dev\.conf\.json/);
 });
 
 test("shell follows system themes and keeps Windows desktop geometry", () => {
