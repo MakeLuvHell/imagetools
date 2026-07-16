@@ -607,7 +607,7 @@ Status: Done
 
 ## RB008: 建立受限媒体协议和 Tauri 命令表面
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -630,7 +630,7 @@ reference IPC 测试。命令与协议只在 mock builder 中注册，尚不切�
 
 ## RB009: 添加前端 Desktop API 适配器
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 

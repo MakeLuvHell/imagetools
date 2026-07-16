@@ -209,3 +209,13 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** The aggregate limit bounds JSON and base64 residency, while the per-image limit remains above the maximum normal encoded output for the supported 8.3-megapixel generation contract. Checking both declared lengths and streamed bytes prevents chunked responses from bypassing the limits. Signature-based typing avoids trusting redirect URLs or misleading response headers.
 
 **Consequences:** Oversized Provider responses and images fail with structured safe errors. A four-image base64 response can reach the aggregate limit before every image reaches the per-image limit; this is intentional process-memory protection. URL downloads remain unauthenticated and use the final response only after the existing redirect and timeout checks.
+
+### 2026-07-16: Resolve Desktop Media Through Capability File Handles
+
+**Decision:** Resolve generated media only by database image ID, open flat `images/<filename>` entries relative to a `cap-std` directory capability, and carry the opened file handle through bounded response reading. Detect PNG, JPEG, or WebP MIME from that handle instead of trusting stored metadata.
+
+**Context:** Canonicalizing a path and reopening it later leaves a replacement race that can expose files outside the workspace. The desktop media protocol also needs to serve existing results back to the Composer without accepting arbitrary local paths.
+
+**Reasoning:** A directory capability constrains symlink and reparse-point resolution across supported platforms. Reading the same opened handle removes the path replacement window. A 64 MiB metadata and read limit, signature-based MIME, `nosniff`, and ID-only routes keep the protocol image-only and bounded.
+
+**Consequences:** Stored media paths must remain flat under `images/`; traversal, nested paths, symlink escape, non-image bytes, and oversized files are rejected. Windows WebView2 still requires a final real-protocol smoke test because Tauri's mock runtime can prove registration but not dispatch the platform URL mapping.
