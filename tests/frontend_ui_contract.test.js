@@ -111,6 +111,7 @@ test("offline icon scripts load before application orchestration", () => {
     "/static/vendor/lucide.min.js",
     "/static/icons.js",
     "/static/ui.js",
+    "/static/desktop-api.js",
     "/static/app.js",
   ]);
   assert.ok(
