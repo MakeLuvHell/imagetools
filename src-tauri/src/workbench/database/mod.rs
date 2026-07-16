@@ -4,6 +4,7 @@ use rusqlite::Connection;
 
 use crate::workbench::error::CommandError;
 
+pub mod history;
 pub mod providers;
 pub mod schema;
 

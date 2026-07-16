@@ -182,3 +182,11 @@ def test_python_provider_helpers_match_the_shared_public_contract(tmp_path):
     assert clean_input.model_dump() == contract["provider_input"]
     assert main.public_provider(provider) == contract["provider_public"]
     assert main.public_settings(main.provider_to_settings(provider)) == contract["settings_public"]
+
+    project = store.get_project(1)
+    session = store.get_session(1)
+    run = store.get_generation_run(1)
+    assert project is not None and session is not None and run is not None
+    assert main.public_project(project) == contract["project_public"]
+    assert main.public_session(session) == contract["session_public"]
+    assert main.public_generation_run(store, run) == contract["run_public"]

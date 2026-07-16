@@ -537,7 +537,7 @@ URL 规范化和兼容 settings 命令。所有公共结果只报告密钥是否
 
 ## RB005: 移植项目、会话与生成历史
 
-Status: Ready
+Status: Done
 
 ### What to build
 

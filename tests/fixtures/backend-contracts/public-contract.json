@@ -22,5 +22,44 @@
     "api_key": "",
     "api_key_set": true,
     "model": "gpt-image-2"
+  },
+  "project_public": {
+    "id": 1,
+    "name": "品牌项目",
+    "created_at": "2026-07-15T00:00:00.000000+00:00",
+    "updated_at": "2026-07-15T00:00:00.000000+00:00"
+  },
+  "session_public": {
+    "id": 1,
+    "title": "已固定会话",
+    "recent_thumbnail_path": "images/result.png",
+    "project_id": 1,
+    "is_pinned": true,
+    "created_at": "2026-07-15T00:00:00.000000+00:00",
+    "updated_at": "2026-07-15T00:00:00.000000+00:00"
+  },
+  "run_public": {
+    "id": 1,
+    "session_id": 1,
+    "status": "succeeded",
+    "prompt": "生成一张海报",
+    "parameters": {"count": 1, "quality": "high", "ratio": "16:9"},
+    "provider_id": 1,
+    "provider_name": "Primary",
+    "model": "gpt-image-2",
+    "reference_image_path": null,
+    "error_message": null,
+    "created_at": "2026-07-15T00:00:00.000000+00:00",
+    "completed_at": "2026-07-15T00:00:01.000000+00:00",
+    "images": [{
+      "id": 1,
+      "local_path": "images/result.png",
+      "url": "/files/images/result.png",
+      "filename": "result.png",
+      "mime_type": "image/png",
+      "width": 1536,
+      "height": 864,
+      "created_at": "2026-07-15T00:00:01.000000+00:00"
+    }]
   }
 }
