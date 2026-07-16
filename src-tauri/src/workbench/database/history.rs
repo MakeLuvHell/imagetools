@@ -293,7 +293,7 @@ impl HistoryRepository {
         &self,
         run_id: i64,
         images: &[NewImageInput],
-    ) -> Result<RunRecord, CommandError> {
+    ) -> Result<(RunRecord, Vec<i64>), CommandError> {
         self.database.with_connection(|connection| {
             let tx = connection.transaction().map_err(database_error)?;
             let run = query_run(&tx, run_id)?.ok_or_else(run_not_found)?;
@@ -313,12 +313,14 @@ impl HistoryRepository {
                 return Err(session_not_found());
             }
             let completed = utc_now();
+            let mut image_ids = Vec::with_capacity(images.len());
             for image in images {
                 tx.execute(
                     "INSERT INTO images (generation_run_id, local_path, filename, mime_type, width, height, created_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                     params![run_id, image.local_path, image.filename, image.mime_type, image.width, image.height, completed])
                     .map_err(database_error)?;
+                image_ids.push(tx.last_insert_rowid());
             }
             tx.execute("UPDATE generation_runs SET status = 'succeeded', error_message = NULL, completed_at = ?1 WHERE id = ?2", params![completed, run_id]).map_err(database_error)?;
             if let Some(image) = images.first() {
@@ -326,7 +328,7 @@ impl HistoryRepository {
             }
             let completed_run = query_run(&tx, run_id)?.ok_or_else(run_not_found)?;
             tx.commit().map_err(database_error)?;
-            Ok(completed_run)
+            Ok((completed_run, image_ids))
         })
     }
 

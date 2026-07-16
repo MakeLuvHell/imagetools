@@ -11,7 +11,10 @@ use atomic_write_file::AtomicWriteFile;
 use rusqlite::{backup::Backup, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 
-use crate::workbench::error::CommandError;
+use crate::workbench::{
+    error::CommandError,
+    models::{StorageLocationDto, StorageLocationInput},
+};
 
 const BOOTSTRAP_FILENAME: &str = "storage-location.json";
 const DATABASE_FILENAME: &str = "workbench.sqlite3";
@@ -52,6 +55,69 @@ impl StorageLocation {
     pub fn is_custom(&self) -> bool {
         self.active_data_dir != self.default_data_dir
     }
+}
+
+#[derive(Clone)]
+pub struct StorageManager {
+    location: StorageLocation,
+    config_dir: PathBuf,
+}
+
+impl StorageManager {
+    pub fn new(location: StorageLocation) -> Result<Self, CommandError> {
+        let config_dir = location
+            .config_path
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| storage_error("storage.path_invalid", "无法解析工作区数据目录。"))?;
+        Ok(Self {
+            location,
+            config_dir,
+        })
+    }
+
+    pub fn location(&self) -> &StorageLocation {
+        &self.location
+    }
+
+    pub fn status(&self) -> Result<StorageLocationDto, CommandError> {
+        self.status_with_restart(None)
+    }
+
+    pub fn schedule(
+        &self,
+        input: StorageLocationInput,
+    ) -> Result<StorageLocationDto, CommandError> {
+        schedule_storage_location(
+            &self.location.active_data_dir,
+            &self.config_dir,
+            &input.data_dir,
+            input.migrate_existing,
+        )?;
+        self.status_with_restart(Some(true))
+    }
+
+    fn status_with_restart(
+        &self,
+        restart_required: Option<bool>,
+    ) -> Result<StorageLocationDto, CommandError> {
+        let bootstrap = read_bootstrap(&self.location.config_path)?;
+        let pending_data_dir = bootstrap
+            .pending
+            .map(|pending| normalize_absolute_path(&pending.data_dir))
+            .transpose()?;
+        Ok(StorageLocationDto {
+            active_data_dir: path_string(&self.location.active_data_dir),
+            default_data_dir: path_string(&self.location.default_data_dir),
+            pending_data_dir: pending_data_dir.as_deref().map(path_string),
+            is_custom: self.location.is_custom(),
+            restart_required,
+        })
+    }
+}
+
+fn path_string(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
 
 pub fn schedule_storage_location(

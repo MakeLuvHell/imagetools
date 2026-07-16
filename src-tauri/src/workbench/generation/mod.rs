@@ -223,17 +223,20 @@ impl GenerationService {
             .iter()
             .map(|image| image.metadata.clone())
             .collect::<Vec<_>>();
-        if let Err(error) = self.history.commit_success(run.id, metadata) {
-            let error = merge_cleanup_error(error, ResultFileStore::cleanup(&persisted));
-            return self.finish_failed(run.id, error);
-        }
+        let image_ids = match self.history.commit_success(run.id, metadata) {
+            Ok(image_ids) => image_ids,
+            Err(error) => {
+                let error = merge_cleanup_error(error, ResultFileStore::cleanup(&persisted));
+                return self.finish_failed(run.id, error);
+            }
+        };
         Ok(GenerateResultDto {
             kind: kind.to_string(),
             model,
             size,
-            images: persisted
+            images: image_ids
                 .iter()
-                .map(|image| format!("/files/{}", image.metadata.local_path))
+                .map(|image_id| crate::workbench::media::media_url(*image_id))
                 .collect(),
         })
     }
@@ -943,6 +946,7 @@ mod tests {
         assert_eq!(runs[0].provider_id, Some(fixture.provider_id));
         assert_eq!(runs[0].provider_name, "Primary");
         assert_eq!(runs[0].model, "gpt-image-2");
+        assert_eq!(result.images, vec![runs[0].images[0].url.clone()]);
         assert_eq!(
             runs[0].parameters,
             serde_json::json!({

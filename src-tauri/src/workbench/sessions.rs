@@ -138,11 +138,17 @@ impl HistoryService {
         id: i64,
         images: Vec<NewImageInput>,
     ) -> Result<GenerationRunDto, CommandError> {
-        let run = self.repository.complete_success(id, &images)?;
+        let (run, _) = self.repository.complete_success(id, &images)?;
         self.run_dto(run)
     }
-    pub fn commit_success(&self, id: i64, images: Vec<NewImageInput>) -> Result<(), CommandError> {
-        self.repository.complete_success(id, &images).map(drop)
+    pub fn commit_success(
+        &self,
+        id: i64,
+        images: Vec<NewImageInput>,
+    ) -> Result<Vec<i64>, CommandError> {
+        self.repository
+            .complete_success(id, &images)
+            .map(|(_, image_ids)| image_ids)
     }
     pub fn finish_failed(&self, id: i64, message: &str) -> Result<GenerationRunDto, CommandError> {
         let run = self.repository.finish_failed(id, message)?;
@@ -211,7 +217,7 @@ fn image_dto(r: ImageRecord) -> ImageDto {
     ImageDto {
         id: r.id,
         local_path: r.local_path.clone(),
-        url: format!("/files/{}", r.local_path),
+        url: crate::workbench::media::media_url(r.id),
         filename: r.filename,
         mime_type: r.mime_type,
         width: r.width,
@@ -467,6 +473,18 @@ mod tests {
             ["images/first.png", "images/second.png"]
         );
         assert_eq!(
+            completed
+                .images
+                .iter()
+                .map(|image| image.url.as_str())
+                .collect::<Vec<_>>(),
+            completed
+                .images
+                .iter()
+                .map(|image| crate::workbench::media::media_url(image.id))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
             fixture
                 .service
                 .get_session(session_id)
@@ -629,10 +647,11 @@ mod tests {
         drop(connection);
         let database = Arc::new(Database::open(&database_path).unwrap());
         let service = HistoryService::new(HistoryRepository::new(database));
-        let contract: serde_json::Value = serde_json::from_str(
+        let mut contract: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(fixture_dir.join("public-contract.json")).unwrap(),
         )
         .unwrap();
+        contract["run_public"]["images"][0]["url"] = crate::workbench::media::media_url(1).into();
 
         assert_eq!(
             serde_json::to_value(service.list_projects().unwrap().remove(0)).unwrap(),

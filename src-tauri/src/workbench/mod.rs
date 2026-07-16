@@ -1,6 +1,8 @@
+pub mod commands;
 pub mod database;
 pub mod error;
 pub mod generation;
+pub mod media;
 pub mod models;
 pub mod providers;
 pub mod sessions;
