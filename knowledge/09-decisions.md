@@ -219,3 +219,13 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** A directory capability constrains symlink and reparse-point resolution across supported platforms. Reading the same opened handle removes the path replacement window. A 64 MiB metadata and read limit, signature-based MIME, `nosniff`, and ID-only routes keep the protocol image-only and bounded.
 
 **Consequences:** Stored media paths must remain flat under `images/`; traversal, nested paths, symlink escape, non-image bytes, and oversized files are rejected. Windows WebView2 still requires a final real-protocol smoke test because Tauri's mock runtime can prove registration but not dispatch the platform URL mapping.
+
+### 2026-07-16: Centralize The Desktop IPC Boundary
+
+**Decision:** Route frontend desktop operations through one injectable adapter. Trust only the exact serialized Rust `CommandError` fields (`code`, `message`, and optional `diagnostic`); convert raw strings, JavaScript errors, and non-exact objects to a fixed safe failure.
+
+**Context:** The additive IPC adapter must support browser mocks during the transition while preserving the Rust backend's safe error contract without exposing arbitrary rejection objects.
+
+**Reasoning:** A single adapter freezes command names and camelCase Tauri arguments before the production cutover. Rust owns the semantic safety of its error strings; JavaScript can enforce the serialized shape and discard every other rejection form, but cannot reliably classify string content.
+
+**Consequences:** Frontend orchestration should call `ImageToolsDesktopApi` after RB010 instead of invoking Tauri commands directly. New Rust commands must return `CommandError` to preserve structured UI failures, and injected mocks should reject with the same exact shape when testing backend errors.

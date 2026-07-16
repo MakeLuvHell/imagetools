@@ -19,6 +19,7 @@ Use this file to feed project experience back into the knowledge base.
 - Separate a successful database commit from fallible DTO projection. Post-commit read failures must never trigger cleanup of files already referenced by committed rows.
 - Canonicalizing a media path and reopening it later is still a replacement race. Carry a capability-contained file handle from validation through response reading.
 - Tauri's `invoke_handler` is a single handler slot. Generate one combined handler for existing shell commands and new workbench commands instead of registering helpers sequentially.
+- Treat the Rust `CommandError` shape as the desktop IPC trust contract. Rebuild accepted errors from its three fields and replace raw or non-exact JavaScript rejections with fixed safe text.
 
 ## Mistakes Or Pitfalls
 

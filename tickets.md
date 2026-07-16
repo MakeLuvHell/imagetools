@@ -630,7 +630,7 @@ reference IPC 测试。命令与协议只在 mock builder 中注册，尚不切�
 
 ## RB009: 添加前端 Desktop API 适配器
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -653,7 +653,7 @@ adapter，`app.js` 仍走 REST。
 
 ## RB010: 一次性切换前端与 Tauri 到 IPC
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
