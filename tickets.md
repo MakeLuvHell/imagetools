@@ -582,7 +582,7 @@ Status: Done
 
 ## RB007: 实现参考图暂存和持久化生成闭环
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -607,7 +607,7 @@ Status: Ready
 
 ## RB008: 建立受限媒体协议和 Tauri 命令表面
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 

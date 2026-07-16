@@ -15,6 +15,8 @@ Use this file to feed project experience back into the knowledge base.
 - Load a small, dependency-free theme bootstrap before the stylesheet so a persisted manual mode reaches the root before first paint.
 - Give native theme synchronization a generation token so late asynchronous failures cannot overwrite the newest selection's status.
 - Browser storage origins include the port. Desktop shells using random loopback ports need a stable-origin or port-independent device mirror, and their regression test must navigate two actual origins.
+- Bound Provider responses while streaming, then validate decoded image signatures before publishing files; checking only after a full response is resident does not protect the desktop process.
+- Separate a successful database commit from fallible DTO projection. Post-commit read failures must never trigger cleanup of files already referenced by committed rows.
 
 ## Mistakes Or Pitfalls
 
@@ -28,6 +30,7 @@ Use this file to feed project experience back into the knowledge base.
 - A radio's `change` event does not fire when the already-selected option is activated, so selected-mode retry needs a focused click path without duplicating ordinary changes.
 - Translucent focus shadows can fail WCAG non-text contrast; use an opaque indicator and test its resolved token contrast in every manual theme.
 - Prefer locator-cropped snapshots only for concise, reusable sub-surfaces. Full-region snapshots should own navigation and page-shell changes, while unchanged cropped dialogs can remain byte-identical.
+- A session can be deleted while an upstream generation request is awaiting. Recheck active ownership inside the completion transaction before inserting images or updating its thumbnail.
 
 ## Prompts That Worked
 
