@@ -175,9 +175,6 @@ test("normalizes structured command errors and preserves only safe fields", asyn
       code: "provider.upstream_status",
       message: "Provider 请求失败。",
       diagnostic: "HTTP 429",
-      api_key: "secret",
-      stack: "private stack",
-      authorization: "Bearer secret",
     };
   });
 
@@ -187,19 +184,32 @@ test("normalizes structured command errors and preserves only safe fields", asyn
     assert.equal(error.code, "provider.upstream_status");
     assert.equal(error.message, "Provider 请求失败。");
     assert.equal(error.diagnostic, "HTTP 429");
-    assert.equal(error.api_key, undefined);
-    assert.equal(error.authorization, undefined);
-    assert.doesNotMatch(error.stack, /private stack|secret/);
     return true;
   });
 });
 
-test("does not expose arbitrary rejection objects as diagnostics", async () => {
+test("does not expose raw sensitive string rejections", async () => {
+  const api = desktopApi.createDesktopApi(async () => {
+    throw "request failed with sk-raw-secret";
+  });
+
+  await assert.rejects(api.getSettings(), (error) => {
+    assert.ok(error instanceof desktopApi.DesktopApiError);
+    assert.equal(error.code, "desktop.invoke_failed");
+    assert.equal(error.message, "桌面后端请求失败。");
+    assert.equal(Object.hasOwn(error, "diagnostic"), false);
+    assert.doesNotMatch(error.stack, /sk-raw-secret/);
+    return true;
+  });
+});
+
+test("rejects non-exact objects without exposing sensitive strings", async () => {
   const api = desktopApi.createDesktopApi(async () => {
     throw {
-      message: { api_key: "secret" },
-      diagnostic: { uploaded_bytes: [1, 2, 3] },
-      stack: "sensitive stack",
+      code: "provider.upstream_status",
+      message: "Provider failed with sk-object-secret",
+      diagnostic: "authorization: Bearer object-secret",
+      api_key: "sk-extra-secret",
     };
   });
 
@@ -208,7 +218,36 @@ test("does not expose arbitrary rejection objects as diagnostics", async () => {
     assert.equal(error.code, "desktop.invoke_failed");
     assert.equal(error.message, "桌面后端请求失败。");
     assert.equal(Object.hasOwn(error, "diagnostic"), false);
-    assert.doesNotMatch(error.stack, /secret|uploaded_bytes|sensitive stack/);
+    assert.doesNotMatch(
+      `${error.stack}\n${JSON.stringify(error)}`,
+      /sk-object-secret|object-secret|sk-extra-secret/,
+    );
+    return true;
+  });
+});
+
+test("clones DesktopApiError rejections without sensitive extra properties", async () => {
+  const rejected = new desktopApi.DesktopApiError(
+    "desktop.unavailable",
+    "桌面后端不可用。",
+  );
+  rejected.api_key = "sk-desktop-secret";
+  rejected.authorization = "Bearer desktop-secret";
+  const api = desktopApi.createDesktopApi(async () => {
+    throw rejected;
+  });
+
+  await assert.rejects(api.getSettings(), (error) => {
+    assert.ok(error instanceof desktopApi.DesktopApiError);
+    assert.notEqual(error, rejected);
+    assert.equal(error.code, "desktop.unavailable");
+    assert.equal(error.message, "桌面后端不可用。");
+    assert.equal(error.api_key, undefined);
+    assert.equal(error.authorization, undefined);
+    assert.doesNotMatch(
+      `${error.stack}\n${JSON.stringify(error)}`,
+      /sk-desktop-secret|desktop-secret/,
+    );
     return true;
   });
 });

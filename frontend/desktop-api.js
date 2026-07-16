@@ -38,23 +38,51 @@
     }
   }
 
-  function normalizeError(error) {
-    if (error instanceof DesktopApiError) {
-      return error;
+  function genericError() {
+    return new DesktopApiError(
+      "desktop.invoke_failed",
+      "桌面后端请求失败。",
+    );
+  }
+
+  function cloneDesktopApiError(error) {
+    if (typeof error.code !== "string" || typeof error.message !== "string") {
+      return genericError();
     }
-    const structured = error !== null && typeof error === "object";
-    const code = structured && typeof error.code === "string"
-      ? error.code
-      : "desktop.invoke_failed";
-    const message = structured && typeof error.message === "string"
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "桌面后端请求失败。";
-    const diagnostic = structured && typeof error.diagnostic === "string"
+    const diagnostic = typeof error.diagnostic === "string"
       ? error.diagnostic
       : undefined;
-    return new DesktopApiError(code, message, diagnostic);
+    return new DesktopApiError(error.code, error.message, diagnostic);
+  }
+
+  function isCommandError(error) {
+    if (error === null || typeof error !== "object") {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(error);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return false;
+    }
+    const keys = Object.keys(error);
+    if (
+      !keys.includes("code") ||
+      !keys.includes("message") ||
+      keys.some((key) => !["code", "message", "diagnostic"].includes(key))
+    ) {
+      return false;
+    }
+    return typeof error.code === "string" &&
+      typeof error.message === "string" &&
+      (error.diagnostic === undefined ||
+        error.diagnostic === null ||
+        typeof error.diagnostic === "string");
+  }
+
+  function normalizeError(error) {
+    if (error instanceof DesktopApiError) {
+      return cloneDesktopApiError(error);
+    }
+    return isCommandError(error) ? cloneDesktopApiError(error) : genericError();
   }
 
   function createDesktopApi(invoke) {
