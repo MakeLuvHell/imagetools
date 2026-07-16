@@ -1,6 +1,309 @@
-use super::error::CommandError;
+use std::{future::Future, path::Path, pin::Pin, sync::Arc};
+
+use super::{
+    database::providers::{ProviderRecord, ProviderRepository},
+    error::CommandError,
+    models::{GenerateInput, GenerateResultDto},
+    sessions::{HistoryService, NewRunInput},
+};
+use client::{ProviderClient, ProviderResponse};
+use files::{ConsumedReference, ReferenceStore, ResultFileStore};
 
 pub mod client;
+pub mod files;
+
+pub trait ProviderTransport: Send + Sync {
+    fn generate<'a>(
+        &'a self,
+        request: &'a GenerationRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>>;
+
+    fn edit<'a>(
+        &'a self,
+        request: &'a EditRequest,
+        filename: String,
+        mime_type: &'a str,
+        image: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>>;
+}
+
+pub trait ProviderFactory: Send + Sync {
+    fn create(
+        &self,
+        base_url: &str,
+        api_key: &str,
+    ) -> Result<Arc<dyn ProviderTransport>, CommandError>;
+}
+
+struct DefaultProviderFactory;
+
+impl ProviderFactory for DefaultProviderFactory {
+    fn create(
+        &self,
+        base_url: &str,
+        api_key: &str,
+    ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
+        Ok(Arc::new(ProviderClient::new(base_url, api_key)?))
+    }
+}
+
+impl ProviderTransport for ProviderClient {
+    fn generate<'a>(
+        &'a self,
+        request: &'a GenerationRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>> {
+        Box::pin(async move { ProviderClient::generate(self, request).await })
+    }
+
+    fn edit<'a>(
+        &'a self,
+        request: &'a EditRequest,
+        filename: String,
+        mime_type: &'a str,
+        image: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>> {
+        Box::pin(
+            async move { ProviderClient::edit(self, request, filename, mime_type, image).await },
+        )
+    }
+}
+
+pub struct GenerationService {
+    providers: ProviderRepository,
+    history: HistoryService,
+    references: ReferenceStore,
+    result_files: ResultFileStore,
+    data_root: std::path::PathBuf,
+    factory: Arc<dyn ProviderFactory>,
+}
+
+impl GenerationService {
+    pub fn new(
+        providers: ProviderRepository,
+        history: HistoryService,
+        references: ReferenceStore,
+        data_root: std::path::PathBuf,
+    ) -> Self {
+        Self::with_factory(
+            providers,
+            history,
+            references,
+            data_root,
+            Arc::new(DefaultProviderFactory),
+        )
+    }
+
+    pub(crate) fn with_factory(
+        providers: ProviderRepository,
+        history: HistoryService,
+        references: ReferenceStore,
+        data_root: std::path::PathBuf,
+        factory: Arc<dyn ProviderFactory>,
+    ) -> Self {
+        Self {
+            providers,
+            history,
+            references,
+            result_files: ResultFileStore::new(data_root.clone()),
+            data_root,
+            factory,
+        }
+    }
+
+    pub async fn generate(&self, input: GenerateInput) -> Result<GenerateResultDto, CommandError> {
+        let prompt = input.prompt.trim().to_string();
+        if prompt.is_empty() {
+            return Err(CommandError::new(
+                "generation.prompt_required",
+                "请先输入提示词。",
+            ));
+        }
+        self.history.get_session(input.session_id)?;
+        let provider = self.resolve_provider(input.provider_id)?;
+        let model = if input.model.trim().is_empty() {
+            provider.default_model.clone()
+        } else {
+            input.model.trim().to_string()
+        };
+        let size = validate_image_size(input.width, input.height)?;
+        let count = normalize_count(input.count);
+        let quality = normalize_quality(&input.quality);
+        let output_format = normalize_output_format(&input.output_format);
+        let output_compression = normalize_output_compression(input.output_compression);
+        let background =
+            validate_background_for_model(&normalize_background(&input.background), &model)?;
+        let moderation = normalize_moderation(&input.moderation);
+        let reference = input
+            .reference_token
+            .as_deref()
+            .map(|token| self.references.consume(token))
+            .transpose()?;
+        let reference_image_path = reference
+            .as_ref()
+            .map(|reference| relative_data_path(&self.data_root, &reference.path))
+            .transpose()?;
+        let kind = if reference.is_some() {
+            "image_to_image"
+        } else {
+            "text_to_image"
+        };
+        let parameters = serde_json::json!({
+            "width": input.width,
+            "height": input.height,
+            "size": size,
+            "ratio": input.ratio.trim(),
+            "resolution": input.resolution.trim(),
+            "count": count,
+            "quality": quality,
+            "output_format": output_format,
+            "output_compression": output_compression,
+            "background": background,
+            "moderation": moderation,
+            "kind": kind,
+        });
+        let run = match self.history.create_run(NewRunInput {
+            session_id: input.session_id,
+            status: "running".into(),
+            prompt: prompt.clone(),
+            parameters,
+            provider_id: Some(provider.id),
+            provider_name: provider.name.clone(),
+            model: model.clone(),
+            reference_image_path,
+            error_message: None,
+        }) {
+            Ok(run) => run,
+            Err(error) => {
+                if let Some(reference) = reference {
+                    let _ = std::fs::remove_file(reference.path);
+                }
+                return Err(error);
+            }
+        };
+
+        let response = self
+            .request_provider(
+                &provider,
+                reference.as_ref(),
+                &prompt,
+                &model,
+                &size,
+                count,
+                &quality,
+                &output_format,
+                output_compression,
+                &background,
+                &moderation,
+            )
+            .await;
+        let response = match response {
+            Ok(response) => response,
+            Err(error) => return self.finish_failed(run.id, error),
+        };
+        let persisted = match self
+            .result_files
+            .persist(response, &output_format, input.width, input.height)
+            .await
+        {
+            Ok(persisted) => persisted,
+            Err(error) => return self.finish_failed(run.id, error),
+        };
+        let metadata = persisted
+            .iter()
+            .map(|image| image.metadata.clone())
+            .collect::<Vec<_>>();
+        if let Err(error) = self.history.complete_success(run.id, metadata) {
+            ResultFileStore::cleanup(&persisted);
+            return self.finish_failed(run.id, error);
+        }
+        Ok(GenerateResultDto {
+            kind: kind.to_string(),
+            model,
+            size,
+            images: persisted
+                .iter()
+                .map(|image| format!("/files/{}", image.metadata.local_path))
+                .collect(),
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn request_provider(
+        &self,
+        provider: &ProviderRecord,
+        reference: Option<&ConsumedReference>,
+        prompt: &str,
+        model: &str,
+        size: &str,
+        count: i64,
+        quality: &str,
+        output_format: &str,
+        output_compression: i64,
+        background: &str,
+        moderation: &str,
+    ) -> Result<ProviderResponse, CommandError> {
+        let client = self.factory.create(&provider.base_url, &provider.api_key)?;
+        if let Some(reference) = reference {
+            let bytes = std::fs::read(&reference.path)
+                .map_err(|_| CommandError::new("reference.read_failed", "无法读取参考图。"))?;
+            client
+                .edit(
+                    &EditRequest {
+                        prompt: prompt.to_string(),
+                        model: model.to_string(),
+                        size: size.to_string(),
+                        quality: quality.to_string(),
+                        output_format: output_format.to_string(),
+                        output_compression,
+                        background: background.to_string(),
+                    },
+                    reference.original_name.clone(),
+                    &reference.mime_type,
+                    bytes,
+                )
+                .await
+        } else {
+            client
+                .generate(&GenerationRequest {
+                    prompt: prompt.to_string(),
+                    model: model.to_string(),
+                    size: size.to_string(),
+                    count,
+                    quality: quality.to_string(),
+                    output_format: output_format.to_string(),
+                    output_compression,
+                    background: background.to_string(),
+                    moderation: moderation.to_string(),
+                })
+                .await
+        }
+    }
+
+    fn resolve_provider(&self, provider_id: Option<i64>) -> Result<ProviderRecord, CommandError> {
+        let provider = if let Some(provider_id) = provider_id {
+            self.providers.get(provider_id)?
+        } else {
+            let providers = self.providers.list()?;
+            providers
+                .iter()
+                .find(|provider| provider.is_default)
+                .cloned()
+                .or_else(|| providers.into_iter().next())
+        };
+        provider.ok_or_else(|| CommandError::new("provider.not_found", "请先配置 Provider。"))
+    }
+
+    fn finish_failed<T>(&self, run_id: i64, error: CommandError) -> Result<T, CommandError> {
+        self.history.finish_failed(run_id, &error.message)?;
+        Err(error)
+    }
+}
+
+fn relative_data_path(data_root: &Path, path: &Path) -> Result<String, CommandError> {
+    path.strip_prefix(data_root)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| CommandError::new("reference.invalid_path", "参考图路径无效。"))
+}
 
 const MIN_IMAGE_PIXELS: u64 = 655_360;
 const MAX_IMAGE_PIXELS: u64 = 8_294_400;
@@ -171,11 +474,31 @@ fn invalid_size(message: &'static str) -> CommandError {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::{Arc, Mutex},
+    };
+
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
     use super::{
         build_edit_fields, build_generation_payload, join_api_url, normalize_background,
         normalize_count, normalize_moderation, normalize_option, normalize_output_compression,
         normalize_output_format, normalize_quality, validate_background_for_model,
-        validate_image_size, EditRequest, GenerationRequest,
+        validate_image_size, EditRequest, GenerationRequest, GenerationService, ProviderFactory,
+        ProviderTransport,
+    };
+    use crate::workbench::{
+        database::{history::HistoryRepository, providers::ProviderRepository, Database},
+        error::CommandError,
+        generation::{
+            client::{ProviderImage, ProviderResponse},
+            files::ReferenceStore,
+        },
+        models::{GenerateInput, ProviderInput, SessionCreateInput},
+        providers::ProviderService,
+        sessions::HistoryService,
     };
 
     fn generation_request() -> GenerationRequest {
@@ -328,5 +651,340 @@ mod tests {
                 ("output_compression".into(), "80".into()),
             ]
         );
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum FakeCall {
+        Generate(GenerationRequest),
+        Edit(EditRequest, String, String, Vec<u8>),
+    }
+
+    struct FakeState {
+        response: Result<ProviderResponse, CommandError>,
+        calls: Mutex<Vec<FakeCall>>,
+        configurations: Mutex<Vec<(String, String)>>,
+    }
+
+    #[derive(Clone)]
+    struct FakeFactory(Arc<FakeState>);
+
+    struct FakeTransport(Arc<FakeState>);
+
+    impl ProviderFactory for FakeFactory {
+        fn create(
+            &self,
+            base_url: &str,
+            api_key: &str,
+        ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
+            self.0
+                .configurations
+                .lock()
+                .unwrap()
+                .push((base_url.to_string(), api_key.to_string()));
+            Ok(Arc::new(FakeTransport(self.0.clone())))
+        }
+    }
+
+    impl ProviderTransport for FakeTransport {
+        fn generate<'a>(
+            &'a self,
+            request: &'a GenerationRequest,
+        ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>>
+        {
+            self.0
+                .calls
+                .lock()
+                .unwrap()
+                .push(FakeCall::Generate(request.clone()));
+            let response = self.0.response.clone();
+            Box::pin(async move { response })
+        }
+
+        fn edit<'a>(
+            &'a self,
+            request: &'a EditRequest,
+            filename: String,
+            mime_type: &'a str,
+            image: Vec<u8>,
+        ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>>
+        {
+            self.0.calls.lock().unwrap().push(FakeCall::Edit(
+                request.clone(),
+                filename,
+                mime_type.to_string(),
+                image,
+            ));
+            let response = self.0.response.clone();
+            Box::pin(async move { response })
+        }
+    }
+
+    struct GenerationFixture {
+        _temporary: tempfile::TempDir,
+        data_root: std::path::PathBuf,
+        database: Arc<Database>,
+        history: HistoryService,
+        references: ReferenceStore,
+        fake: Arc<FakeState>,
+        provider_id: i64,
+        session_id: i64,
+    }
+
+    impl GenerationFixture {
+        fn new(response: Result<ProviderResponse, CommandError>) -> Self {
+            let temporary = tempfile::tempdir().unwrap();
+            let data_root = temporary.path().join("data");
+            std::fs::create_dir_all(&data_root).unwrap();
+            let database = Arc::new(Database::open(&data_root.join("workbench.sqlite3")).unwrap());
+            let providers = ProviderRepository::new(database.clone());
+            let provider_service = ProviderService::new(providers, data_root.join("settings.json"));
+            let provider_id = provider_service
+                .create(ProviderInput {
+                    name: "Primary".into(),
+                    base_url: "https://provider.example/v1".into(),
+                    api_key: "sk-private".into(),
+                    default_model: "gpt-image-2".into(),
+                    is_default: true,
+                })
+                .unwrap()
+                .id;
+            let history = HistoryService::new(HistoryRepository::new(database.clone()));
+            let session_id = history
+                .create_session(SessionCreateInput {
+                    title: "产品海报".into(),
+                })
+                .unwrap()
+                .id;
+            let references = ReferenceStore::new(data_root.join("uploads")).unwrap();
+            Self {
+                _temporary: temporary,
+                data_root,
+                database,
+                history,
+                references,
+                fake: Arc::new(FakeState {
+                    response,
+                    calls: Mutex::new(Vec::new()),
+                    configurations: Mutex::new(Vec::new()),
+                }),
+                provider_id,
+                session_id,
+            }
+        }
+
+        fn service(&self) -> GenerationService {
+            GenerationService::with_factory(
+                ProviderRepository::new(self.database.clone()),
+                self.history.clone(),
+                self.references.clone(),
+                self.data_root.clone(),
+                Arc::new(FakeFactory(self.fake.clone())),
+            )
+        }
+
+        fn input(&self) -> GenerateInput {
+            GenerateInput {
+                session_id: self.session_id,
+                provider_id: Some(self.provider_id),
+                prompt: "  A clean product poster  ".into(),
+                model: String::new(),
+                width: 1536,
+                height: 864,
+                ratio: " 16:9 ".into(),
+                resolution: " standard ".into(),
+                count: 2,
+                quality: "high".into(),
+                output_format: "png".into(),
+                output_compression: 85,
+                background: "opaque".into(),
+                moderation: "low".into(),
+                reference_token: None,
+            }
+        }
+    }
+
+    fn image_response(bytes: &[u8]) -> Result<ProviderResponse, CommandError> {
+        Ok(ProviderResponse {
+            data: vec![ProviderImage {
+                b64_json: Some(STANDARD.encode(bytes)),
+                url: None,
+            }],
+        })
+    }
+
+    #[tokio::test]
+    async fn text_generation_persists_snapshots_images_and_thumbnail() {
+        let fixture = GenerationFixture::new(image_response(b"generated-image"));
+
+        let result = fixture.service().generate(fixture.input()).await.unwrap();
+
+        assert_eq!(result.kind, "text_to_image");
+        assert_eq!(result.model, "gpt-image-2");
+        assert_eq!(result.size, "1536x864");
+        assert_eq!(result.images.len(), 1);
+        let runs = fixture.history.list_runs(fixture.session_id).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, "succeeded");
+        assert_eq!(runs[0].prompt, "A clean product poster");
+        assert_eq!(runs[0].provider_id, Some(fixture.provider_id));
+        assert_eq!(runs[0].provider_name, "Primary");
+        assert_eq!(runs[0].model, "gpt-image-2");
+        assert_eq!(
+            runs[0].parameters,
+            serde_json::json!({
+                "width": 1536,
+                "height": 864,
+                "size": "1536x864",
+                "ratio": "16:9",
+                "resolution": "standard",
+                "count": 2,
+                "quality": "high",
+                "output_format": "png",
+                "output_compression": 85,
+                "background": "opaque",
+                "moderation": "low",
+                "kind": "text_to_image"
+            })
+        );
+        assert_eq!(runs[0].images.len(), 1);
+        assert_eq!(
+            std::fs::read(fixture.data_root.join(&runs[0].images[0].local_path)).unwrap(),
+            b"generated-image"
+        );
+        assert_eq!(
+            fixture
+                .history
+                .get_session(fixture.session_id)
+                .unwrap()
+                .recent_thumbnail_path,
+            Some(runs[0].images[0].local_path.clone())
+        );
+        assert_eq!(
+            *fixture.fake.configurations.lock().unwrap(),
+            [("https://provider.example/v1".into(), "sk-private".into())]
+        );
+        assert!(matches!(
+            fixture.fake.calls.lock().unwrap().as_slice(),
+            [FakeCall::Generate(_)]
+        ));
+    }
+
+    #[test]
+    fn generation_future_is_send_so_database_guards_cannot_cross_awaits() {
+        fn assert_send<T: Send>(_: T) {}
+        let fixture = GenerationFixture::new(image_response(b"generated-image"));
+        let service = fixture.service();
+
+        assert_send(service.generate(fixture.input()));
+    }
+
+    #[tokio::test]
+    async fn reference_generation_consumes_the_token_and_uses_edit() {
+        const PNG: &[u8] = b"\x89PNG\r\n\x1a\nreference";
+        let fixture = GenerationFixture::new(image_response(b"edited-image"));
+        let staged = fixture
+            .references
+            .stage("参考图.png", "image/png", PNG)
+            .unwrap();
+        let mut input = fixture.input();
+        input.reference_token = Some(staged.token.clone());
+
+        let result = fixture.service().generate(input).await.unwrap();
+
+        assert_eq!(result.kind, "image_to_image");
+        let run = &fixture.history.list_runs(fixture.session_id).unwrap()[0];
+        assert!(run
+            .reference_image_path
+            .as_deref()
+            .unwrap()
+            .starts_with("uploads/ref_"));
+        assert_eq!(
+            fixture.references.consume(&staged.token).unwrap_err().code,
+            "reference.not_found"
+        );
+        let calls = fixture.fake.calls.lock().unwrap();
+        let [FakeCall::Edit(request, filename, mime_type, bytes)] = calls.as_slice() else {
+            panic!("expected exactly one edit request");
+        };
+        assert_eq!(request.prompt, "A clean product poster");
+        assert_eq!(filename, "参考图.png");
+        assert_eq!(mime_type, "image/png");
+        assert_eq!(bytes, PNG);
+    }
+
+    #[tokio::test]
+    async fn upstream_failure_finishes_the_running_row() {
+        let fixture = GenerationFixture::new(Err(CommandError::new(
+            "provider.http_error",
+            "接口返回错误 502。",
+        )));
+
+        let error = fixture
+            .service()
+            .generate(fixture.input())
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.code, "provider.http_error");
+        let runs = fixture.history.list_runs(fixture.session_id).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, "failed");
+        assert_eq!(runs[0].error_message.as_deref(), Some("接口返回错误 502。"));
+        assert!(runs[0].images.is_empty());
+    }
+
+    #[tokio::test]
+    async fn disk_failure_finishes_the_running_row_without_temporary_files() {
+        let fixture = GenerationFixture::new(image_response(b"generated-image"));
+        std::fs::write(fixture.data_root.join("images"), b"not a directory").unwrap();
+
+        let error = fixture
+            .service()
+            .generate(fixture.input())
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.code, "generation.file_write_failed");
+        let runs = fixture.history.list_runs(fixture.session_id).unwrap();
+        assert_eq!(runs[0].status, "failed");
+        assert!(runs[0].images.is_empty());
+        assert!(std::fs::read_dir(&fixture.data_root)
+            .unwrap()
+            .all(|entry| !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with('.')));
+    }
+
+    #[tokio::test]
+    async fn completion_failure_deletes_durable_files_and_finishes_the_run() {
+        let fixture = GenerationFixture::new(image_response(b"generated-image"));
+        fixture
+            .database
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "CREATE TRIGGER reject_generated_images BEFORE INSERT ON images
+                 BEGIN SELECT RAISE(ABORT, 'test completion failure'); END;",
+                    )
+                    .map_err(crate::workbench::database::schema::database_error)
+            })
+            .unwrap();
+
+        let error = fixture
+            .service()
+            .generate(fixture.input())
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.code, "database.query_failed");
+        let runs = fixture.history.list_runs(fixture.session_id).unwrap();
+        assert_eq!(runs[0].status, "failed");
+        assert!(runs[0].images.is_empty());
+        assert!(std::fs::read_dir(fixture.data_root.join("images"))
+            .unwrap()
+            .next()
+            .is_none());
     }
 }

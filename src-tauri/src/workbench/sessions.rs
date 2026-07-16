@@ -31,6 +31,7 @@ pub struct NewImageInput {
     pub height: Option<i64>,
 }
 
+#[derive(Clone)]
 pub struct HistoryService {
     repository: HistoryRepository,
 }
