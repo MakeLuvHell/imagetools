@@ -1,7 +1,9 @@
+use super::files::sanitize_reference_filename;
 use super::{
     build_edit_fields, build_generation_payload, join_api_url, EditRequest, GenerationRequest,
 };
 use crate::workbench::error::CommandError;
+use futures_util::StreamExt;
 use reqwest::{
     header::CONTENT_TYPE,
     multipart::{Form, Part},
@@ -12,6 +14,7 @@ use std::time::Duration;
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 pub const READ_TIMEOUT: Duration = Duration::from_secs(300);
+pub const MAX_PROVIDER_RESPONSE_BYTES: usize = 192 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProviderImage {
@@ -130,8 +133,9 @@ impl ProviderClient {
         mime_type: &str,
         image: Vec<u8>,
     ) -> Result<ProviderResponse, CommandError> {
+        let filename = sanitize_reference_filename(&filename.into(), mime_type)?;
         let image = Part::bytes(image)
-            .file_name(filename.into())
+            .file_name(filename)
             .mime_str(mime_type)
             .map_err(|_| CommandError::new("provider.invalid_response", "参考图类型无效。"))?;
         let mut form = Form::new().part("image", image);
@@ -163,7 +167,7 @@ async fn parse_response(response: Response) -> Result<ProviderResponse, CommandE
         .and_then(|value| value.to_str().ok())
         .unwrap_or("")
         .to_ascii_lowercase();
-    let bytes = response.bytes().await.map_err(map_request_error)?;
+    let bytes = read_response_bytes(response, MAX_PROVIDER_RESPONSE_BYTES).await?;
     if !status.is_success() {
         let body = String::from_utf8_lossy(&bytes).to_ascii_lowercase();
         let message = if matches!(status.as_u16(), 500 | 503 | 504) {
@@ -208,6 +212,25 @@ async fn parse_response(response: Response) -> Result<ProviderResponse, CommandE
     Ok(ProviderResponse { data })
 }
 
+async fn read_response_bytes(response: Response, limit: usize) -> Result<Vec<u8>, CommandError> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return Err(provider_response_too_large());
+    }
+    let mut bytes = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(map_request_error)?;
+        if bytes.len().saturating_add(chunk.len()) > limit {
+            return Err(provider_response_too_large());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
 fn map_request_error(error: reqwest::Error) -> CommandError {
     if error.is_timeout() {
         transport_error("provider.timeout", "接口响应超时。")
@@ -220,13 +243,23 @@ fn invalid_response() -> CommandError {
     CommandError::new("provider.invalid_response", "接口返回格式不正确。")
 }
 
+fn provider_response_too_large() -> CommandError {
+    CommandError::new(
+        "provider.response_too_large",
+        "接口响应数据过大，请减少生成张数或图片尺寸。",
+    )
+}
+
 fn transport_error(code: &'static str, message: &'static str) -> CommandError {
     CommandError::new(code, message)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{allows_redirect, ProviderClient, ProviderResponse, CONNECT_TIMEOUT, READ_TIMEOUT};
+    use super::{
+        allows_redirect, read_response_bytes, ProviderClient, ProviderResponse, CONNECT_TIMEOUT,
+        MAX_PROVIDER_RESPONSE_BYTES, READ_TIMEOUT,
+    };
     use crate::workbench::generation::{EditRequest, GenerationRequest};
     use std::{
         collections::HashMap,
@@ -399,6 +432,37 @@ mod tests {
                 "unexpected multipart field: {omitted}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn edit_sanitizes_unicode_multipart_filename_attributes() {
+        let (base_url, requests, server) =
+            spawn_server(1, |_, _| response(200, "application/json", URL_FIXTURE));
+        let client = ProviderClient::new(base_url, SECRET).unwrap();
+
+        client
+            .edit(
+                &edit_request(),
+                "folder\\ignored/中文\"'\r\nX-Evil: yes\0.exe",
+                "image/png",
+                b"fixture-image-bytes".to_vec(),
+            )
+            .await
+            .unwrap();
+        server.join().unwrap();
+
+        let request_body = requests.lock().unwrap()[0].body.clone();
+        let body = String::from_utf8_lossy(&request_body);
+        let filename_line = body
+            .lines()
+            .find(|line| line.contains("name=\"image\""))
+            .unwrap();
+        assert!(filename_line.contains("中文"));
+        assert!(filename_line.ends_with(".png\""));
+        for forbidden in ["folder", "ignored", "X-Evil:", "exe", "%0D", "%0A", "\\0"] {
+            assert!(!filename_line.contains(forbidden), "{filename_line}");
+        }
+        assert_eq!(body.matches("name=\"image\"").count(), 1);
     }
 
     #[tokio::test]
@@ -576,6 +640,53 @@ mod tests {
 
         assert_eq!(result.data.len(), 1);
         assert!(result.data[0].b64_json.is_some());
+    }
+
+    #[tokio::test]
+    async fn rejects_provider_content_length_above_the_hard_limit() {
+        let declared = MAX_PROVIDER_RESPONSE_BYTES + 1;
+        let (base_url, _, server) = spawn_server(1, move |_, _| {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {declared}\r\nConnection: close\r\n\r\n"
+            )
+        });
+        let client = ProviderClient::new(base_url, SECRET).unwrap();
+
+        let error = client.generate(&generation_request()).await.unwrap_err();
+        server.join().unwrap();
+
+        assert_eq!(error.code, "provider.response_too_large");
+        assert_secret_free(&error);
+    }
+
+    #[tokio::test]
+    async fn bounds_chunked_provider_responses_while_streaming() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let _ = read_request(&mut stream);
+            let body = vec![b'x'; 129];
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:x}\r\n",
+                body.len()
+            )
+            .unwrap();
+            stream.write_all(&body).unwrap();
+            stream.write_all(b"\r\n0\r\n\r\n").unwrap();
+        });
+        let response = reqwest::Client::new()
+            .get(format!("http://{address}/chunked"))
+            .send()
+            .await
+            .unwrap();
+
+        let error = read_response_bytes(response, 128).await.unwrap_err();
+        server.join().unwrap();
+
+        assert_eq!(error.code, "provider.response_too_large");
+        assert_secret_free(&error);
     }
 
     fn assert_secret_free(error: &crate::workbench::error::CommandError) {

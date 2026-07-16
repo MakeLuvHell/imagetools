@@ -12,6 +12,7 @@ use std::{
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::{Local, Utc};
+use futures_util::StreamExt;
 use reqwest::header::CONTENT_TYPE;
 use uuid::Uuid;
 
@@ -21,6 +22,7 @@ use crate::workbench::{
 };
 
 pub const MAX_REFERENCE_BYTES: usize = 25 * 1024 * 1024;
+pub const MAX_RESULT_IMAGE_BYTES: usize = 64 * 1024 * 1024;
 const STAGING_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Clone)]
@@ -70,17 +72,8 @@ impl ResultFileStore {
         for (offset, image) in response.data.into_iter().enumerate() {
             let index = offset + 1;
             let material = if let Some(value) = image.b64_json.filter(|value| !value.is_empty()) {
-                let encoded = value
-                    .strip_prefix("data:")
-                    .and_then(|value| value.split_once(','))
-                    .map_or(value.as_str(), |(_, encoded)| encoded);
-                let bytes = STANDARD.decode(encoded).map_err(|_| {
-                    CommandError::new(
-                        "generation.invalid_image_data",
-                        "接口返回的图片数据无法解析。",
-                    )
-                });
-                bytes.map(|bytes| (bytes, normalized_extension(output_format).to_string()))
+                decode_base64_image(&value, MAX_RESULT_IMAGE_BYTES)
+                    .map(|(bytes, extension, _)| (bytes, extension.to_string()))
             } else if let Some(url) = image.url.filter(|value| !value.is_empty()) {
                 self.download(&url, output_format).await
             } else {
@@ -89,15 +82,13 @@ impl ResultFileStore {
             let (bytes, extension) = match material {
                 Ok(material) => material,
                 Err(error) => {
-                    Self::cleanup(&persisted);
-                    return Err(error);
+                    return Err(merge_cleanup_error(error, Self::cleanup(&persisted)));
                 }
             };
             match self.write_one(&bytes, index, &extension, width, height) {
                 Ok(image) => persisted.push(image),
                 Err(error) => {
-                    Self::cleanup(&persisted);
-                    return Err(error);
+                    return Err(merge_cleanup_error(error, Self::cleanup(&persisted)));
                 }
             }
         }
@@ -110,10 +101,12 @@ impl ResultFileStore {
         Ok(persisted)
     }
 
-    pub fn cleanup(images: &[PersistedImage]) {
-        for image in images {
-            let _ = fs::remove_file(&image.path);
-        }
+    pub fn cleanup(images: &[PersistedImage]) -> Result<(), CommandError> {
+        let paths = images
+            .iter()
+            .map(|image| image.path.clone())
+            .collect::<Vec<_>>();
+        remove_files_with_retry(&paths, |path| fs::remove_file(path))
     }
 
     fn write_one(
@@ -146,14 +139,17 @@ impl ResultFileStore {
             fs::rename(&temporary_path, &final_path).map_err(result_write_failed)
         })();
         if let Err(error) = write_result {
-            let _ = fs::remove_file(&temporary_path);
-            return Err(error);
+            return Err(merge_cleanup_error(error, cleanup_file(&temporary_path)));
         }
-        let local_path = final_path
-            .strip_prefix(&self.data_root)
-            .map_err(|_| result_write_failed(()))?
-            .to_string_lossy()
-            .replace('\\', "/");
+        let local_path = match final_path.strip_prefix(&self.data_root) {
+            Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
+            Err(_) => {
+                return Err(merge_cleanup_error(
+                    result_write_failed(()),
+                    cleanup_file(&final_path),
+                ));
+            }
+        };
         Ok(PersistedImage {
             path: final_path,
             metadata: NewImageInput {
@@ -170,6 +166,16 @@ impl ResultFileStore {
         &self,
         value: &str,
         fallback_extension: &str,
+    ) -> Result<(Vec<u8>, String), CommandError> {
+        self.download_with_limit(value, fallback_extension, MAX_RESULT_IMAGE_BYTES)
+            .await
+    }
+
+    async fn download_with_limit(
+        &self,
+        value: &str,
+        _fallback_extension: &str,
+        limit: usize,
     ) -> Result<(Vec<u8>, String), CommandError> {
         let url = reqwest::Url::parse(value).map_err(|_| invalid_image_url())?;
         if !matches!(url.scheme(), "http" | "https") {
@@ -203,6 +209,10 @@ impl ResultFileStore {
                 format!("下载图片失败，状态码：{}。", response.status().as_u16()),
             ));
         }
+        let final_url = response.url().clone();
+        if !matches!(final_url.scheme(), "http" | "https") {
+            return Err(invalid_image_url());
+        }
         let content_type = response
             .headers()
             .get(CONTENT_TYPE)
@@ -210,13 +220,25 @@ impl ResultFileStore {
             .unwrap_or("")
             .split(';')
             .next()
-            .unwrap_or("");
-        let extension = extension_from_url(&url)
-            .or_else(|| extension_for_mime(content_type))
-            .unwrap_or_else(|| normalized_extension(fallback_extension))
+            .unwrap_or("")
             .to_string();
-        let bytes = response.bytes().await.map_err(map_download_error)?.to_vec();
-        Ok((bytes, extension))
+        if response
+            .content_length()
+            .is_some_and(|length| length > limit as u64)
+        {
+            return Err(image_too_large());
+        }
+        let mut bytes = Vec::new();
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(map_download_error)?;
+            if bytes.len().saturating_add(chunk.len()) > limit {
+                return Err(image_too_large());
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        let (extension, _) = validate_result_image(&bytes, Some(&content_type), limit)?;
+        Ok((bytes, extension.to_string()))
     }
 }
 
@@ -267,21 +289,22 @@ impl ReferenceStore {
             fs::rename(&temporary_path, &staged_path).map_err(reference_write_failed)
         })();
         if let Err(error) = write_result {
-            let _ = fs::remove_file(&temporary_path);
-            return Err(error);
+            return Err(merge_cleanup_error(error, cleanup_file(&temporary_path)));
         }
 
         let entry = StagedReference {
             path: staged_path.clone(),
-            original_name: original_name.to_string(),
+            original_name: sanitize_reference_filename(original_name, mime_type)?,
             mime_type: canonical_mime(mime_type),
             created_at: SystemTime::now(),
         };
         let mut entries = match self.entries.lock() {
             Ok(entries) => entries,
             Err(error) => {
-                let _ = fs::remove_file(&staged_path);
-                return Err(reference_unavailable(error));
+                return Err(merge_cleanup_error(
+                    reference_unavailable(error),
+                    cleanup_file(&staged_path),
+                ));
             }
         };
         entries.insert(token.clone(), entry);
@@ -390,6 +413,39 @@ fn canonical_mime(mime_type: &str) -> String {
     }
 }
 
+pub fn sanitize_reference_filename(
+    original_name: &str,
+    mime_type: &str,
+) -> Result<String, CommandError> {
+    let extension = extension_for_mime(&canonical_mime(mime_type)).ok_or_else(|| {
+        CommandError::new(
+            "reference.unsupported_type",
+            "仅支持 PNG、JPEG 和 WebP 参考图。",
+        )
+    })?;
+    let basename = original_name.rsplit(['/', '\\']).next().unwrap_or("");
+    let raw_stem = basename.rsplit_once('.').map_or(basename, |(stem, _)| stem);
+    let mut stem = raw_stem
+        .chars()
+        .take(100)
+        .map(|character| {
+            if character.is_alphanumeric() || matches!(character, ' ' | '-' | '_' | '.' | '(' | ')')
+            {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    stem = stem
+        .trim_matches(|character| matches!(character, ' ' | '.' | '_'))
+        .to_string();
+    if stem.is_empty() {
+        stem = "reference".to_string();
+    }
+    Ok(format!("{stem}.{extension}"))
+}
+
 fn extension_for_mime(mime_type: &str) -> Option<&'static str> {
     match mime_type {
         "image/png" => Some("png"),
@@ -399,16 +455,55 @@ fn extension_for_mime(mime_type: &str) -> Option<&'static str> {
     }
 }
 
-fn extension_from_url(url: &reqwest::Url) -> Option<&'static str> {
-    let extension = Path::new(url.path())
-        .extension()
-        .and_then(|value| value.to_str())?;
-    match extension.to_ascii_lowercase().as_str() {
-        "png" => Some("png"),
-        "jpg" | "jpeg" => Some("jpg"),
-        "webp" => Some("webp"),
-        _ => None,
+fn decode_base64_image(
+    value: &str,
+    limit: usize,
+) -> Result<(Vec<u8>, &'static str, &'static str), CommandError> {
+    let encoded = value
+        .strip_prefix("data:")
+        .and_then(|value| value.split_once(','))
+        .map_or(value, |(_, encoded)| encoded);
+    if encoded.len() > limit.div_ceil(3).saturating_mul(4) {
+        return Err(image_too_large());
     }
+    let bytes = STANDARD.decode(encoded).map_err(|_| invalid_image_data())?;
+    let (extension, mime_type) = validate_result_image(&bytes, None, limit)?;
+    Ok((bytes, extension, mime_type))
+}
+
+fn validate_result_image(
+    bytes: &[u8],
+    declared_mime: Option<&str>,
+    limit: usize,
+) -> Result<(&'static str, &'static str), CommandError> {
+    if bytes.len() > limit {
+        return Err(image_too_large());
+    }
+    let declared = declared_mime
+        .map(|declared| canonical_mime(declared.split(';').next().unwrap_or("")))
+        .unwrap_or_default();
+    if !declared.is_empty() && extension_for_mime(&declared).is_none() {
+        return Err(CommandError::new(
+            "generation.invalid_image_type",
+            "接口返回的图片类型不受支持。",
+        ));
+    }
+    let detected = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        ("png", "image/png")
+    } else if bytes.starts_with(b"\xff\xd8\xff") {
+        ("jpg", "image/jpeg")
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        ("webp", "image/webp")
+    } else {
+        return Err(invalid_image_data());
+    };
+    if !declared.is_empty() && declared != detected.1 {
+        return Err(CommandError::new(
+            "generation.image_type_mismatch",
+            "接口返回的图片类型与内容不匹配。",
+        ));
+    }
+    Ok(detected)
 }
 
 fn unique_result_timestamp() -> String {
@@ -431,25 +526,26 @@ fn unique_result_timestamp() -> String {
         .to_string()
 }
 
-fn normalized_extension(value: &str) -> &'static str {
-    match value
-        .trim()
-        .trim_start_matches('.')
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "jpeg" | "jpg" => "jpg",
-        "webp" => "webp",
-        _ => "png",
-    }
-}
-
 fn mime_for_extension(extension: &str) -> &'static str {
     match extension {
         "jpg" | "jpeg" => "image/jpeg",
         "webp" => "image/webp",
         _ => "image/png",
     }
+}
+
+fn invalid_image_data() -> CommandError {
+    CommandError::new(
+        "generation.invalid_image_data",
+        "接口返回的图片数据无法解析。",
+    )
+}
+
+fn image_too_large() -> CommandError {
+    CommandError::new(
+        "generation.image_too_large",
+        "接口返回的单张图片不能超过 64 MiB。",
+    )
 }
 
 fn invalid_image_url() -> CommandError {
@@ -470,6 +566,57 @@ fn download_failed() -> CommandError {
 
 fn result_write_failed<T>(_: T) -> CommandError {
     CommandError::new("generation.file_write_failed", "无法保存生成的图片。")
+}
+
+pub(crate) fn cleanup_file(path: &Path) -> Result<(), CommandError> {
+    remove_files_with_retry(&[path.to_path_buf()], |path| fs::remove_file(path))
+}
+
+fn remove_files_with_retry(
+    paths: &[PathBuf],
+    mut remove: impl FnMut(&Path) -> std::io::Result<()>,
+) -> Result<(), CommandError> {
+    let mut cleanup_failed = false;
+    for path in paths {
+        let mut removed = false;
+        for attempt in 0..3 {
+            match remove(path) {
+                Ok(()) => {
+                    removed = true;
+                    break;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    removed = true;
+                    break;
+                }
+                Err(_) if attempt < 2 => thread_sleep_for_cleanup(),
+                Err(_) => break,
+            }
+        }
+        cleanup_failed |= !removed;
+    }
+    if cleanup_failed {
+        Err(CommandError::new(
+            "generation.file_cleanup_failed",
+            "部分生成文件无法清理，请稍后重试或重启应用。",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn thread_sleep_for_cleanup() {
+    std::thread::sleep(Duration::from_millis(10));
+}
+
+pub(crate) fn merge_cleanup_error(
+    mut root: CommandError,
+    cleanup: Result<(), CommandError>,
+) -> CommandError {
+    if cleanup.is_err() {
+        root.diagnostic = Some("file_cleanup_failed".to_string());
+    }
+    root
 }
 
 fn reference_not_found() -> CommandError {
@@ -496,7 +643,11 @@ mod tests {
 
     use base64::{engine::general_purpose::STANDARD, Engine};
 
-    use super::{ReferenceStore, ResultFileStore, MAX_REFERENCE_BYTES};
+    use super::{
+        decode_base64_image, merge_cleanup_error, remove_files_with_retry,
+        sanitize_reference_filename, ReferenceStore, ResultFileStore, MAX_REFERENCE_BYTES,
+        MAX_RESULT_IMAGE_BYTES,
+    };
     use crate::workbench::generation::client::{ProviderImage, ProviderResponse};
 
     const PNG_1X1: &[u8] = &[
@@ -567,6 +718,26 @@ mod tests {
                 .unwrap_err()
                 .code,
             "reference.unsupported_type"
+        );
+    }
+
+    #[test]
+    fn sanitizes_reference_names_to_a_bounded_unicode_basename_and_mime_extension() {
+        let unsafe_name = format!("folder/ignored\\中文\"'\r\n\0:{}...exe", "图".repeat(160));
+
+        let safe = sanitize_reference_filename(&unsafe_name, "image/png").unwrap();
+
+        assert!(safe.starts_with("中文__"));
+        assert!(safe.ends_with(".png"));
+        assert!(!safe.contains("folder"));
+        assert!(!safe.contains("ignored"));
+        assert!(!safe.contains("exe"));
+        assert!(!safe.chars().any(char::is_control));
+        assert!(!safe.contains(['\"', '\'', '/', '\\', ':']));
+        assert!(safe.chars().count() <= 105);
+        assert_eq!(
+            sanitize_reference_filename("..", "image/jpeg").unwrap(),
+            "reference.jpg"
         );
     }
 
@@ -691,10 +862,10 @@ mod tests {
             let (mut stream, _) = listener.accept().unwrap();
             let mut request = [0_u8; 1024];
             let _ = stream.read(&mut request).unwrap();
-            let body = b"downloaded-image";
+            let body = PNG_1X1;
             write!(
                 stream,
-                "HTTP/1.1 200 OK\r\nContent-Type: image/webp\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 body.len()
             )
             .unwrap();
@@ -719,9 +890,9 @@ mod tests {
             .unwrap();
 
         server.join().unwrap();
-        assert_eq!(fs::read(&images[0].path).unwrap(), b"downloaded-image");
-        assert_eq!(images[0].metadata.mime_type, "image/webp");
-        assert_eq!(images[0].path.extension().unwrap(), "webp");
+        assert_eq!(fs::read(&images[0].path).unwrap(), PNG_1X1);
+        assert_eq!(images[0].metadata.mime_type, "image/png");
+        assert_eq!(images[0].path.extension().unwrap(), "png");
         assert!(fs::read_dir(temporary.path().join("images"))
             .unwrap()
             .all(|entry| !entry
@@ -738,7 +909,7 @@ mod tests {
         let response = ProviderResponse {
             data: vec![
                 ProviderImage {
-                    b64_json: Some(STANDARD.encode(b"first-image")),
+                    b64_json: Some(STANDARD.encode(PNG_1X1)),
                     url: None,
                 },
                 ProviderImage {
@@ -760,6 +931,143 @@ mod tests {
             .is_none());
     }
 
+    #[test]
+    fn base64_length_is_rejected_before_decode_and_signature_is_authoritative() {
+        let oversized = STANDARD.encode([0_u8; 9]);
+        assert_eq!(
+            decode_base64_image(&oversized, 8).unwrap_err().code,
+            "generation.image_too_large"
+        );
+        let (bytes, extension, mime) =
+            decode_base64_image(&STANDARD.encode(JPEG), MAX_RESULT_IMAGE_BYTES).unwrap();
+        assert_eq!(bytes, JPEG);
+        assert_eq!(extension, "jpg");
+        assert_eq!(mime, "image/jpeg");
+        assert_eq!(
+            decode_base64_image(
+                &STANDARD.encode(b"<html>bad</html>"),
+                MAX_RESULT_IMAGE_BYTES
+            )
+            .unwrap_err()
+            .code,
+            "generation.invalid_image_data"
+        );
+    }
+
+    #[tokio::test]
+    async fn url_download_rejects_type_mismatch_and_declared_or_streamed_oversize() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ResultFileStore::new(temporary.path().to_path_buf());
+
+        let mismatch = spawn_download_response("image/png", JPEG, Some(JPEG.len()), false);
+        let error = store
+            .download_with_limit(&mismatch.0, "png", 128)
+            .await
+            .unwrap_err();
+        mismatch.1.join().unwrap();
+        assert_eq!(error.code, "generation.image_type_mismatch");
+
+        let html = spawn_download_response("text/html", b"<html>bad</html>", None, false);
+        let error = store
+            .download_with_limit(&html.0, "png", 128)
+            .await
+            .unwrap_err();
+        html.1.join().unwrap();
+        assert_eq!(error.code, "generation.invalid_image_type");
+
+        let declared = spawn_download_response("image/png", b"", Some(129), false);
+        let error = store
+            .download_with_limit(&declared.0, "png", 128)
+            .await
+            .unwrap_err();
+        declared.1.join().unwrap();
+        assert_eq!(error.code, "generation.image_too_large");
+
+        let chunked = spawn_download_response("image/png", &[0_u8; 129], None, true);
+        let error = store
+            .download_with_limit(&chunked.0, "png", 128)
+            .await
+            .unwrap_err();
+        chunked.1.join().unwrap();
+        assert_eq!(error.code, "generation.image_too_large");
+    }
+
+    fn spawn_download_response(
+        content_type: &'static str,
+        body: &[u8],
+        content_length: Option<usize>,
+        chunked: bool,
+    ) -> (String, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let body = body.to_vec();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).unwrap();
+            if chunked {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{:x}\r\n",
+                    body.len()
+                )
+                .unwrap();
+                stream.write_all(&body).unwrap();
+                stream.write_all(b"\r\n0\r\n\r\n").unwrap();
+            } else {
+                let length = content_length.unwrap_or(body.len());
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n"
+                )
+                .unwrap();
+                stream.write_all(&body).unwrap();
+            }
+        });
+        (format!("http://{address}/result"), server)
+    }
+
+    #[test]
+    fn cleanup_retries_transient_failures_and_reports_permanent_failure_safely() {
+        let path = std::path::PathBuf::from("private/result.png");
+        let mut attempts = 0;
+        remove_files_with_retry(std::slice::from_ref(&path), |_| {
+            attempts += 1;
+            if attempts == 1 {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "locked",
+                ))
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+
+        let mut attempts = 0;
+        let cleanup = remove_files_with_retry(std::slice::from_ref(&path), |_| {
+            attempts += 1;
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "private/result.png locked",
+            ))
+        })
+        .unwrap_err();
+        assert_eq!(attempts, 3);
+        assert_eq!(cleanup.code, "generation.file_cleanup_failed");
+        assert!(!serde_json::to_string(&cleanup).unwrap().contains("private"));
+
+        let root = crate::workbench::error::CommandError::new(
+            "database.query_failed",
+            "无法读取或更新工作区数据库。",
+        );
+        let combined = merge_cleanup_error(root, Err(cleanup));
+        assert_eq!(combined.code, "database.query_failed");
+        assert_eq!(combined.message, "无法读取或更新工作区数据库。");
+        assert_eq!(combined.diagnostic.as_deref(), Some("file_cleanup_failed"));
+    }
+
     #[tokio::test]
     async fn result_names_end_with_index_and_remain_unique_across_persists() {
         let temporary = tempfile::tempdir().unwrap();
@@ -771,7 +1079,7 @@ mod tests {
                 .persist(
                     ProviderResponse {
                         data: vec![ProviderImage {
-                            b64_json: Some(STANDARD.encode(b"image")),
+                            b64_json: Some(STANDARD.encode(PNG_1X1)),
                             url: None,
                         }],
                     },

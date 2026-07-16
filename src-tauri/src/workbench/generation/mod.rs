@@ -7,7 +7,9 @@ use super::{
     sessions::{HistoryService, NewRunInput},
 };
 use client::{ProviderClient, ProviderResponse};
-use files::{ConsumedReference, ReferenceStore, ResultFileStore};
+use files::{
+    cleanup_file, merge_cleanup_error, ConsumedReference, ReferenceStore, ResultFileStore,
+};
 
 pub mod client;
 pub mod files;
@@ -141,7 +143,16 @@ impl GenerationService {
         let reference_image_path = reference
             .as_ref()
             .map(|reference| relative_data_path(&self.data_root, &reference.path))
-            .transpose()?;
+            .transpose();
+        let reference_image_path = match reference_image_path {
+            Ok(path) => path,
+            Err(error) => {
+                let cleanup = reference
+                    .as_ref()
+                    .map_or(Ok(()), |reference| cleanup_file(&reference.path));
+                return Err(merge_cleanup_error(error, cleanup));
+            }
+        };
         let kind = if reference.is_some() {
             "image_to_image"
         } else {
@@ -174,10 +185,10 @@ impl GenerationService {
         }) {
             Ok(run) => run,
             Err(error) => {
-                if let Some(reference) = reference {
-                    let _ = std::fs::remove_file(reference.path);
-                }
-                return Err(error);
+                let cleanup = reference
+                    .as_ref()
+                    .map_or(Ok(()), |reference| cleanup_file(&reference.path));
+                return Err(merge_cleanup_error(error, cleanup));
             }
         };
 
@@ -212,8 +223,8 @@ impl GenerationService {
             .iter()
             .map(|image| image.metadata.clone())
             .collect::<Vec<_>>();
-        if let Err(error) = self.history.complete_success(run.id, metadata) {
-            ResultFileStore::cleanup(&persisted);
+        if let Err(error) = self.history.commit_success(run.id, metadata) {
+            let error = merge_cleanup_error(error, ResultFileStore::cleanup(&persisted));
             return self.finish_failed(run.id, error);
         }
         Ok(GenerateResultDto {
@@ -670,6 +681,25 @@ mod tests {
 
     struct FakeTransport(Arc<FakeState>);
 
+    struct DelayedFactory {
+        entered: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+        response: ProviderResponse,
+    }
+
+    struct DelayedTransport {
+        entered: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+        response: ProviderResponse,
+    }
+
+    struct RejectingFactory;
+
+    struct DeletingReferenceFactory {
+        upload_dir: std::path::PathBuf,
+        transport: Arc<dyn ProviderTransport>,
+    }
+
     impl ProviderFactory for FakeFactory {
         fn create(
             &self,
@@ -716,6 +746,78 @@ mod tests {
             ));
             let response = self.0.response.clone();
             Box::pin(async move { response })
+        }
+    }
+
+    impl ProviderFactory for DelayedFactory {
+        fn create(
+            &self,
+            _base_url: &str,
+            _api_key: &str,
+        ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
+            Ok(Arc::new(DelayedTransport {
+                entered: self.entered.clone(),
+                release: self.release.clone(),
+                response: self.response.clone(),
+            }))
+        }
+    }
+
+    impl ProviderFactory for RejectingFactory {
+        fn create(
+            &self,
+            _base_url: &str,
+            _api_key: &str,
+        ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
+            Err(CommandError::new(
+                "provider.connect_failed",
+                "无法初始化接口连接。",
+            ))
+        }
+    }
+
+    impl ProviderFactory for DeletingReferenceFactory {
+        fn create(
+            &self,
+            _base_url: &str,
+            _api_key: &str,
+        ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
+            for entry in std::fs::read_dir(&self.upload_dir).unwrap() {
+                let entry = entry.unwrap();
+                if entry.file_type().unwrap().is_file() {
+                    std::fs::remove_file(entry.path()).unwrap();
+                }
+            }
+            Ok(self.transport.clone())
+        }
+    }
+
+    impl ProviderTransport for DelayedTransport {
+        fn generate<'a>(
+            &'a self,
+            _request: &'a GenerationRequest,
+        ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>>
+        {
+            Box::pin(async move {
+                self.entered.notify_one();
+                self.release.notified().await;
+                Ok(self.response.clone())
+            })
+        }
+
+        fn edit<'a>(
+            &'a self,
+            _request: &'a EditRequest,
+            _filename: String,
+            _mime_type: &'a str,
+            _image: Vec<u8>,
+        ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>>
+        {
+            Box::pin(async move {
+                self.entered.notify_one();
+                self.release.notified().await;
+                Ok(self.response.clone())
+            })
         }
     }
 
@@ -782,6 +884,16 @@ mod tests {
             )
         }
 
+        fn service_with_factory(&self, factory: Arc<dyn ProviderFactory>) -> GenerationService {
+            GenerationService::with_factory(
+                ProviderRepository::new(self.database.clone()),
+                self.history.clone(),
+                self.references.clone(),
+                self.data_root.clone(),
+                factory,
+            )
+        }
+
         fn input(&self) -> GenerateInput {
             GenerateInput {
                 session_id: self.session_id,
@@ -804,9 +916,11 @@ mod tests {
     }
 
     fn image_response(bytes: &[u8]) -> Result<ProviderResponse, CommandError> {
+        let mut image = b"\x89PNG\r\n\x1a\n".to_vec();
+        image.extend_from_slice(bytes);
         Ok(ProviderResponse {
             data: vec![ProviderImage {
-                b64_json: Some(STANDARD.encode(bytes)),
+                b64_json: Some(STANDARD.encode(image)),
                 url: None,
             }],
         })
@@ -849,7 +963,7 @@ mod tests {
         assert_eq!(runs[0].images.len(), 1);
         assert_eq!(
             std::fs::read(fixture.data_root.join(&runs[0].images[0].local_path)).unwrap(),
-            b"generated-image"
+            b"\x89PNG\r\n\x1a\ngenerated-image"
         );
         assert_eq!(
             fixture
@@ -934,6 +1048,108 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn factory_and_reference_read_failures_finish_created_runs() {
+        let factory_fixture = GenerationFixture::new(image_response(b"unused"));
+        let error = factory_fixture
+            .service_with_factory(Arc::new(RejectingFactory))
+            .generate(factory_fixture.input())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "provider.connect_failed");
+        assert_eq!(
+            factory_fixture
+                .history
+                .list_runs(factory_fixture.session_id)
+                .unwrap()[0]
+                .status,
+            "failed"
+        );
+
+        let reference_fixture = GenerationFixture::new(image_response(b"unused"));
+        let staged = reference_fixture
+            .references
+            .stage("reference.png", "image/png", b"\x89PNG\r\n\x1a\nreference")
+            .unwrap();
+        let mut input = reference_fixture.input();
+        input.reference_token = Some(staged.token);
+        let transport: Arc<dyn ProviderTransport> =
+            Arc::new(FakeTransport(reference_fixture.fake.clone()));
+        let error = reference_fixture
+            .service_with_factory(Arc::new(DeletingReferenceFactory {
+                upload_dir: reference_fixture.data_root.join("uploads"),
+                transport,
+            }))
+            .generate(input)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "reference.read_failed");
+        assert_eq!(
+            reference_fixture
+                .history
+                .list_runs(reference_fixture.session_id)
+                .unwrap()[0]
+                .status,
+            "failed"
+        );
+    }
+
+    #[tokio::test]
+    async fn default_provider_resolves_and_missing_provider_creates_no_run() {
+        let default_fixture = GenerationFixture::new(image_response(b"default"));
+        let mut input = default_fixture.input();
+        input.provider_id = None;
+        default_fixture.service().generate(input).await.unwrap();
+        assert_eq!(
+            default_fixture
+                .history
+                .list_runs(default_fixture.session_id)
+                .unwrap()[0]
+                .provider_id,
+            Some(default_fixture.provider_id)
+        );
+
+        let missing_fixture = GenerationFixture::new(image_response(b"unused"));
+        let mut input = missing_fixture.input();
+        input.provider_id = Some(999_999);
+        let error = missing_fixture.service().generate(input).await.unwrap_err();
+        assert_eq!(error.code, "provider.not_found");
+        assert!(missing_fixture
+            .history
+            .list_runs(missing_fixture.session_id)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn create_run_failure_cleans_the_consumed_reference_file() {
+        let fixture = GenerationFixture::new(image_response(b"unused"));
+        let staged = fixture
+            .references
+            .stage("reference.png", "image/png", b"\x89PNG\r\n\x1a\nreference")
+            .unwrap();
+        fixture
+            .database
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "CREATE TRIGGER reject_generation_run BEFORE INSERT ON generation_runs
+                         BEGIN SELECT RAISE(ABORT, 'reject run'); END;",
+                    )
+                    .map_err(crate::workbench::database::schema::database_error)
+            })
+            .unwrap();
+        let mut input = fixture.input();
+        input.reference_token = Some(staged.token);
+
+        let error = fixture.service().generate(input).await.unwrap_err();
+
+        assert_eq!(error.code, "database.query_failed");
+        assert!(std::fs::read_dir(fixture.data_root.join("uploads"))
+            .unwrap()
+            .all(|entry| entry.unwrap().file_name() == ".staging"));
+    }
+
+    #[tokio::test]
     async fn disk_failure_finishes_the_running_row_without_temporary_files() {
         let fixture = GenerationFixture::new(image_response(b"generated-image"));
         std::fs::write(fixture.data_root.join("images"), b"not a directory").unwrap();
@@ -982,6 +1198,99 @@ mod tests {
         let runs = fixture.history.list_runs(fixture.session_id).unwrap();
         assert_eq!(runs[0].status, "failed");
         assert!(runs[0].images.is_empty());
+        assert!(std::fs::read_dir(fixture.data_root.join("images"))
+            .unwrap()
+            .next()
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn post_commit_projection_failure_does_not_undo_a_succeeded_generation() {
+        let fixture = GenerationFixture::new(image_response(b"generated-image"));
+        fixture
+            .database
+            .with_connection(|connection| {
+                connection
+                    .execute_batch(
+                        "CREATE TRIGGER corrupt_projection_after_image AFTER INSERT ON images
+                         BEGIN
+                           UPDATE generation_runs SET parameters_json = '{broken'
+                           WHERE id = NEW.generation_run_id;
+                         END;",
+                    )
+                    .map_err(crate::workbench::database::schema::database_error)
+            })
+            .unwrap();
+
+        let result = fixture.service().generate(fixture.input()).await.unwrap();
+
+        assert_eq!(result.images.len(), 1);
+        fixture
+            .database
+            .with_connection(|connection| {
+                let (status, image_count): (String, i64) = connection
+                    .query_row(
+                        "SELECT generation_runs.status, COUNT(images.id)
+                         FROM generation_runs
+                         LEFT JOIN images ON images.generation_run_id = generation_runs.id
+                         GROUP BY generation_runs.id",
+                        [],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .map_err(crate::workbench::database::schema::database_error)?;
+                assert_eq!(status, "succeeded");
+                assert_eq!(image_count, 1);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            std::fs::read_dir(fixture.data_root.join("images"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn deleting_session_during_upstream_await_prevents_hidden_success() {
+        let fixture = GenerationFixture::new(image_response(b"unused"));
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let response = image_response(b"delayed").unwrap();
+        let service = fixture.service_with_factory(Arc::new(DelayedFactory {
+            entered: entered.clone(),
+            release: release.clone(),
+            response,
+        }));
+        let input = fixture.input();
+        let generation = tokio::spawn(async move { service.generate(input).await });
+        entered.notified().await;
+
+        fixture.history.delete_session(fixture.session_id).unwrap();
+        release.notify_one();
+        let error = generation.await.unwrap().unwrap_err();
+
+        assert_eq!(error.code, "session.not_found");
+        fixture
+            .database
+            .with_connection(|connection| {
+                let (status, image_count, thumbnail): (String, i64, Option<String>) = connection
+                    .query_row(
+                        "SELECT generation_runs.status, COUNT(images.id), sessions.recent_thumbnail_path
+                         FROM generation_runs
+                         JOIN sessions ON sessions.id = generation_runs.session_id
+                         LEFT JOIN images ON images.generation_run_id = generation_runs.id
+                         GROUP BY generation_runs.id",
+                        [],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                    )
+                    .map_err(crate::workbench::database::schema::database_error)?;
+                assert_eq!(status, "failed");
+                assert_eq!(image_count, 0);
+                assert_eq!(thumbnail, None);
+                Ok(())
+            })
+            .unwrap();
         assert!(std::fs::read_dir(fixture.data_root.join("images"))
             .unwrap()
             .next()

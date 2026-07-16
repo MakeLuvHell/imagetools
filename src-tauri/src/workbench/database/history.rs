@@ -300,6 +300,18 @@ impl HistoryRepository {
             if run.status != "running" {
                 return Err(run_already_finished());
             }
+            let session_active: bool = tx
+                .query_row(
+                    "SELECT EXISTS(
+                        SELECT 1 FROM sessions WHERE id = ?1 AND deleted_at IS NULL
+                     )",
+                    [run.session_id],
+                    |row| row.get(0),
+                )
+                .map_err(database_error)?;
+            if !session_active {
+                return Err(session_not_found());
+            }
             let completed = utc_now();
             for image in images {
                 tx.execute(

@@ -141,6 +141,9 @@ impl HistoryService {
         let run = self.repository.complete_success(id, &images)?;
         self.run_dto(run)
     }
+    pub fn commit_success(&self, id: i64, images: Vec<NewImageInput>) -> Result<(), CommandError> {
+        self.repository.complete_success(id, &images).map(drop)
+    }
     pub fn finish_failed(&self, id: i64, message: &str) -> Result<GenerationRunDto, CommandError> {
         let run = self.repository.finish_failed(id, message)?;
         self.run_dto(run)
