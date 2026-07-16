@@ -1,5 +1,5 @@
 use std::{
-    io::Read,
+    io::{Read, Seek},
     path::{Component, PathBuf},
     sync::Arc,
 };
@@ -20,6 +20,7 @@ const MEDIA_SCHEME: &str = "imagetools-media";
 #[derive(Debug)]
 pub struct ResolvedMedia {
     pub path: PathBuf,
+    pub mime_type: String,
     pub file: cap_std::fs::File,
 }
 
@@ -89,7 +90,7 @@ impl MediaResolver {
             return Err(path_outside_workspace());
         }
 
-        let file = self
+        let mut file = self
             .image_dir
             .open(filename)
             .map_err(|_| media_not_found())?;
@@ -100,8 +101,13 @@ impl MediaResolver {
         if metadata.len() > MAX_RESULT_IMAGE_BYTES as u64 {
             return Err(media_too_large());
         }
+        let mime_type = detect_opened_file_mime(&mut file)?.to_string();
 
-        Ok(ResolvedMedia { path: target, file })
+        Ok(ResolvedMedia {
+            path: target,
+            mime_type,
+            file,
+        })
     }
 }
 
@@ -161,7 +167,21 @@ fn read_resolved_media(
 ) -> Result<(Vec<u8>, &'static str), CommandError> {
     let bytes = read_resolved_media_with_limit(&mut resolved.file, MAX_RESULT_IMAGE_BYTES)?;
     let mime_type = detect_image_mime(&bytes).ok_or_else(media_not_found)?;
+    if mime_type != resolved.mime_type {
+        return Err(media_not_found());
+    }
     Ok((bytes, mime_type))
+}
+
+fn detect_opened_file_mime(file: &mut cap_std::fs::File) -> Result<&'static str, CommandError> {
+    let mut signature = Vec::with_capacity(12);
+    Read::by_ref(file)
+        .take(12)
+        .read_to_end(&mut signature)
+        .map_err(|_| media_not_found())?;
+    file.seek(std::io::SeekFrom::Start(0))
+        .map_err(|_| media_not_found())?;
+    detect_image_mime(&signature).ok_or_else(media_not_found)
 }
 
 fn read_resolved_media_with_limit(
@@ -291,17 +311,23 @@ mod tests {
     #[test]
     fn resolves_the_existing_data_root_relative_image_path() {
         let fixture = MediaFixture::new();
-        fs::write(fixture.data_root.join("images/result.png"), b"png").unwrap();
+        fs::write(
+            fixture.data_root.join("images/result.png"),
+            b"\x89PNG\r\n\x1a\nimage",
+        )
+        .unwrap();
         let image_id = fixture.insert_image("images/result.png", "image/png");
 
+        let resolved = fixture.resolver.resolve(image_id).unwrap();
         assert_eq!(
-            fixture.resolver.resolve(image_id).unwrap().path,
+            resolved.path,
             fixture
                 .data_root
                 .join("images/result.png")
                 .canonicalize()
                 .unwrap(),
         );
+        assert_eq!(resolved.mime_type, "image/png");
     }
 
     #[test]
@@ -437,6 +463,11 @@ mod tests {
         .unwrap();
         let image_id = fixture.insert_image("images/result.png", "text/html");
 
+        assert_eq!(
+            fixture.resolver.resolve(image_id).unwrap().mime_type,
+            "image/png"
+        );
+
         let response = fixture.request(Method::GET, &format!("/image/{image_id}"));
 
         assert_eq!(response.status(), StatusCode::OK);
@@ -453,6 +484,11 @@ mod tests {
         )
         .unwrap();
         let image_id = fixture.insert_image("images/result.png", "image/png");
+
+        assert_eq!(
+            fixture.resolver.resolve(image_id).unwrap_err().code,
+            "media.not_found"
+        );
 
         assert_eq!(
             fixture
@@ -538,6 +574,21 @@ mod tests {
 
         assert_eq!(bytes, original);
         assert_eq!(mime_type, "image/png");
+    }
+
+    #[test]
+    fn complete_read_rejects_mime_changes_after_resolve() {
+        let fixture = MediaFixture::new();
+        let path = fixture.data_root.join("images/result.png");
+        fs::write(&path, b"\x89PNG\r\n\x1a\noriginal").unwrap();
+        let image_id = fixture.insert_image("images/result.png", "image/png");
+        let resolved = fixture.resolver.resolve(image_id).unwrap();
+        fs::write(path, b"\xff\xd8\xffchanged-to-jpeg").unwrap();
+
+        assert_eq!(
+            read_resolved_media(resolved).unwrap_err().code,
+            "media.not_found"
+        );
     }
 
     #[cfg(unix)]
