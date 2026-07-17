@@ -41,7 +41,7 @@ def test_windows_release_workflow_is_manual_and_tag_driven():
     assert "workflow_dispatch:" in workflow
     assert "release_tag:" in workflow
     assert "build_ref:" in workflow
-    assert workflow.count("default: v0.2.3") == 2
+    assert workflow.count("default: v0.3.0") == 2
     assert "ref: ${{ inputs.build_ref }}" in workflow
 
 
@@ -153,7 +153,7 @@ def test_release_docs_include_windows_workflow_command():
 
     assert "Windows x64" in docs
     assert "windows-release.yml" in docs
-    assert "gh workflow run windows-release.yml -f release_tag=v0.2.3 -f build_ref=v0.2.3" in docs
+    assert "gh workflow run windows-release.yml -f release_tag=v0.3.0 -f build_ref=v0.3.0" in docs
 
 
 def test_readme_mentions_windows_release_assets_are_built_by_github_actions():
@@ -176,10 +176,10 @@ def test_user_svg_is_the_source_for_committed_tauri_icons():
         assert Path("src-tauri/icons", icon).is_file()
 
 
-def test_release_versions_are_consistently_0_2_3():
+def test_release_versions_are_consistently_0_3_0():
     package = json.loads(Path("package.json").read_text())
     cargo = tomllib.loads(Path("src-tauri/Cargo.toml").read_text())
 
-    assert package["version"] == "0.2.3"
-    assert tauri_config()["version"] == "0.2.3"
-    assert cargo["package"]["version"] == "0.2.3"
+    assert package["version"] == "0.3.0"
+    assert tauri_config()["version"] == "0.3.0"
+    assert cargo["package"]["version"] == "0.3.0"

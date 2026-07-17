@@ -1,120 +1,71 @@
 # Review Notes
 
-## Product Review
+## Single-Process Rust Migration Review
 
-### Findings
+### Product
 
-- New Task must remain unpersisted until the first valid generation submission.
-- Running, successful, and failed generations belong to one chronological stream.
-- Session menus, settings, image preview, and result actions must perform real operations.
+- Closing the desktop application must terminate the entire product runtime; there is no background mode.
+- The Windows release offers an MSI and a Portable ZIP whose only entry is `Image Tools.exe`.
+- Existing Provider, project, session, timeline, Composer, storage, result, and three-mode theme workflows remain in scope.
+- v0.3.0 is not release-ready until RB014 passes against real Windows x64 artifacts.
 
-### Required Changes
+### Architecture
 
-- Clear a draft only after the server confirms its run was persisted.
-- Preserve Image Tools branding and exclude Codex-only navigation and features.
+- The production window loads bundled frontend assets and communicates only through Tauri IPC.
+- Rust owns startup, SQLite, storage selection/migration, Provider configuration, generation, reference staging, media, native picking, saving, and theme synchronization.
+- The command adapter is injectable for browser and Node tests; production orchestration obtains it from `ImageToolsDesktopApi.current()`.
+- Persisted media is returned through an ID-only custom protocol. The resolver carries a capability-contained file handle from validation through bounded reading.
+- The release UI exposes no network listener and accepts no arbitrary local filesystem URL.
 
-## Frontend Review
+### Frontend And Theme
 
-### Findings
+- Top-level Tauri arguments use camelCase, while nested Rust DTO fields retain snake_case.
+- Uploaded reference bytes use the raw invoke body and metadata headers; generation receives only metadata and `reference_token` or `reference_image_id`.
+- Current-origin localStorage remains the primary theme store under `image-tools-theme` on the bundled application origin.
+- The current Tauri-only cookie mirror is still present for compatibility with existing profiles. It stores only the non-sensitive theme enum and is not required for the stable bundled origin.
+- Theme persistence and native titlebar errors remain non-destructive; generation tokens prevent stale native completions from replacing newer status.
 
-- Uploaded `File` references remain memory-only; only serializable draft fields use localStorage.
-- Menus and dialogs require complete keyboard and focus behavior.
-- Pending submissions must be keyed by session ID and submission ID.
+### Backend And Data
 
-### Required Changes
+- `CommandError` exposes only `code`, `message`, and optional `diagnostic`; the frontend rebuilds exact shapes and replaces all other rejections with a generic error.
+- Provider responses redact the secret by returning `api_key: ""` and the boolean `api_key_set`.
+- Schema version remains 2. No v0.3.0 database migration was added.
+- v1 initialization upgrades transactionally to v2; a database newer than v2 is rejected.
+- Projects soft-delete; sessions soft-delete; project deletion unassigns sessions; Provider deletion preserves run snapshots and nulls `provider_id`; session deletion cascades generation runs and images.
+- Startup imports legacy settings when needed and converts interrupted runs to a durable failed state before exposing commands.
 
-- Keep pure state in `workbench.js`, rendering in `ui.js`, and orchestration in `app.js`.
-- Bundle Lucide locally and preserve stable dimensions at both target viewports.
+### Generation And Media Security
 
-## Backend Review
+- Reference files are limited to 25 MiB and staged tokens are single-use with 24-hour cleanup.
+- Provider JSON responses are limited to 192 MiB and each result image to 64 MiB.
+- PNG, JPEG, and WebP are accepted by byte signature; stored extension and served MIME derive from bytes.
+- Media paths must be flat `images/<filename>` entries and remain inside the capability directory; traversal, nested paths, links, replacements, unsupported bytes, and oversized files fail closed.
+- Media responses include signature-derived `Content-Type`, `X-Content-Type-Options: nosniff`, and CORS.
 
-### Findings
+### Packaging And Release
 
-- Unexpected generation exceptions can strand persisted runs in `running` state.
-- Existing APIs and SQLite schema are sufficient for this redesign.
+- `npm run desktop:build:windows` targets `x86_64-pc-windows-msvc` and builds MSI only.
+- The workflow renames the MSI to a stable asset name and creates the Portable ZIP directly from the release `Image Tools.exe`.
+- `scripts/verify_windows_single_process.ps1` inspects both payloads, installs/uninstalls the MSI, launches installed and Portable copies, checks process count and listeners, closes the window, and rejects leftover processes.
+- Windows assets are unsigned and no automatic updater is configured.
 
-### Required Changes
+## Resolved Review Findings
 
-- Persist failures after run creation; keep network and pre-validation failures local.
-- Provider PATCH sends a complete payload; an empty key preserves the stored secret.
+- Generation never holds the database guard across an asynchronous Provider call.
+- Post-commit DTO failures do not delete files already referenced by committed rows.
+- Session deletion during generation completion is rechecked inside the completion transaction.
+- The Desktop API adapter does not pass arbitrary rejection objects or raw reference data through generation metadata.
+- Tauri uses one combined invoke handler so shell and workbench commands cannot overwrite one another.
+- Production configuration contains no external binary and invokes Tauri directly in development and build scripts.
 
-## Data Review
+## Remaining Gate
 
-### Findings
+RB014 must provide Windows x64 evidence for:
 
-- No SQLite migration is required.
-- Parse localStorage drafts defensively with version-tolerant defaults.
+- MSI and Portable payload contents and stable asset names.
+- Exactly one application process, no UI listener, and complete exit after window close.
+- Installed and Portable startup, generation/media/native-save smoke behavior.
+- Opening a v0.2.3 schema-v2 workspace with v0.3.0 and reopening it with v0.2.3 after backup/rollback.
+- Windows WebView2 media URL mapping, native theme synchronization, and target-size visual checks.
 
-### Required Changes
-
-- Playwright must isolate data, reject external network, avoid server reuse, and await fonts.
-- Linux Chromium screenshots cannot prove Windows WebView2 pixel parity.
-
-## Testing Review
-
-### Findings
-
-- Add focused state and renderer tests first, then cover themes, sizes, dialogs, menus, and task states with Playwright.
-
-### Required Changes
-
-- API keys stay in the existing local Provider store and are not echoed unnecessarily.
-- Preview and reference URLs stay within application-owned local or API paths.
-
-## Security Review
-
-### Findings
-
-- Keep the current local Provider security model; system credential storage is out of scope.
-- Windows WebView2 screenshots remain the final visual acceptance evidence.
-
-### Required Changes
-
-- Keep Windows WebView2 screenshot comparison as a release-time platform calibration step.
-
-## Accepted Risks
-
-- Local Web/Chromium screenshots validate the implemented UI; Windows font and WebView rendering differences may still require release-time calibration.
-
-## Codex Desktop Settings Redesign Review
-
-### Product And Architecture
-
-- Provider management is scan-first; add and edit use focused dialogs, while default and named deletion live in the row menu.
-- Provider, sessions, generation history, reference images, and generated images remain one `工作区数据目录` with the existing restart-only migration semantics.
-- The redesign changes frontend structure and behavior only. Backend APIs, SQLite schema, storage bootstrap, and relative payload paths remain unchanged.
-
-### Frontend And Accessibility
-
-- The settings shell uses neutral navigation, a constrained reading width, unframed sections, and responsive geometry at `1280x860` and `960x640`.
-- Dialog and menu Escape handling closes the innermost layer first and restores focus to the concrete trigger.
-- Light-theme muted text uses `#656a72`, providing `5.443:1` contrast on white and `4.695:1` on the hover surface.
-
-### Testing Review
-
-- Provider and storage request lifecycles ignore stale reloads, submissions, and directory-picker results after a newer task or closed dialog takes ownership.
-- Browser assertions cover the settings root, main scroll container, visible panel, target-size dialog containment, and actual vertical scrolling at `960x420`.
-- Sixteen settings baselines cover Provider, Provider dialog, storage status, and storage dialog across both target sizes and themes. All were manually inspected after the contrast update.
-- Final specification and quality reviews found no remaining implementation issue.
-- Release verification passed with 101 Python tests, 58 Node tests, 40 Playwright tests, and the Tauri Rust check. A fresh worktree must run `mise run backend-bundle` before `mise run desktop-check` because the generated sidecar is intentionally ignored.
-
-## Three-Mode Appearance Review
-
-### Product And Data Boundary
-
-- A dedicated first-position Appearance category was selected over embedding theme controls in Provider or local-data settings. The settings gear opens Appearance, while the sidebar Provider shortcut still opens Provider directly.
-- The exact modes are `system`, `light`, and `dark`, with `system` as the default. Current-origin localStorage remains primary under `image-tools-theme`; Tauri alone mirrors that non-sensitive enum to a host-only `Path=/`, `Max-Age=31536000`, `SameSite=Strict` cookie for random loopback ports. No backend API, SQLite schema, `settings.json`, storage bootstrap, or workspace-data migration change is involved.
-
-### Frontend And Native Resilience
-
-- `frontend/theme.js` restores the root mode before stylesheet evaluation. A valid Tauri cookie wins stale per-port localStorage; missing/invalid cookie data falls back to localStorage/system, while a true localStorage error still returns system with the existing error. Startup remains read-only.
-- User changes write localStorage and the requested Tauri cookie mirror; mirror failure uses the existing save error. The normal web entry never receives the theme cookie jar, while the app-local WebView intentionally exposes the non-sensitive enum to loopback requests.
-- Content theming remains active when persistence or native titlebar synchronization fails, and the Appearance panel reports the failure inline. Activating the already-selected radio retries both operations.
-- A generation counter gives the newest native synchronization ownership, preventing a late failure or completion from replacing newer status. The Tauri command targets the invoking `WebviewWindow`, maps system to no override, and maps light/dark to explicit native themes.
-
-### Accessibility And Verification
-
-- The segmented-control focus indicator uses an opaque accent outline with `3.598:1` light-theme and `5.802:1` dark-theme non-text contrast against the subtle surface, exceeding the WCAG `3:1` threshold.
-- The settings matrix now contains exactly 20 baselines across Appearance, Provider, Provider dialog, storage status, and storage dialog at two sizes and two themes. Four Appearance baselines were added, eight full-region settings baselines changed, and the eight locator-cropped dialog baselines remain byte-identical.
-- Fresh release verification passed with 102 Python, 74 Node, 48 Playwright, and 5 Rust tests; the backend sidecar bundle and Cargo check also passed. Only the existing Starlette `TestClient`/`httpx` deprecation and Playwright color-environment warnings were emitted.
-- Chromium's two-ephemeral-port regression proves the second origin has null localStorage while the pre-paint root/bootstrap restores dark through the Tauri cookie mirror. Windows WebView2 remains the final gate for persistence across two random-port release launches and system/light/dark content/titlebar synchronization at `1280x860` and `960x640`.
+Until that evidence exists, Linux compilation and static package inspection do not prove the Windows release gate.

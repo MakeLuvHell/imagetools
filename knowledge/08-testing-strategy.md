@@ -1,54 +1,96 @@
 # Testing Strategy
 
+## Principles
+
+- Use focused checks while implementing one ticket, then run the complete repository gate once the related tickets are finished.
+- Keep browser mocks at the `ImageToolsDesktopApi` boundary so Playwright exercises production orchestration without introducing another transport.
+- Treat Linux compilation, mock runtime, and static package checks as supporting evidence, not as proof of Windows behavior.
+- Do not publish v0.3.0 until the real Windows MSI and Portable assets pass RB014.
+
 ## Layers
 
-### Python API And Persistence
+### Frontend State, Adapter, And DOM
 
-Run `pytest -q` or `mise run test`. Tests cover Provider/session CRUD, generation history, unexpected failure finalization, sidecar packaging, Tauri configuration, release workflows, and configurable data-directory resolution. Storage tests cover bootstrap parsing, pending activation, SQLite backup, recursive payload copying, unsafe path rejection, and restart-only API scheduling.
+Run `node --test tests/*.test.js`. Coverage includes:
 
-### Frontend State And DOM
+- Desktop command names, camelCase top-level arguments, nested snake_case DTOs, raw reference bodies, generation metadata allowlisting, and error normalization.
+- Drafts, optimistic run isolation, reconciliation, Composer rules, project/session state, and result-reference handling.
+- DOM renderers, dialogs, menus, focus restoration, native save, and injected desktop API orchestration.
+- Theme normalization, pre-paint bootstrap, localStorage, the retained Tauri cookie compatibility mirror, native retry, and stale completion ownership.
+- Static HTML/CSS/Tauri/release contracts and v0.3.0 version consistency.
 
-Run `node --test tests/*.test.js`. Pure state tests cover drafts, pending-run isolation, reconciliation, payloads, and Composer rules. Theme tests exercise normalization, Tauri-only cookie gating, cookie attributes, cookie/localStorage precedence, read-only pre-paint bootstrap, persistence failures, and the real browser IIFE in a VM. jsdom tests cover renderers and focus behavior; static contracts cover shell structure, pre-style script order, explicit manual-theme selectors, local assets, WCAG AA muted text, and WCAG non-text focus contrast.
+### Rust Backend And Desktop Boundary
+
+Run:
+
+```bash
+python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo.toml
+mise run desktop-check
+```
+
+Coverage includes:
+
+- Schema v1-to-v2 migration, v2 preservation, newer-schema rejection, rollback, and foreign keys.
+- Workspace bootstrap, pending migration, SQLite backup, relative paths, and startup failures.
+- Provider redaction/key preservation, projects, sessions, runs, recovery, and deletion races.
+- Provider request validation, streaming limits, staged-reference lifecycle, durable file publication, and failure convergence.
+- ID-only media routing, path containment, same-handle reading, signatures, MIME, limits, CORS, and `nosniff`.
+- Real mock-runtime IPC dispatch for workbench commands and combined-handler registration.
+- Native theme mapping, directory picking, save-result behavior, and application startup wiring.
 
 ### Browser Interaction And Visual Regression
 
-Run `mise run ui-test` or `npm run test:ui`. Playwright starts a non-reused server on port `8765`, uses `test-results/playwright-data`, mocks all mutable APIs and image bytes, rejects external origins, and waits for fonts.
+Run `mise run ui-test` or `npm run test:ui`. Playwright loads the bundled frontend through its test harness, injects the Desktop API mock, rejects unexpected external network, and waits for fonts.
 
-Baselines cover:
+Coverage includes:
 
 - `1280x860` and `960x640` in light and dark themes.
-- Parameter menu, Provider dialog, running, success, and failure states.
-- Enter/Shift+Enter, focus restoration, menu arrows, rapid submit, retry, long CJK text, and overflow.
-- Popover-to-trigger geometry before and after viewport resize at both supported viewport sizes.
-- Provider Cancel close/focus behavior, storage-location loading/submission/errors/restart feedback, and the system reduced-motion preference.
-- Scan-first Provider management, storage current/pending state, stale async response guards, and innermost-layer Escape ordering.
-- Manual modes overriding operating-system changes, live system-mode changes, reload persistence, storage/native failures, selected-mode retry, and stale native-response ordering.
-- A real two-ephemeral-port Chromium regression where the second origin's localStorage is null but the Tauri cookie mirror restores dark on the root and bootstrap before paint.
-- Exactly 20 settings baselines across five states (Appearance, Provider list, Provider dialog, storage status, and storage dialog), two target sizes, and two themes. Four Appearance baselines were added, eight full-region baselines changed, and eight locator-cropped dialogs remain byte-identical.
-- Horizontal containment of the settings root, main scroll area, and visible panel, plus viewport-contained dialog scrolling at `960x420`.
+- Composer menus, Provider and storage settings, generation running/success/failure states, and image actions.
+- Enter/Shift+Enter, focus restoration, rapid submit, long CJK text, resize, reduced motion, stale asynchronous responses, and overflow.
+- Exactly 20 settings baselines across Appearance, Provider list, Provider dialog, storage status, and storage dialog.
 
-Regenerate intentional baselines with `npm run test:ui:update`, then inspect the PNG files before committing. Use Playwright's `--update-snapshots=all` mode when a small token change falls within the default screenshot color threshold but the stored baseline must still reflect the new value.
+The bundled Tauri application origin is stable, so localStorage is the primary persistence mechanism. Existing cookie-mirror tests remain as compatibility regression coverage; they are no longer the release architecture or a substitute for a real application restart.
 
-### Desktop And Release
+### Static And Release Configuration
 
-On a clean worktree, run the bundle before the desktop check because the generated sidecar is intentionally ignored:
+Python repository tests and direct parse checks cover documentation, JSON/TOML configuration, workflow structure, stable asset names, icon assets, and PowerShell verifier contracts. Python remains tooling and does not ship in the application.
+
+Before the Windows job, run the consolidated non-Windows gate from a clean worktree:
 
 ```bash
-mise run desktop-prereqs
-mise run backend-bundle
-mise run desktop-check
+mise run test
+mise run ui-test
 python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo.toml
-mise run desktop-dev
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+mise run desktop-check
+git diff --check
 ```
 
-Verify the native titlebar, minimum size, system/light/dark changes, manual override behavior, live system restoration, menus, references, session switching, and Python/frontend hot reload. Rust tests verify system-to-`None` and light/dark mapping for `set_app_theme`. On Windows, build with `npm run desktop:build:windows`, launch the release twice with different random sidecar ports, and verify persistence plus all three content/titlebar modes at both target sizes.
+### Windows MSI And Portable Gate
 
-For local visual review without launching Tauri, run the reload-enabled web entry and open `http://127.0.0.1:7860`:
+Build on a Windows x64 runner:
 
-```bash
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860 --reload
+```powershell
+npm run desktop:build:windows
+pwsh -NoProfile -File scripts/package_windows_portable.ps1 `
+  -Executable "src-tauri\target\x86_64-pc-windows-msvc\release\Image Tools.exe" `
+  -Output "release-assets\Image-Tools-v0.3.0-Windows-x64-Portable.zip"
+pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
+  -Msi "release-assets\Image-Tools-v0.3.0-Windows-x64.msi" `
+  -PortableZip "release-assets\Image-Tools-v0.3.0-Windows-x64-Portable.zip"
 ```
+
+The verifier must prove:
+
+- Portable contains exactly `Image Tools.exe` and the MSI administrative payload contains exactly one application executable with that name.
+- MSI install and uninstall succeed and leave the expected registry state.
+- Installed and Portable copies each start exactly one application process and open a native window.
+- Neither copy creates an unexpected application listener.
+- Closing the main window terminates the process within the gate timeout.
+- Cleanup does not leave processes, installations, or test data behind.
+
+RB014 also requires a manual or scripted Windows WebView2 smoke test for generation, ID-only result display, native save, all three theme modes, and both target sizes. A copied v0.2.3 schema-v2 workspace must be opened by v0.3.0 and then reopened by v0.2.3 for rollback evidence.
 
 ## Acceptance Boundary
 
-Linux Chromium provides deterministic layout/theme behavior and proves the cookie-based mechanism across two actual loopback origins. Cargo verifies native theme API compilation and pure mode mapping, while Linux WebKitGTK is a desktop behavior smoke test. Only Windows WebView2 can provide final persistence evidence across two random-port release launches plus content/native-titlebar synchronization and pixel fidelity for system/light/dark at `1280x860` and `960x640`.
+Node, Rust, Playwright, parsers, and Linux desktop checks establish source-level behavior and regression coverage. Only the Windows x64 workflow against the final MSI and Portable bytes establishes release payload, install/uninstall, process lifecycle, listener, WebView2 protocol, and upgrade/rollback acceptance.

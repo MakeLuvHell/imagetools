@@ -1,61 +1,51 @@
 # Lessons Learned
 
-Use this file to feed project experience back into the knowledge base.
-
 ## Useful Patterns
 
 - Keep optimistic generation rows keyed by both session ID and submission ID so late responses cannot mutate another task.
-- Reconcile against the server run count before clearing a submitted draft; a transport failure may still have produced a durable failed run.
+- Reconcile against durable run history before clearing a submitted draft; an IPC failure may still have produced a failed run.
 - Keep anchored-layer position math pure, then verify the DOM measurement path separately in a real browser.
-- Use animation completion tokens so reopening a closing layer cannot be hidden by stale asynchronous cleanup.
-- Keep small bootstrap configuration outside a user-movable payload; process pending migration before opening SQLite or mounting file storage.
-- For low-frequency settings, keep the default surface scan-first and move focused create/edit or confirmation work into dialogs.
-- Use lifecycle or request tokens for settings reloads, mutations, and native picker results so late async work cannot overwrite a newer task.
-- Parse shared CSS tokens in a static contrast contract; visual snapshots can accept a subtle color regression that falls within their per-pixel threshold.
-- Load a small, dependency-free theme bootstrap before the stylesheet so a persisted manual mode reaches the root before first paint.
-- Give native theme synchronization a generation token so late asynchronous failures cannot overwrite the newest selection's status.
-- Browser storage origins include the port. Desktop shells using random loopback ports need a stable-origin or port-independent device mirror, and their regression test must navigate two actual origins.
-- Bound Provider responses while streaming, then validate decoded image signatures before publishing files; checking only after a full response is resident does not protect the desktop process.
-- Separate a successful database commit from fallible DTO projection. Post-commit read failures must never trigger cleanup of files already referenced by committed rows.
-- Canonicalizing a media path and reopening it later is still a replacement race. Carry a capability-contained file handle from validation through response reading.
-- Tauri's `invoke_handler` is a single handler slot. Generate one combined handler for existing shell commands and new workbench commands instead of registering helpers sequentially.
-- Treat the Rust `CommandError` shape as the desktop IPC trust contract. Rebuild accepted errors from its three fields and replace raw or non-exact JavaScript rejections with fixed safe text.
+- Use lifecycle tokens for settings reloads, mutations, native picker results, animation cleanup, and theme synchronization.
+- Keep small bootstrap configuration outside a user-movable payload; process pending migration before opening SQLite or file storage.
+- Copy live SQLite data with `Connection.backup()` and retain the source workspace for recovery.
+- Load a small dependency-free theme bootstrap before the stylesheet. On the current bundled origin, localStorage is the primary stable store; the Tauri cookie mirror remains compatibility behavior, not architecture.
+- Initialize the Rust workbench as one lifecycle: resolve storage, open schema v2, import legacy Provider settings, recover interrupted runs, then expose IPC state.
+- Put all Tauri commands in one combined generated handler because the builder has one invoke-handler slot.
+- Route frontend data operations through one injectable adapter and allowlist generation fields.
+- Treat `CommandError` as a serialized trust contract: copy only `code`, `message`, and optional `diagnostic`, and replace every other rejection shape.
+- Bound Provider responses while streaming, validate decoded image signatures, and derive stored type from bytes.
+- Separate a committed database transaction from fallible DTO projection; never remove files referenced by committed rows.
+- Recheck session ownership inside the completion transaction after asynchronous Provider work.
+- Carry a capability-contained media file handle from path validation through bounded reading to avoid reopen races.
+- Build the Portable ZIP from the exact release executable and inspect the archive after creation; stable names alone do not prove payload contents.
+- Test application shutdown by closing the native main window and waiting for process exit. Killing a launcher does not prove lifecycle correctness.
 
 ## Mistakes Or Pitfalls
 
-- Catching only upstream API errors can strand a generation run in `running`; every exception after run creation must finish it as `failed` before propagating.
-- Playwright's downloaded Chromium still needs host NSS/NSPR libraries. On sudo-restricted Linux, download `libnspr4` and `libnss3` into a user-space sysroot and launch tests with its `LD_LIBRARY_PATH`.
-- Viewport formulas that mirror Composer width do not locate a specific trigger; measure the trigger and clamp the resulting layer coordinates.
-- A button labeled Cancel must follow dialog-level close semantics unless the UI explicitly labels it as a form reset.
-- Copying a live SQLite database should use `Connection.backup()` rather than a raw filesystem copy.
-- Checking only the fixed settings overlay for horizontal overflow can miss overflow inside its main scroll container or active panel.
-- Testing CommonJS exports alone can miss browser bootstrap failures; execute the real IIFE in a VM with document, storage, inaccessible-storage, and no-document variants.
-- A radio's `change` event does not fire when the already-selected option is activated, so selected-mode retry needs a focused click path without duplicating ordinary changes.
-- Translucent focus shadows can fail WCAG non-text contrast; use an opaque indicator and test its resolved token contrast in every manual theme.
-- Prefer locator-cropped snapshots only for concise, reusable sub-surfaces. Full-region snapshots should own navigation and page-shell changes, while unchanged cropped dialogs can remain byte-identical.
-- A session can be deleted while an upstream generation request is awaiting. Recheck active ownership inside the completion transaction before inserting images or updating its thumbnail.
-- Initialize the Rust workbench as a lifecycle: resolve storage, open the database, import legacy Provider settings, and recover interrupted runs before exposing IPC state.
-
-## Prompts That Worked
-
-- TBD
-
-## Prompts To Avoid
-
-- TBD
+- Catching only Provider errors can strand a run in `running`; every failure after run creation must converge to `failed`.
+- A button labeled Cancel must follow dialog-level close semantics unless explicitly described as a form reset.
+- Translucent focus shadows can fail WCAG non-text contrast; use an opaque indicator and test resolved colors.
+- Testing CommonJS exports alone can miss browser bootstrap failures; execute the real IIFE in a VM and in the bundled page contract.
+- A radio `change` event does not fire when the selected option is activated, so retry needs a focused click path.
+- Static package inspection cannot prove Windows install/uninstall, WebView2 protocol dispatch, listener state, or shutdown.
+- A schema fixture proving v2 preservation cannot by itself prove user upgrade and rollback; exercise a copied real workspace with both release versions.
+- Soft-deleting sessions preserves rows; command services must still reject operations against inactive sessions and late generation completion.
+- Stored media metadata is untrusted input. Validate the relative path, opened file, size, signature, and response headers at the read boundary.
 
 ## Verification Notes
 
-- `tests/test_generation_history.py` covers successful, upstream-failed, unexpected-failed, and reference-image generation history.
-- Playwright uses isolated API mocks, rejects external origins, waits for fonts, and verifies light/dark layouts at `1280x860` and `960x640`.
-- Playwright verifies anchored menus at both viewport sizes, after resize, and with reduced motion enabled.
-- Settings Playwright coverage includes exactly 20 theme/size baselines across five states, inner-container overflow checks, and a `960x420` dialog scrolling case.
-- Theme persistence coverage starts two ephemeral loopback servers and proves the second origin has null localStorage while the Tauri cookie mirror restores dark before paint.
-- The Web entry on port `7860` is sufficient for local UI inspection and hot-reload checks; Tauri is only required for native shell/platform smoke testing.
-- Run Playwright through `scripts/run_playwright_linux_env.py` on Linux; direct `npx playwright test` may miss the repository-managed NSS/NSPR sysroot.
+- Frontend tests should inject `ImageToolsDesktopApi` rather than emulate a network API.
+- Rust mock-runtime tests prove command serialization and dispatch but not Windows custom-protocol URL mapping.
+- Playwright proves layout and orchestration at `1280x860` and `960x640`; Windows WebView2 remains the platform visual and native integration gate.
+- `scripts/verify_windows_single_process.ps1` is the release authority for MSI/Portable payload, installation, runtime process count, listener checks, window close, exit, uninstall, and cleanup.
+- RB014 must also record v0.2.3 to v0.3.0 upgrade and v0.3.0 to v0.2.3 rollback evidence before release.
 
-## Reusable Snippets Or Commands
+## Reusable Commands
 
 ```bash
-# TBD
+mise run test
+mise run ui-test
+python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo.toml
+mise run desktop-check
+git diff --check
 ```

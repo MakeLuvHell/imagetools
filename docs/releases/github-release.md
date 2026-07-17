@@ -1,112 +1,132 @@
 # GitHub Release 发布步骤
 
-本文记录 Image Tools Windows x64 安装包的发布流程。当前待发布版本为 `0.2.3`，对应不可变 tag `v0.2.3`。
+本文记录 Image Tools v0.3.0 Windows x64 发布流程。目标 tag 是不可变的 `v0.3.0`；已存在的 `v0.2.3` 不移动、不覆盖。
 
-## 发布原则
+## 发布资产
 
-- `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 的版本必须一致。
-- Release 从同名 tag 构建，`release_tag` 和 `build_ref` 均填写该 tag。
-- 已发布 tag 不移动、不覆盖；后续修改使用新的补丁版本。
-- Windows 安装包暂未签名，系统可能显示未知发布者或 SmartScreen 提示。
+Windows workflow 只发布两个稳定命名资产：
 
-## 发布前验证
+```text
+Image-Tools-v0.3.0-Windows-x64.msi
+Image-Tools-v0.3.0-Windows-x64-Portable.zip
+```
+
+Portable ZIP 必须只包含 `Image Tools.exe`。MSI 的行政解包负载必须只包含一个应用可执行文件 `Image Tools.exe`。两个资产均未签名，Windows 可能显示未知发布者或 SmartScreen 提示；应用不包含自动更新。
+
+## 版本一致性
+
+下列位置必须全部是 `0.3.0`，workflow 默认值必须全部是 `v0.3.0`：
+
+- `package.json` 和 `package-lock.json`
+- `src-tauri/Cargo.toml` 和根 crate 的 `src-tauri/Cargo.lock` 条目
+- `src-tauri/tauri.conf.json`
+- `.github/workflows/windows-release.yml`
+- `docs/releases/v0.3.0.md`
+
+可用只读脚本检查：
 
 ```bash
-npm run frontend:vendor
-cmp src-tauri/icons/icon.png frontend/assets/app-icon.png
-pytest -q
-node --test tests/*.test.js
-cargo check --manifest-path src-tauri/Cargo.toml
+python - <<'PY'
+import json, pathlib, tomllib
+
+package = json.loads(pathlib.Path("package.json").read_text())
+lock = json.loads(pathlib.Path("package-lock.json").read_text())
+tauri = json.loads(pathlib.Path("src-tauri/tauri.conf.json").read_text())
+cargo = tomllib.loads(pathlib.Path("src-tauri/Cargo.toml").read_text())
+assert package["version"] == lock["version"] == lock["packages"][""]["version"] == "0.3.0"
+assert tauri["version"] == cargo["package"]["version"] == "0.3.0"
+PY
+```
+
+## 发布前门禁
+
+先在干净提交上完成集中仓库门禁：
+
+```bash
+mise run test
+mise run ui-test
+python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo.toml
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+mise run desktop-check
+git diff --check
 git status --short
 ```
 
-Windows 安装器配置应满足：
-
-- NSIS `.exe` 使用 `SimpChinese`。
-- WiX/MSI `.msi` 使用 `zh-CN`。
-- 应用、安装器和卸载器使用 `src-tauri/icons/icon.ico`。
+这些检查不能替代 Windows 门禁。发布前还必须在 Windows x64 runner 上验证真实 MSI 与 Portable 资产：负载内容、安装/卸载、唯一应用进程、无应用监听端口、关闭窗口后完整退出、Windows WebView2 媒体/主题行为，以及 v0.2.3 工作区升级和回滚。
 
 ## 创建 Tag
 
-确认所有验证通过并推送 `main` 后创建 tag：
+确认待发布提交已推送后创建新 tag：
 
 ```bash
-git tag -a v0.2.3 -m "Image Tools v0.2.3"
+git tag -a v0.3.0 -m "Image Tools v0.3.0"
 git push origin main
-git push origin v0.2.3
+git push origin v0.3.0
 ```
 
-可以在 GitHub 手工创建 `v0.2.3` Release，说明使用 `docs/releases/v0.2.3.md`：
+不要复用旧 tag，也不要在失败后移动 `v0.3.0`。若发布提交需要修复，使用新的补丁版本和 tag。
 
-```text
-https://github.com/MakeLuvHell/imagetools/releases/new?tag=v0.2.3
-```
+## 运行 Windows Workflow
 
-使用 GitHub CLI 时可执行：
+工作流位于 `.github/workflows/windows-release.yml`。它会：
+
+1. Checkout `build_ref`。
+2. 在 `windows-latest` 上构建 x86_64 MSI。
+3. 把唯一 MSI 重命名为稳定资产名。
+4. 从 `src-tauri\target\x86_64-pc-windows-msvc\release\Image Tools.exe` 创建单文件 Portable ZIP。
+5. 在任何上传前运行 `scripts/verify_windows_single_process.ps1`。
+6. 上传 workflow artifact，确保 GitHub Release 存在，再上传两个 release assets。
+
+触发命令：
 
 ```bash
-gh release create v0.2.3 \
-  --repo MakeLuvHell/imagetools \
-  --title "Image Tools v0.2.3" \
-  --notes-file docs/releases/v0.2.3.md
+gh workflow run windows-release.yml -f release_tag=v0.3.0 -f build_ref=v0.3.0
 ```
 
-手工创建不是必须步骤。Windows Release 工作流会先检查 Release；若 tag 存在但 Release 不存在，会自动使用对应的 `docs/releases/vX.Y.Z.md` 创建 Release，再上传安装包。
-
-## 构建 Windows 安装包
-
-工作流位于 `.github/workflows/windows-release.yml`，必须在 Windows runner 上构建 x64 NSIS 和 MSI 安装包。
-
-请启动新的 workflow run，不要重跑修复前已经失败的旧 run；旧 run 会继续使用当时的工作流定义。
-
-GitHub CLI 触发命令：
-
-```bash
-gh workflow run windows-release.yml -f release_tag=v0.2.3 -f build_ref=v0.2.3
-```
-
-没有安装 `gh` 时打开：
+也可在以下页面选择 `Run workflow`，两个输入都填写 `v0.3.0`：
 
 ```text
 https://github.com/MakeLuvHell/imagetools/actions/workflows/windows-release.yml
 ```
 
-点击 `Run workflow`，两个输入均填写 `v0.2.3`。构建成功后，工作流会把以下文件上传到 Release：
+不要重跑修复前已经失败的旧 run；它仍使用当时 checkout 的提交。提交修复并使用新 tag。
 
-- Windows x64 NSIS `.exe`
-- Windows x64 MSI `.msi`
+## 本地 Windows 构建与验证
 
-本地 Windows 机器也可执行：
+本地 Windows x64 机器可执行：
 
-```bash
+```powershell
 npm run desktop:build:windows
 ```
 
-产物位于：
+MSI 产物目录：
 
 ```text
-src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/
 src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/
 ```
 
+按 workflow 的稳定名称复制 MSI，并创建 Portable ZIP 后运行：
+
+```powershell
+pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
+  -Msi release-assets/Image-Tools-v0.3.0-Windows-x64.msi `
+  -PortableZip release-assets/Image-Tools-v0.3.0-Windows-x64-Portable.zip
+```
+
+该脚本会拒绝已有 Image Tools 安装，避免修改预存用户状态；请在隔离 Windows runner 或干净测试机上运行。
+
 ## 发布后检查
 
-打开 Release 页面：
-
-```text
-https://github.com/MakeLuvHell/imagetools/releases/tag/v0.2.3
+```bash
+gh release view v0.3.0 --repo MakeLuvHell/imagetools
 ```
 
 确认：
 
-- tag 和标题均为 `v0.2.3`。
-- `.exe` 和 `.msi` 两种资产都存在。
-- 两种安装界面均显示简体中文。
-- 应用、安装器、卸载器和开始菜单快捷方式显示新图标。
+- tag 和标题均为 `v0.3.0`。
+- 只有预期的 MSI 与 Portable ZIP，文件名完全匹配。
+- workflow 的 `Verify Windows single-process release` 步骤成功，并发生在任何资产上传前。
+- Release 正文来自 `docs/releases/v0.3.0.md`。
+- 下载后的哈希与 workflow 上传产物一致。
 
-也可使用命令检查：
-
-```bash
-gh release view v0.2.3 --repo MakeLuvHell/imagetools
-curl --fail --silent https://api.github.com/repos/MakeLuvHell/imagetools/releases/tags/v0.2.3
-```
+发布门禁证据和升级/回滚记录应附在发布 run 或 RB014 验证记录中；不能用源代码检查结果代替。

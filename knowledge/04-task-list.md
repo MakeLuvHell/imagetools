@@ -18,7 +18,7 @@
 | UI006 | Timeline | Render and reconcile task states | Persistent chronological task stream | UI001, UI003, UI005 | Done |
 | UI007 | Testing | Add Playwright accessibility and visual checks | Isolated deterministic UI suite | UI002-UI006 | Done |
 | UI008 | Release | Update docs and run release-grade verification | Verified desktop development build | UI001-UI007 | Done |
-| PKG001 | Release | Apply new app icon and localize Windows installers | Version 0.2.1 NSIS/MSI release preparation | UI008 | Done |
+| PKG001 | Release | Apply new app icon and localize Windows installers | Historical version 0.2.1 installer preparation | UI008 | Done |
 | UI009 | Interaction | Anchor temporary layers and add restrained motion | Responsive popovers, dialogs, and reduced-motion support | UI008 | Done |
 | STG001 | Storage | Configure a restart-only local data directory | Copy-safe migration, bootstrap configuration, settings UI, and browser coverage | UI004, UI008 | Done |
 | UI010 | Settings | Replace the mixed Provider dialog with a dedicated settings view | Vertical settings navigation with isolated Provider and local-data panels | UI004, STG001 | Done |
@@ -50,16 +50,38 @@
 12. THM001-THM004 add the device-local three-mode Appearance preference, pre-paint restoration, native synchronization, and regression coverage.
 13. THM005 records the final theme boundaries and runs release-grade verification.
 
+## Single-Process Rust Migration
+
+Source: `docs/spec/2026-07-15-single-process-rust-desktop-backend-design.md`, `docs/adr/0001-single-process-rust-desktop-backend.md`, and `tickets.md`.
+
+| ID | Area | Task | Status |
+| --- | --- | --- | --- |
+| RB001 | Contract | Establish Rust backend contracts and fixtures | Done |
+| RB002 | Data | Prove SQLite schema v1/v2 in-place compatibility | Done |
+| RB003 | Storage | Port workspace bootstrap and copy migration | Done |
+| RB004 | Provider | Port Provider, Settings, and secret semantics | Done |
+| RB005 | History | Port projects, sessions, and generation history | Done |
+| RB006 | Generation | Port validation and Provider HTTP client | Done |
+| RB007 | Generation | Implement staged references and durable generation | Done |
+| RB008 | Desktop | Add restricted media protocol and Tauri commands | Done |
+| RB009 | Frontend | Add the injectable Desktop API adapter | Done |
+| RB010 | Cutover | Switch production frontend orchestration to IPC | Done |
+| RB011 | Packaging | Remove the former secondary runtime from production | Done |
+| RB012 | Windows | Produce MSI and single-file Portable assets | Done |
+| RB013 | Release | Synchronize v0.3.0 architecture and release documentation | Done |
+| RB014 | Windows gate | Verify upgrade, rollback, payload, runtime, media, and shutdown | Blocked on a Windows x64 runner and release artifacts |
+
 ## Blockers
 
-- No implementation blockers remain.
-- Final Windows pixel calibration still requires WebView2 screenshots on Windows hardware or CI.
+- RB001-RB013 have no implementation blockers.
+- RB014 requires a Windows x64 runner and the real v0.3.0 MSI/Portable artifacts. The release must not be published before this gate passes.
 
 ## Verification Checklist
 
 - Run each ticket's focused test before advancing it.
-- Run the full Python, Node, Playwright, backend bundle, Cargo check, and Rust test sequence when closing release tickets such as UI008, SET005, and THM005.
+- Run the consolidated Node, Playwright, Rust, static, and desktop checks before the Windows gate.
 - Keep the theme VM/static/Rust contracts and manual/system behavior, persistence failure, native retry, and stale-response checks green.
 - Keep the settings WCAG token contract and all 20 light/dark, target-size visual baselines green.
-- Verify native content/titlebar synchronization for all three modes on Windows WebView2 at both target sizes before release.
+- Run `scripts/verify_windows_single_process.ps1` against both v0.3.0 assets and verify schema-v2 upgrade/rollback on Windows before release.
+- Verify native content/titlebar synchronization and the ID-only media protocol on Windows WebView2 at both target sizes before release.
 - Keep normal per-ticket Git commits; do not squash.

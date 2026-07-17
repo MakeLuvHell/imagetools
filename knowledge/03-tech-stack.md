@@ -2,46 +2,49 @@
 
 ## Frontend
 
-- Framework: vanilla HTML and JavaScript modules exposed through browser/CommonJS IIFEs.
-- Theme bootstrap: `frontend/theme.js` is a browser/CommonJS IIFE loaded before the stylesheet; it resolves current-origin localStorage plus the Tauri-only cross-port cookie mirror before first paint without writing at startup.
-- Styling: one static CSS token system with `prefers-color-scheme` for system mode and explicit `:root[data-theme="light"]` / `:root[data-theme="dark"]` manual overrides.
-- State management: pure helpers in `frontend/workbench.js`; orchestration in `frontend/app.js`.
-- Rendering: DOM-only functions in `frontend/ui.js`.
-- Icons: pinned Lucide 1.24.0 UMD bundle copied into `frontend/vendor/`.
-- Routing: one desktop workbench surface; no client router.
+- Vanilla HTML, CSS, and JavaScript served from Tauri's bundled `frontendDist`.
+- `frontend/desktop-api.js` is a browser/CommonJS IIFE and the sole frontend desktop transport adapter.
+- `frontend/theme.js` applies `system`, `light`, or `dark` before first paint.
+- `frontend/workbench.js` owns pure state, `frontend/ui.js` owns DOM rendering, and `frontend/app.js` owns orchestration.
+- Lucide 1.24.0 and application artwork are committed local assets.
 
-## Backend
+## Desktop Backend
 
-- Runtime: Python 3.12 and FastAPI/Uvicorn.
-- API style: local JSON and multipart REST endpoints under `/api/`.
-- Desktop integration: PyInstaller sidecar launched and health-checked by Tauri; `set_app_theme` maps system/light/dark to the current `WebviewWindow` theme override.
-- Authentication: Provider bearer keys stored locally; no user authentication.
+- Tauri 2 and Rust 2021 in the same `Image Tools.exe` process as the WebView host.
+- Tauri IPC commands for settings, storage, Providers, projects, sessions, generation, theme, picking, and saving.
+- `rusqlite` 0.32 with bundled SQLite and backup support.
+- `reqwest` 0.12 with Rustls, JSON, multipart, and streaming for Provider calls.
+- Tokio for bounded asynchronous file and network work.
+- `cap-std` directory capabilities for persisted media resolution.
+- `tauri-plugin-dialog` for native directory and save-file dialogs.
 
-## Data
+## Data And Media
 
-- Database: SQLite through `WorkbenchStore`.
-- Cache: browser localStorage for serializable Composer drafts and the primary per-origin `image-tools-theme` preference. Tauri WebViews additionally mirror only that enum to a host-only one-year cookie (`Path=/`, `Max-Age=31536000`, `SameSite=Strict`) because release sidecars use random loopback ports; ordinary web entry does not use the cookie.
-- File storage: local application data directories for generated images and references.
+- SQLite schema v2 in `workbench.sqlite3`.
+- Generated files under `images/`; staged references under `uploads/`.
+- `imagetools-media` is an ID-only read protocol with platform-specific Tauri URL mapping.
+- Current-origin localStorage stores serializable Composer drafts and primary theme state. The Tauri cookie mirror for the theme enum remains as a compatibility layer.
 
 ## Testing
 
-- Unit tests: Node test runner for preference precedence, Tauri cookie attributes/failures, the real theme browser IIFE in a VM, pure state, renderer, and static/CSS contracts.
-- DOM tests: jsdom 29.1.1.
-- API/integration tests: pytest and FastAPI TestClient.
-- End-to-end/visual tests: Playwright 1.61.1 with Chromium, isolated data, mocked APIs, screenshot baselines, and two real ephemeral loopback origins for cross-port persistence.
-- Desktop tests: Rust theme-mapping tests, Cargo check, Tauri development smoke test, and Windows build/screenshots; Linux compilation does not prove Windows titlebar rendering.
+- Node test runner and jsdom for state, adapters, renderers, and static contracts.
+- Rust unit and mock-runtime IPC tests for schema, services, generation, media, and commands.
+- Playwright 1.61.1 for desktop-sized behavior and visual regression using injected desktop API mocks.
+- Python test files cover repository/static contracts and release configuration; Python is tooling only.
+- PowerShell packages the Portable ZIP and performs the real Windows MSI/Portable lifecycle gate.
 
 ## Tooling
 
-- Package manager: npm with exact frontend test/icon dependency versions.
-- Tool versions: mise pins Node 24.16.0, Python 3.12.13, and Rust 1.96.1.
-- Formatting/checks: `git diff --check`, Node syntax checks, pytest, and Cargo check.
-- Build command: `mise run desktop-build` or `npm run desktop:build:windows`.
-- Dev command: `mise run desktop-dev`.
+- npm manages exact frontend test and asset dependencies.
+- mise pins Node 24.16.0, Python 3.12.13, and Rust 1.96.1.
+- `mise run desktop-dev` and `mise run desktop-build` invoke Tauri directly through Linux environment wrappers where required.
+- `npm run desktop:build:windows` builds the x86_64-pc-windows-msvc MSI.
+- `.github/workflows/windows-release.yml` stages stable MSI/Portable names, verifies them, and uploads them to the matching GitHub Release.
 
 ## Constraints
 
 - No frontend bundler or framework.
-- No icon CDN or required runtime internet beyond the configured image Provider.
+- No runtime CDN and no network dependency beyond the configured image Provider.
+- No production web server or externally callable desktop API.
 - Default/minimum Windows client sizes are `1280x860` and `960x640`.
-- Linux Chromium/WebKitGTK verifies behavior but cannot establish Windows pixel parity.
+- Windows release assets are currently unsigned and do not self-update.

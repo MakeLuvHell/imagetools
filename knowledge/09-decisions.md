@@ -110,11 +110,11 @@ Use this file to record decisions that future agents should not reopen without a
 
 **Consequences:** Frontend work should follow `docs/spec/2026-07-10-codex-windows-ui.md`, remove permanent parameter forms and browser-native dialogs, preserve the existing backend/data contracts, and verify both Windows themes at desktop viewport sizes.
 
-### 2026-07-11: Commit Generated Icons And Use Native Chinese Installer Locales
+### 2026-07-11: Commit Generated Icons And Use A Native Chinese MSI Locale
 
-**Decision:** Treat `frontend/assets/icon.svg` as the canonical application artwork, generate and commit the complete Tauri icon set, configure NSIS with `SimpChinese`, and configure WiX/MSI with `zh-CN`.
+**Decision:** Treat `frontend/assets/icon.svg` as the canonical application artwork, generate and commit the complete Tauri icon set, and configure WiX/MSI with `zh-CN`.
 
-**Context:** Windows release assets need consistent Image Tools branding and Simplified Chinese installation prompts in both supported installer formats.
+**Context:** Windows release assets need consistent Image Tools branding and Simplified Chinese installation prompts.
 
 **Options Considered:**
 
@@ -122,9 +122,9 @@ Use this file to record decisions that future agents should not reopen without a
 - Commit Tauri-generated platform icons from one canonical SVG.
 - Replace only the existing ICO and PNG files manually.
 
-**Reasoning:** Committed generated assets keep local and GitHub Actions builds deterministic while preserving the SVG as the editable source. NSIS and WiX use different native locale identifiers, so each bundler must be configured explicitly.
+**Reasoning:** Committed generated assets keep local and GitHub Actions builds deterministic while preserving the SVG as the editable source. WiX uses its native locale identifier and retains the branded executable icon.
 
-**Consequences:** Artwork changes must start from `frontend/assets/icon.svg` and rerun `npx tauri icon`. Windows release verification must check both NSIS and MSI because one localized installer does not prove the other is localized.
+**Consequences:** Artwork changes must start from `frontend/assets/icon.svg` and rerun `npx tauri icon`. The current installer format is MSI; the companion Portable ZIP needs no installer locale.
 
 ### 2026-07-11: Calculate Temporary-Layer Geometry In JavaScript
 
@@ -186,19 +186,19 @@ Use this file to record decisions that future agents should not reopen without a
 
 ### 2026-07-15: Keep Theme Preference Device-Local
 
-**Decision:** Offer exactly `system`, `light`, and `dark` appearance modes, default to `system`, and store the primary per-origin value in localStorage under `image-tools-theme`. Because Tauri release launches use random `127.0.0.1` sidecar ports, mirror the same non-sensitive enum under the same key in a host-only `Path=/`, `Max-Age=31536000`, `SameSite=Strict` cookie only when the injected Tauri global exists. Exclude both layers from workspace migration, SQLite, `settings.json`, storage bootstrap, and backend APIs. Apply the root theme before first paint and synchronize the invoking Tauri window through `set_app_theme`.
+**Decision:** Offer exactly `system`, `light`, and `dark` appearance modes, default to `system`, and store the primary bundled-origin value in localStorage under `image-tools-theme`. Keep the existing Tauri-only host cookie mirror (`Path=/`, `Max-Age=31536000`, `SameSite=Strict`) as a compatibility layer for the same non-sensitive enum. Exclude both layers from workspace migration, SQLite, `settings.json`, storage bootstrap, and desktop data commands. Apply the root theme before first paint and synchronize the invoking Tauri window through `set_app_theme`.
 
-**Context:** Creative workspace data may move between local directories as one coherent set, but an installation's appearance is a device preference. Browser origins include the port, so localStorage alone cannot survive a Tauri release restart on a different random loopback port. System mode must keep following live operating-system changes, while manual light/dark modes must override them for both content and the native titlebar.
+**Context:** Creative workspace data may move between local directories as one coherent set, but an installation's appearance is a device preference. The current Tauri application uses a stable bundled origin, so localStorage persists across normal restarts. System mode must keep following live operating-system changes, while manual light/dark modes must override them for both content and the native titlebar.
 
 **Options Considered:**
 
 - Add theme to `settings.json` and move it with the workspace payload.
 - Store theme in SQLite or expose a backend settings endpoint.
-- Keep localStorage as the ordinary web behavior and add a Tauri-only, port-independent host cookie mirror.
+- Keep localStorage as the primary behavior and retain the existing Tauri cookie mirror for profile compatibility.
 
-**Reasoning:** Provider configuration, sessions, generation history, and image files are creative workspace data that should move together. Installation appearance should stay local so moving a workspace does not unexpectedly restyle another device. A host cookie crosses loopback ports and remains available before CSS paint without introducing a backend setting; it contains only the non-sensitive enum and is intentionally visible to loopback requests in the app-local WebView profile.
+**Reasoning:** Provider configuration, sessions, generation history, and image files are creative workspace data that should move together. Installation appearance should stay local so moving a workspace does not unexpectedly restyle another device. Keeping the non-sensitive compatibility mirror avoids unnecessary profile churn during the architecture cutover without making it part of the new transport design.
 
-**Consequences:** `frontend/theme.js` owns normalization, guarded localStorage/cookie access, and pre-paint root application. A valid Tauri cookie wins stale per-port localStorage; a missing/invalid cookie falls back to localStorage/system, while a true localStorage error still returns system with the existing error. Startup is read-only. User saves write localStorage and the requested Tauri mirror, whose failure uses the existing save error; ordinary web use never receives the cookie jar. `system` maps to no Tauri override, while `light` and `dark` map to explicit themes on the current `WebviewWindow`. Linux Chromium proves the cross-port mechanism, but Windows WebView2 must still verify two random-port release launches and all three content/titlebar modes. This focused correction stays within the existing device-local browser/WebView boundary and requires no ADR; future workspace migration and schema work must not absorb `image-tools-theme` without revisiting this decision.
+**Consequences:** `frontend/theme.js` owns normalization, guarded localStorage/cookie access, and pre-paint root application. A valid compatibility cookie still wins stale localStorage according to the existing implementation; missing or invalid cookie data falls back to localStorage/system. Startup is read-only. User saves write localStorage and the requested Tauri mirror, whose failure uses the existing save error. `system` maps to no Tauri override, while `light` and `dark` map to explicit themes on the current `WebviewWindow`. Windows WebView2 must verify restart persistence and all three content/titlebar modes. Future cleanup may remove the mirror in a separately tested change, but workspace migration and schema work must not absorb `image-tools-theme`.
 
 ### 2026-07-16: Bound And Validate Provider Image Results
 
@@ -229,3 +229,23 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** A single adapter freezes command names and camelCase Tauri arguments before the production cutover. Rust owns the semantic safety of its error strings; JavaScript can enforce the serialized shape and discard every other rejection form, but cannot reliably classify string content.
 
 **Consequences:** Frontend orchestration should call `ImageToolsDesktopApi` after RB010 instead of invoking Tauri commands directly. New Rust commands must return `CommandError` to preserve structured UI failures, and injected mocks should reject with the same exact shape when testing backend errors.
+
+### 2026-07-17: Complete The Single-Process Rust Cutover
+
+**Decision:** Implement [ADR 0001](../docs/adr/0001-single-process-rust-desktop-backend.md) as the production architecture: bundled frontend assets call the in-process Rust backend through Tauri IPC; SQLite, storage, Provider, generation, reference, media, and native-save behavior all live in `Image Tools.exe`. Do not expose a local REST service.
+
+**Context:** Closing the desktop window previously could leave another backend program running. The approved product requirement is one installed application executable, one application process, and no hidden background mode.
+
+**Reasoning:** Eliminating the second runtime fixes lifecycle ownership at its source, removes duplicated transport and packaging, and narrows local data/media access to capability-scoped commands and ID-only URLs. Keeping schema version 2 avoids an unrelated data-format change during the runtime migration.
+
+**Consequences:** `mise run desktop-dev` starts Tauri directly. Production uses the combined Rust command handler and `imagetools-media` protocol. Python remains tooling only. Version 0.3.0 is the first release under this architecture; v0.2.3 remains immutable. Windows upgrade and rollback evidence is still required by RB014.
+
+### 2026-07-17: Publish MSI And A Single-Executable Portable ZIP
+
+**Decision:** Publish Windows x64 as `Image-Tools-v0.3.0-Windows-x64.msi` and `Image-Tools-v0.3.0-Windows-x64-Portable.zip`. The Portable ZIP contains exactly `Image Tools.exe`, and the MSI administrative payload contains exactly one application executable with that name.
+
+**Context:** Users asked for a complete portable release with one executable while retaining a normal installed option. The existing v0.2.3 tag cannot be moved or overwritten.
+
+**Reasoning:** One Rust/Tauri executable provides the requested portable experience without shipping an interpreter or auxiliary runtime. MSI supplies Windows installation and uninstall semantics; stable names make workflow and release verification deterministic.
+
+**Consequences:** All version sources and workflow defaults use 0.3.0/v0.3.0. The workflow builds MSI, creates the Portable ZIP from the same release executable, runs `scripts/verify_windows_single_process.ps1`, and uploads both stable assets only after verification. Assets are unsigned and there is no automatic updater.

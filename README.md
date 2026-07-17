@@ -4,13 +4,13 @@ Windows 桌面图片创作工作台，用于通过兼容 OpenAI 图片接口进�
 
 ## 当前能力
 
-- Windows-first Tauri 桌面应用，启动后自动拉起本地 FastAPI sidecar。
-- Codex Desktop Windows 风格的克制侧栏、无框任务流和底部双层 Composer，并跟随系统明暗主题。
-- 新任务先保存在本地草稿中，第一次有效提交才自动创建会话。
-- 多 provider 配置：名称、Base URL、API Key、默认模型。
-- 每次生成写入本地历史：提示词、参数、provider/model 快照、参考图、结果图或错误。
-- 图片文件保存在本地目录，元数据保存在 SQLite；可在设置中选择数据目录。
-- 支持结果预览、下载、复制链接、设为参考图、复制参数继续生成。
+- 单一 Tauri/Rust 应用进程；正式版的应用负载只有 `Image Tools.exe`。
+- 前端资源随应用打包，通过 Tauri IPC 调用 Rust 后端，不启动本地 Web/API 服务，也不监听 UI 端口。
+- Rust 使用 `rusqlite` 管理本地历史，使用 `reqwest` 调用图片 Provider。
+- Codex Desktop Windows 风格的克制侧栏、无框任务流和底部双层 Composer，支持系统、浅色和深色主题。
+- 多 Provider 配置，以及会话、项目、固定会话、生成轮次、参考图和结果图管理。
+- 图片元数据保存在 SQLite，文件保存在工作区数据目录；设置可安排重启后切换目录。
+- 结果图通过只接受数据库图片 ID 的只读媒体协议展示，并可用系统原生保存对话框导出。
 
 不包含云同步、账号、多用户、素材中心、系统凭据存储、自动更新或内置图片编辑器。
 
@@ -23,11 +23,7 @@ mise install
 mise run install
 ```
 
-项目 `.mise.toml` 固定了：
-
-- Python 3.12.13
-- Node.js 24.16.0
-- Rust 1.96.1
+项目 `.mise.toml` 固定了 Node.js 24.16.0、Rust 1.96.1 和 Python 3.12.13。Python 只用于测试和 Linux 工具包装脚本，不进入应用运行时或 Windows 发布资产。
 
 还需要安装当前平台的 Tauri 系统依赖。Ubuntu 24.04 可参考 Tauri v2 的 Linux 依赖安装：
 
@@ -57,9 +53,7 @@ mise run desktop-prereqs
 mise run desktop-sysroot
 ```
 
-`desktop-check`、`desktop-dev` 和 `desktop-build` 会优先使用系统依赖；系统依赖缺失时会自动使用 `build/tauri-sysroot/`。
-
-Playwright 首次运行会下载 Chromium。无 sudo 的 Linux 环境会自动把 Chromium 所需的 NSS/NSPR 库下载到 `build/playwright-sysroot/`，不会修改系统目录。
+`desktop-check`、`desktop-dev` 和 `desktop-build` 会优先使用系统依赖；缺失时使用 `build/tauri-sysroot/`。
 
 ## 运行桌面开发版
 
@@ -67,19 +61,9 @@ Playwright 首次运行会下载 Chromium。无 sudo 的 Linux 环境会自动�
 mise run desktop-dev
 ```
 
-该命令会启动 Tauri 原生窗口，并自动运行源码版 Uvicorn：监听 `127.0.0.1:7860` 且启用 `--reload`。修改 Python 后端后 Uvicorn 会自动重载；修改 `frontend/` 下的 HTML、CSS 或 JavaScript 后，需要刷新原生窗口。Rust 代码由 Tauri watcher 监视并自动触发开发构建。
+该命令直接启动 Tauri 窗口并加载仓库内的 `frontend/`。修改 HTML、CSS 或 JavaScript 后刷新窗口；Rust 代码由 Tauri watcher 重新构建。开发版和正式版使用同一套 Tauri IPC、Rust 数据服务和应用内资源路径。
 
-`desktop-dev` 固定使用 `127.0.0.1:7860`，并由启动器独占该端口。端口已被 Web/Uvicorn 服务占用时，启动会立即失败；启动器会为本次运行生成校验令牌，桌面端不会连接遗留后端。`desktop:dev -- --release` 不受支持，因为发布模式需要打包后的 PyInstaller sidecar；请使用 `mise run desktop-build` 构建发布版。
-
-浏览器入口仅作为开发测试入口，不是正式产品主入口。
-
-如需单独调试后端或静态前端，可运行：
-
-```bash
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860
-```
-
-## 构建桌面安装包
+## 构建发布版
 
 本地平台构建：
 
@@ -87,74 +71,68 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 7860
 mise run desktop-build
 ```
 
-Windows x64 构建脚本：
+Windows x64 MSI：
 
 ```bash
 npm run desktop:build:windows
 ```
 
-构建产物位于 `src-tauri/target/release/bundle/`；Linux 默认生成 deb/rpm 安装包。Windows x64 安装包产物位于：
+MSI 位于：
 
 ```text
-src-tauri/target/release/bundle/nsis/
-src-tauri/target/release/bundle/msi/
+src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/
 ```
 
-Windows x64 安装包由 GitHub Actions 的 Windows runner 构建并上传到 GitHub Release；本地 Linux/WSL 构建只生成 Linux deb/rpm。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
+GitHub Actions 的 Windows runner 会同时发布：
+
+```text
+Image-Tools-v0.3.0-Windows-x64.msi
+Image-Tools-v0.3.0-Windows-x64-Portable.zip
+```
+
+Portable ZIP 中只有 `Image Tools.exe`。工作流会在上传前检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭后进程退出以及无监听端口。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
 
 ## 运行时数据
 
-Windows 桌面版默认把数据保存到 `%APPDATA%\com.imagetools.desktop\`。开发测试入口未设置 `IMAGE_TOOLS_DATA_DIR` 时使用仓库内 `data/`。
+Windows 默认工作区数据目录由 Tauri 的 `app_data_dir` 提供，当前标识为 `com.imagetools.desktop`，通常对应 `%APPDATA%\com.imagetools.desktop\`。目录选择配置由 `app_local_data_dir` 提供，通常位于 `%LOCALAPPDATA%\com.imagetools.desktop\storage-location.json`。
 
-在左下角设置中可输入新的绝对路径，或点击路径右侧的文件夹按钮使用系统目录选择器。提交后重启应用才会切换目录；可选择复制现有数据。复制会保留旧目录作为恢复副本，不会移动或删除旧文件。迁移期间目标目录必须为空；若已选择的自定义目录在后续启动时不可读写，应用会启动失败，而不会悄悄创建新的历史目录。
+在左下角设置中可输入新的绝对路径，或用系统目录选择器选取目录。提交后重启应用才会切换；可选择复制现有数据。复制保留旧目录作为恢复副本，不移动或删除源数据。迁移目标必须为空，自定义目录不可读写时应用会明确启动失败。
 
-目录选择本身保存在固定的 `%LOCALAPPDATA%\com.imagetools.desktop\storage-location.json`，不随工作数据迁移。
+工作区数据布局：
 
-数据布局：
+- `workbench.sqlite3`：Provider、项目、会话、生成轮次和图片元数据。
+- `images/`：生成结果文件。
+- `uploads/`：暂存参考图；一次性 token 使用后清理，过期文件也会回收。
+- `settings.json`：兼容旧版单 Provider 设置；首次初始化会导入默认 Provider。
 
-- `workbench.sqlite3`：SQLite 元数据。
-- `providers`：provider 配置，包含 Base URL、API Key、默认模型。
-- `sessions`：创作会话。
-- `generation_runs`：每轮生成的提示词、参数、provider/model 快照、状态和错误。
-- `images`：生成图片文件的本地路径和元数据。
-- `images/`：生成图片文件；开发默认数据根下对应 `data/images/`。
-- `uploads/`：上传或继续生成使用的参考图。
-- `settings.json`：旧版单 provider 设置；首次访问 provider API 时会迁移为默认 provider。
+`storage-location.json` 位于固定配置目录，不随工作区迁移。主题选择以应用稳定 origin 下的 `localStorage` 为主；当前仍保留 Tauri cookie 镜像作为兼容层，二者都不属于工作区数据。
 
-## 测试与验证
+## 验证
 
-完整测试：
+仓库检查：
 
 ```bash
 mise run test
 mise run ui-test
-```
-
-分别运行：
-
-```bash
-pytest -q
-node --test tests/*.test.js
-npm run test:ui
-```
-
-桌面相关验证：
-
-```bash
-mise run backend-bundle
 mise run desktop-check
-mise run desktop-build
+python scripts/run_tauri_linux_env.py cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Playwright 会在隔离数据目录中使用固定 API fixture，并验证 `1280x860`、`960x640` 的浅色/深色布局。更新预期截图时运行 `npm run test:ui:update`，并在提交前人工检查生成的 PNG。
+Windows 发布门禁必须在 Windows x64 runner 上针对真实 MSI 和 Portable ZIP 运行：
 
-Linux Chromium 和 WebKitGTK 结果用于自动布局与桌面行为回归。Windows WebView2 在两种窗口尺寸、两种系统主题下的四张实机截图才是最终像素级视觉验收依据。
+```powershell
+pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
+  -Msi release-assets/Image-Tools-v0.3.0-Windows-x64.msi `
+  -PortableZip release-assets/Image-Tools-v0.3.0-Windows-x64-Portable.zip
+```
+
+Linux Chromium 和 WebKitGTK 可验证前端布局、行为与桌面编译，但不能替代 Windows WebView2、安装器和进程生命周期门禁。
 
 ## 图片接口说明
 
-后端调用兼容 OpenAI 图片接口：
+Rust 后端调用兼容 OpenAI 图片接口：
 
 - `/v1/images/generations`
 - `/v1/images/edits`
 
-Base URL 可以包含 `/v1`，后端会避免拼成重复的 `/v1/v1/...`。完整字段适配见 [`docs/api/gpt-image-api-frontend-adapter.md`](docs/api/gpt-image-api-frontend-adapter.md)。
+Base URL 可以包含 `/v1`，客户端会避免拼成重复的 `/v1/v1/...`。完整字段适配见 [`docs/api/gpt-image-api-frontend-adapter.md`](docs/api/gpt-image-api-frontend-adapter.md)。

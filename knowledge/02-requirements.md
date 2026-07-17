@@ -2,83 +2,81 @@
 
 ## Confirmed Requirements
 
-- Keep Tauri 2, FastAPI, SQLite, and vanilla HTML/CSS/JavaScript.
-- Use the native Windows titlebar and provide `system`, `light`, and `dark` appearance modes that synchronize web content and the titlebar immediately.
-- Default to `system`, keep following live operating-system theme changes in that mode, and let manual light/dark modes override operating-system changes.
-- Persist the selected mode primarily under `image-tools-theme` in current-origin localStorage. In Tauri only, mirror the non-sensitive enum under the same key in a host-only `Path=/`, `Max-Age=31536000`, `SameSite=Strict` cookie so random `127.0.0.1` sidecar ports share the device preference.
-- Enable the cookie mirror only when the injected Tauri global exists; the normal browser/web entry uses localStorage alone. Keep both layers outside workspace migration, backend APIs, SQLite, storage bootstrap, and `settings.json`.
-- Keep Image Tools branding and image-creation language.
-- Use a restrained sidebar, unframed task canvas, chronological task stream, and bottom layered Composer.
-- Keep Lucide and brand assets local with no runtime CDN dependency.
+- Ship Tauri 2, Rust, SQLite, and bundled vanilla HTML/CSS/JavaScript as one application process.
+- The installed application payload and Portable ZIP contain one application executable named `Image Tools.exe`.
+- Do not expose a local REST or UI listener in development or release runtime.
+- Route frontend operations through `window.ImageToolsDesktopApi` and Tauri commands.
+- Use ID-only, read-only media URLs for persisted images and the native save dialog for downloads.
+- Preserve the schema-v2 workbench layout and existing v0.2.3 data.
+- Keep Provider API keys backend-only; desktop responses return an empty `api_key` plus `api_key_set`.
+- Use the native Windows titlebar and provide `system`, `light`, and `dark` appearance modes.
+- Persist theme primarily under `image-tools-theme` in the bundled app origin's localStorage. The existing Tauri-only host cookie mirror remains a compatibility layer for the non-sensitive enum; neither layer belongs to workspace data.
 - Start on an unpersisted new-task draft; derive the session title from the first valid prompt.
 - Isolate drafts and optimistic runs by session and submission ID.
-- Manage Providers and sessions with accessible in-app dialogs.
-- Keep reference uploads memory-only; persist result-reference URLs and serializable fields in localStorage.
-- Persist every run created by the backend as succeeded or failed, including unexpected exceptions.
-
-## Open Questions
-
-- No implementation blocker. Final color and font-rendering calibration is performed against Windows WebView2 screenshots.
+- Persist every run created by the Rust backend as succeeded or failed, including unexpected errors after creation.
+- Keep references bounded and one-use; generation accepts either a staged `reference_token` or a persisted `reference_image_id`, never both.
 
 ## User Flows
 
 ### New Task And Generation
 
-1. Open the app on an empty new-task canvas.
+1. Open the bundled desktop workbench on an empty draft.
 2. Enter a prompt and optionally choose a Provider, model, reference, and parameters.
-3. Submit with Enter; the app creates one session, inserts an optimistic run, and calls generation.
-4. Reconcile the optimistic row with persisted success/failure history, or keep a local failure if no server run exists.
+3. Submit; the frontend creates one session when needed, stages uploaded bytes, then invokes `generate_image` with metadata and an optional token or image ID.
+4. Reconcile the optimistic row with the durable success/failure history.
 
 ### Continue From History
 
 1. Select a session from the sidebar.
-2. Inspect its chronological prompts, parameters, errors, and images.
-3. Preview/download/copy an image, set it as a reference, or copy parameters.
+2. Inspect chronological prompts, parameters, errors, and ID-only image URLs.
+3. Preview, save, or use a result as a reference.
 4. Refine and submit from the same Composer.
 
 ### Provider Management
 
-1. Open Providers from the sidebar or settings action.
+1. Open Provider settings.
 2. Create, edit, delete, or select the default Provider.
 3. Leave API Key empty during edit to preserve the stored secret.
 
-### Appearance
+### Workspace Location
 
-1. Open the settings gear to the first Appearance category; keep the sidebar Provider shortcut opening Provider directly.
-2. Select follow-system, light, or dark and see the content and native titlebar update immediately.
-3. In system mode, continue following live operating-system changes; in a manual mode, keep the chosen appearance across operating-system changes and app reloads on the same device.
+1. Select an absolute destination with the native picker or enter it manually.
+2. Choose whether to copy the existing payload.
+3. Restart to activate the pending location; retain the old root as recovery data.
 
 ## Data Requirements
 
-- SQLite stores Providers, sessions, generation runs, and image metadata.
-- Image and uploaded reference bytes remain on local disk.
-- Provider API keys are never returned to or persisted by frontend drafts.
-- Generation parameter, Provider, and model snapshots remain historical.
-- The appearance preference is device-local browser/WebView state, not movable workspace data; current-origin localStorage is primary and Tauri adds only the one-year host cookie mirror. The cookie enum is non-sensitive and intentionally visible to loopback requests in the app-local WebView profile.
+- `workbench.sqlite3` stores Providers, projects, sessions, generation runs, and image metadata.
+- `images/` stores generated image bytes and `uploads/` stores short-lived staged references.
+- Provider/model and generation parameter snapshots remain historical.
+- `storage-location.json` stays in the fixed app-local configuration directory.
+- `settings.json` remains a compatibility input for the old single-Provider settings shape.
+- Theme state is installation-local and does not move with the workbench payload.
 
 ## Edge Cases
 
-- Malformed localStorage drafts fall back to defaults.
+- Malformed localStorage drafts and theme values fall back safely.
 - Rapid double submit creates one session and one generation.
-- A retry after a pre-server network failure reuses the already-created session.
-- Late responses cannot remove pending runs belonging to another session.
-- Reference mode forces one result and disables incompatible transparent background options.
-- Empty Provider state opens setup without persisting a session.
-- At Tauri startup, a valid cookie wins stale per-port localStorage before paint; a missing or invalid cookie falls back to localStorage, then `system`. A true localStorage access/read error still falls back to `system` with the existing error, and startup writes neither layer.
-- User changes write localStorage and, when requested by Tauri, the cookie mirror. A localStorage or mirror failure keeps the selected content theme active and reports the existing save error.
-- Native titlebar synchronization failure does not roll back content theming; reselecting the active mode retries failed persistence/native work, and stale native completions cannot replace newer status.
+- A retry after an IPC failure reuses an already-created session when appropriate.
+- Late responses cannot mutate another session's optimistic state.
+- Reference mode forces one result and disables incompatible transparent-background options.
+- A deleted session cannot receive a late generation completion.
+- Interrupted `running` rows are recovered as failed during startup.
+- Oversized, malformed, unsupported, escaped, nested, linked, or replaced media files are rejected.
+- An invalid custom workspace root fails visibly instead of silently opening a different history.
+- Startup failure is shown in a native dialog and terminates the application.
 
 ## Non-Functional Requirements
 
-- Performance: stable dimensions prevent layout shifts during loading and image decode.
-- Security: secrets remain backend-only; external network is rejected in UI tests.
+- Security: no arbitrary filesystem paths in media URLs; secrets remain Rust-only; external UI navigation is rejected.
+- Reliability: database migrations and generation completion are transactional; file publication is atomic.
+- Performance: Provider responses, references, and result images have explicit byte limits.
 - Accessibility: named icon controls, focus rings, trapped dialogs, keyboard menus, Escape restoration, and Enter/Shift+Enter semantics.
-- Internationalization: Chinese product copy with Segoe UI and CJK system fallbacks.
-- Offline behavior: shell, icons, history, and settings work locally; generation requires the configured Provider endpoint.
+- Offline behavior: bundled shell, icons, history, settings, and media work locally; generation alone requires the configured Provider endpoint.
 
-## Priority
+## Release Requirements
 
-- Must have: Windows shell, drafts, Provider CRUD, Composer, task stream, persistence, themes, accessibility, and verification.
-- Should have: final Windows screenshot calibration and release artifact smoke testing.
-- Could have: masks, multiple references, streaming partial images, and system credential storage.
-- Not now: cloud accounts, sync, Codex-only features, standalone library, and browser productization.
+- Version metadata is `0.3.0` and the immutable release tag is `v0.3.0`.
+- Windows x64 release assets are one MSI and one Portable ZIP.
+- Assets are unsigned and have no automatic update mechanism.
+- The Windows verifier must pass before release; Linux checks cannot substitute for this gate.
