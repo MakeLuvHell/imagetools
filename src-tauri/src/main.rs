@@ -90,6 +90,10 @@ fn empty_media_response(status: StatusCode) -> tauri::http::Response<Vec<u8>> {
         .expect("empty media response is valid")
 }
 
+fn should_exit_after_window_event(label: &str, event: &tauri::WindowEvent) -> bool {
+    label == "main" && matches!(event, tauri::WindowEvent::Destroyed)
+}
+
 fn theme_override(mode: &str) -> Result<Option<tauri::Theme>, String> {
     match mode {
         "system" => Ok(None),
@@ -212,6 +216,11 @@ fn main() {
                 .build()?;
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if should_exit_after_window_event(window.label(), event) {
+                window.app_handle().exit(0);
+            }
+        })
         .run(tauri::generate_context!())
         .expect("failed to run Image Tools desktop app");
 }
@@ -220,7 +229,8 @@ fn main() {
 mod tests {
     use super::theme_override;
     use super::{
-        is_allowed_navigation, resolve_startup, resolve_workspace_directories, StartupOutcome,
+        is_allowed_navigation, resolve_startup, resolve_workspace_directories,
+        should_exit_after_window_event, StartupOutcome,
     };
     use crate::workbench::error::CommandError;
     use std::{ffi::OsString, path::PathBuf};
@@ -318,6 +328,22 @@ mod tests {
         assert!(exit_codes.lock().unwrap().is_empty());
         completion.lock().unwrap().take().unwrap()();
         assert_eq!(*exit_codes.lock().unwrap(), [1]);
+    }
+
+    #[test]
+    fn exits_only_after_the_main_window_is_destroyed() {
+        assert!(should_exit_after_window_event(
+            "main",
+            &tauri::WindowEvent::Destroyed
+        ));
+        assert!(!should_exit_after_window_event(
+            "secondary",
+            &tauri::WindowEvent::Destroyed
+        ));
+        assert!(!should_exit_after_window_event(
+            "main",
+            &tauri::WindowEvent::Focused(false)
+        ));
     }
 
     #[tokio::test]
