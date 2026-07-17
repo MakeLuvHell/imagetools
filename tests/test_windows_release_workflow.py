@@ -35,6 +35,14 @@ def single_process_verifier() -> str:
     return Path("scripts/verify_windows_single_process.ps1").read_text()
 
 
+def upgrade_rollback_verifier() -> str:
+    return Path("scripts/verify_windows_upgrade_rollback.ps1").read_text()
+
+
+def upgrade_fixture_script() -> str:
+    return Path("scripts/prepare_windows_upgrade_fixture.py").read_text()
+
+
 def test_windows_release_workflow_is_manual_and_tag_driven():
     workflow = windows_release_workflow()
 
@@ -43,6 +51,18 @@ def test_windows_release_workflow_is_manual_and_tag_driven():
     assert "build_ref:" in workflow
     assert workflow.count("default: v0.3.0") == 2
     assert "ref: ${{ inputs.build_ref }}" in workflow
+
+
+def test_windows_release_workflow_defaults_to_a_non_publishing_validation_run():
+    workflow = windows_release_workflow()
+
+    assert "publish_release:" in workflow
+    assert "type: boolean" in workflow
+    assert "default: false" in workflow
+    assert workflow.count("if: ${{ inputs.publish_release }}") == 2
+    assert workflow.index("if: ${{ inputs.publish_release }}") > workflow.index(
+        "actions/upload-artifact@v4"
+    )
 
 
 def test_windows_release_workflow_builds_on_windows_x64():
@@ -91,6 +111,25 @@ def test_windows_release_workflow_selects_one_msi_and_builds_portable_from_main_
     )
 
 
+def test_windows_release_workflow_runs_upgrade_and_rollback_before_artifact_upload():
+    workflow = windows_release_workflow()
+
+    assert "GH_TOKEN: ${{ github.token }}" in workflow
+    assert "gh release download v0.2.3" in workflow
+    assert "Image.Tools_0.2.3_x64_zh-CN.msi" in workflow
+    assert "$oldMsiFiles.Count -ne 1" in workflow
+    assert "scripts/verify_windows_upgrade_rollback.ps1" in workflow
+    assert "-OldMsi $oldMsi" in workflow
+    assert "-NewMsi $newMsi" in workflow
+    assert workflow.index("gh release download v0.2.3") < workflow.index(
+        "scripts/verify_windows_upgrade_rollback.ps1"
+    )
+    assert workflow.index("scripts/verify_windows_upgrade_rollback.ps1") < workflow.index(
+        "actions/upload-artifact@v4"
+    )
+    assert "upgrade-assets/" not in workflow.split("path: |", 1)[1]
+
+
 def test_portable_packager_enforces_a_single_branded_executable_entry():
     script = portable_packager()
 
@@ -136,6 +175,53 @@ def test_windows_single_process_verifier_covers_payload_install_runtime_and_clea
     assert "imagetools-backend" in script
     assert "finally" in script
     assert "Stop-Process -Id" in script
+
+
+def test_upgrade_fixture_is_schema_v2_linked_and_secret_free():
+    script = upgrade_fixture_script()
+
+    assert "argparse" in script
+    assert 'add_parser("create"' in script
+    assert 'add_parser("verify"' in script
+    assert "PRAGMA foreign_keys = ON" in script
+    assert "schema_migrations" in script
+    assert "providers" in script
+    assert "projects" in script
+    assert "sessions" in script
+    assert "generation_runs" in script
+    assert "images/result.png" in script
+    assert "PNG_SIGNATURE" in script
+    assert '"redacted"' in script
+    assert "SENSITIVE_PATTERNS" in script
+
+
+def test_upgrade_rollback_verifier_is_isolated_versioned_and_self_cleaning():
+    script = upgrade_rollback_verifier()
+
+    assert script.count('[Parameter(Mandatory = $true)]') >= 2
+    assert "$OldMsi" in script
+    assert "$NewMsi" in script
+    assert "Set-StrictMode -Version Latest" in script
+    assert '$ErrorActionPreference = "Stop"' in script
+    assert "Get-UninstallEntries" in script
+    assert "InstallLocation" in script
+    assert "DisplayIcon" in script
+    assert "DisplayVersion" in script
+    assert '"0.2.3"' in script
+    assert '"0.3.0"' in script
+    assert "IMAGE_TOOLS_DATA_DIR" in script
+    assert "IMAGE_TOOLS_CONFIG_DIR" in script
+    assert "prepare_windows_upgrade_fixture.py" in script
+    assert '"create"' in script
+    assert '"verify"' in script
+    assert "Copy-Item" in script
+    assert "MainWindowHandle" in script
+    assert "CloseMainWindow" in script
+    assert "TimeoutSeconds 10" in script
+    assert "imagetools-backend" in script
+    assert "finally" in script
+    assert "Stop-TestProcess" in script
+    assert "1605" in script
 
 
 def test_windows_release_workflow_creates_a_missing_release_before_upload():

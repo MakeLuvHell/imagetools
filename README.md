@@ -90,7 +90,7 @@ Image-Tools-v0.3.0-Windows-x64.msi
 Image-Tools-v0.3.0-Windows-x64-Portable.zip
 ```
 
-Portable ZIP 中只有 `Image Tools.exe`。工作流会在上传前检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭后进程退出以及无监听端口。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
+Portable ZIP 中只有 `Image Tools.exe`。工作流会检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭退出和无监听端口，并用公开的 v0.2.3 MSI 验证 schema-v2 工作区升级与回滚。手动运行默认只验证并保留 workflow artifact；只有显式设置 `publish_release=true` 才会公开 Release 资产。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
 
 ## 运行时数据
 

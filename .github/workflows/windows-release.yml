@@ -11,6 +11,11 @@ on:
         description: Git ref to build from
         required: true
         default: v0.3.0
+      publish_release:
+        description: Publish validated assets to the GitHub Release
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -96,6 +101,49 @@ jobs:
             throw "Windows single-process verification failed with exit code $LASTEXITCODE."
           }
 
+      - name: Download v0.2.3 upgrade baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          New-Item -ItemType Directory -Path upgrade-assets -Force | Out-Null
+          & gh release download v0.2.3 `
+            --pattern "Image.Tools_0.2.3_x64_zh-CN.msi" `
+            --dir upgrade-assets `
+            --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to download the published v0.2.3 MSI baseline."
+          }
+
+          $oldMsiFiles = @(Get-ChildItem -LiteralPath upgrade-assets -File -Filter "*.msi")
+          if ($oldMsiFiles.Count -ne 1) {
+            throw "Expected exactly one v0.2.3 MSI; found $($oldMsiFiles.Count)."
+          }
+
+      - name: Verify Windows upgrade and rollback
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          $oldMsiFiles = @(Get-ChildItem -LiteralPath upgrade-assets -File -Filter "*.msi")
+          if ($oldMsiFiles.Count -ne 1) {
+            throw "Expected exactly one v0.2.3 MSI; found $($oldMsiFiles.Count)."
+          }
+          $oldMsi = $oldMsiFiles[0].FullName
+          $newMsi = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi"
+          & pwsh -NoProfile -File scripts/verify_windows_upgrade_rollback.ps1 `
+            -OldMsi $oldMsi `
+            -NewMsi $newMsi
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows upgrade and rollback verification failed with exit code $LASTEXITCODE."
+          }
+
       - name: Upload Windows release assets as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -106,6 +154,7 @@ jobs:
           if-no-files-found: error
 
       - name: Ensure GitHub Release exists
+        if: ${{ inputs.publish_release }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -135,6 +184,7 @@ jobs:
           }
 
       - name: Upload Windows assets to GitHub Release
+        if: ${{ inputs.publish_release }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

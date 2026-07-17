@@ -74,13 +74,20 @@ git push origin v0.3.0
 2. 在 `windows-latest` 上构建 x86_64 MSI。
 3. 把唯一 MSI 重命名为稳定资产名。
 4. 从 `src-tauri\target\x86_64-pc-windows-msvc\release\Image Tools.exe` 创建单文件 Portable ZIP。
-5. 在任何上传前运行 `scripts/verify_windows_single_process.ps1`。
-6. 上传 workflow artifact，确保 GitHub Release 存在，再上传两个 release assets。
+5. 运行 `scripts/verify_windows_single_process.ps1`。
+6. 下载公开 Release 中固定的 v0.2.3 MSI，在隔离工作区运行 v0.2.3 → v0.3.0 → v0.2.3 升级/回滚门禁。
+7. 无条件上传两个 workflow artifact；只有 `publish_release=true` 时才创建 GitHub Release 并上传 release assets。
 
 触发命令：
 
 ```bash
 gh workflow run windows-release.yml -f release_tag=v0.3.0 -f build_ref=v0.3.0
+```
+
+该命令的 `publish_release` 默认为 `false`，适合安全验证，不会创建或修改公开 Release。门禁成功后，发布 run 必须显式执行：
+
+```bash
+gh workflow run windows-release.yml -f release_tag=v0.3.0 -f build_ref=v0.3.0 -f publish_release=true
 ```
 
 也可在以下页面选择 `Run workflow`，两个输入都填写 `v0.3.0`：
@@ -114,6 +121,8 @@ pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
 ```
 
 该脚本会拒绝已有 Image Tools 安装，避免修改预存用户状态；请在隔离 Windows runner 或干净测试机上运行。
+
+升级/回滚门禁另需公开的 `Image.Tools_0.2.3_x64_zh-CN.msi`，并运行 `scripts/verify_windows_upgrade_rollback.ps1`。脚本生成脱敏 schema-v2 fixture，不把工作区、SQLite 数据库或 API Key 上传为 artifact。
 
 ## 发布后检查
 
