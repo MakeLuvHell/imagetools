@@ -7,7 +7,7 @@
 - Closing the desktop application must terminate the entire product runtime; there is no background mode.
 - The Windows release offers an MSI and a Portable ZIP whose only entry is `Image Tools.exe`.
 - Existing Provider, project, session, timeline, Composer, storage, result, and three-mode theme workflows remain in scope.
-- v0.3.0 is not release-ready until RB014 passes against real Windows x64 artifacts.
+- v0.3.0 passed RB014 against real Windows x64 artifacts in workflow run `29605770705`.
 
 ### Architecture
 
@@ -58,9 +58,9 @@
 - Tauri uses one combined invoke handler so shell and workbench commands cannot overwrite one another.
 - Production configuration contains no external binary and invokes Tauri directly in development and build scripts.
 
-## Remaining Gate
+## Completed Windows Gate
 
-RB014 must provide Windows x64 evidence for:
+RB014 Windows x64 evidence records:
 
 - MSI and Portable payload contents and stable asset names.
 - Exactly one application process, no UI listener, and complete exit after window close.
@@ -68,4 +68,4 @@ RB014 must provide Windows x64 evidence for:
 - Opening a v0.2.3 schema-v2 workspace with v0.3.0 and reopening it with v0.2.3 after backup/rollback.
 - Windows WebView2 media URL mapping, native theme synchronization, and target-size visual checks.
 
-Until that evidence exists, Linux compilation and static package inspection do not prove the Windows release gate.
+Workflow run `29605770705` passed the MSI/Portable single-process verifier, v0.2.3 to v0.3.0 upgrade and v0.2.3 rollback verifier, and artifact upload. It ran with `publish_release=false`, so no tag or public Release was created.

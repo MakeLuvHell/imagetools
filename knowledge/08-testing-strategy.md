@@ -3,9 +3,10 @@
 ## Principles
 
 - Use focused checks while implementing one ticket, then run the complete repository gate once the related tickets are finished.
+- Run the expensive Windows release gate only after all focused implementation work is complete. If that final gate exposes a defect, make and verify the focused fix before rerunning the failed final gate.
 - Keep browser mocks at the `ImageToolsDesktopApi` boundary so Playwright exercises production orchestration without introducing another transport.
 - Treat Linux compilation, mock runtime, and static package checks as supporting evidence, not as proof of Windows behavior.
-- Do not publish v0.3.0 until the real Windows MSI and Portable assets pass RB014.
+- The real Windows MSI and Portable assets passed RB014 in workflow run `29605770705`; public release publication remains an explicit separate action.
 
 ## Layers
 

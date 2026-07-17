@@ -19,6 +19,8 @@
 - Carry a capability-contained media file handle from path validation through bounded reading to avoid reopen races.
 - Build the Portable ZIP from the exact release executable and inspect the archive after creation; stable names alone do not prove payload contents.
 - Test application shutdown by closing the native main window and waiting for process exit. Killing a launcher does not prove lifecycle correctness.
+- In automated Windows lifecycle checks, wait until the native main-window handle is stable before sending the close request; the first nonzero handle can race Tauri/WebView initialization.
+- A PyInstaller one-file sidecar can replace its launcher PID with workers in a temporary extraction directory. Legacy cleanup must re-enumerate all test-owned backend processes instead of trusting the initially observed PID or install path.
 
 ## Mistakes Or Pitfalls
 
@@ -38,7 +40,7 @@
 - Rust mock-runtime tests prove command serialization and dispatch but not Windows custom-protocol URL mapping.
 - Playwright proves layout and orchestration at `1280x860` and `960x640`; Windows WebView2 remains the platform visual and native integration gate.
 - `scripts/verify_windows_single_process.ps1` is the release authority for MSI/Portable payload, installation, runtime process count, listener checks, window close, exit, uninstall, and cleanup.
-- RB014 must also record v0.2.3 to v0.3.0 upgrade and v0.3.0 to v0.2.3 rollback evidence before release.
+- RB014 recorded v0.2.3 to v0.3.0 upgrade and v0.3.0 to v0.2.3 rollback evidence in workflow run `29605770705`.
 
 ## Reusable Commands
 

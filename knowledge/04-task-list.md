@@ -69,12 +69,12 @@ Source: `docs/spec/2026-07-15-single-process-rust-desktop-backend-design.md`, `d
 | RB011 | Packaging | Remove the former secondary runtime from production | Done |
 | RB012 | Windows | Produce MSI and single-file Portable assets | Done |
 | RB013 | Release | Synchronize v0.3.0 architecture and release documentation | Done |
-| RB014 | Windows gate | Verify upgrade, rollback, payload, runtime, media, and shutdown | Blocked on a Windows x64 runner and release artifacts |
+| RB014 | Windows gate | Verify upgrade, rollback, payload, runtime, media, and shutdown | Done |
 
 ## Blockers
 
-- RB001-RB013 have no implementation blockers.
-- RB014 requires a Windows x64 runner and the real v0.3.0 MSI/Portable artifacts. The release must not be published before this gate passes.
+- RB001-RB014 have no implementation blockers.
+- Windows workflow run `29605770705` passed with `publish_release=false`; creating the public v0.3.0 Release remains a separate explicit release action.
 
 ## Verification Checklist
 

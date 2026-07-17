@@ -238,7 +238,7 @@ Use this file to record decisions that future agents should not reopen without a
 
 **Reasoning:** Eliminating the second runtime fixes lifecycle ownership at its source, removes duplicated transport and packaging, and narrows local data/media access to capability-scoped commands and ID-only URLs. Keeping schema version 2 avoids an unrelated data-format change during the runtime migration.
 
-**Consequences:** `mise run desktop-dev` starts Tauri directly. Production uses the combined Rust command handler and `imagetools-media` protocol. Python remains tooling only. Version 0.3.0 is the first release under this architecture; v0.2.3 remains immutable. Windows upgrade and rollback evidence is still required by RB014.
+**Consequences:** `mise run desktop-dev` starts Tauri directly. Production uses the combined Rust command handler and `imagetools-media` protocol. Python remains tooling only. Version 0.3.0 is the first release under this architecture; v0.2.3 remains immutable. Windows workflow run `29605770705` records the completed RB014 upgrade and rollback evidence.
 
 ### 2026-07-17: Publish MSI And A Single-Executable Portable ZIP
 

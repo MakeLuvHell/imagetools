@@ -751,7 +751,7 @@ Status: Done
 
 ## RB014: 执行 Windows 升级、回滚与发布门禁
 
-Status: Blocked
+Status: Done
 
 ### What to build
 
@@ -773,3 +773,11 @@ Status: Blocked
 - Windows WebView2 主题、参考图、生成历史和关闭行为 smoke test 通过。
 - API Key 不出现在 IPC、日志、诊断或 CI artifact 中。
 - Node、Playwright、Rust、desktop-check、打包和 Windows smoke checks 全部通过。
+
+### Verification
+
+- Windows workflow run `29605770705` at commit `7d17e869c8137b7139efc9b016c3b74549f0565a` passed MSI build, Portable packaging, single-process runtime and shutdown, v0.2.3 upgrade baseline, schema-v2 upgrade/rollback, and artifact upload.
+- Artifact `8416961492` contains `Image-Tools-v0.3.0-Windows-x64.msi` and `Image-Tools-v0.3.0-Windows-x64-Portable.zip`; the Portable archive contains exactly `Image Tools.exe`.
+- MSI SHA-256: `8b3ab00ceb3ef5871c48a536d4fc24cb2c4e5d5b27d472b43c8ce38dd1a881bd`.
+- Portable ZIP SHA-256: `ef0180f2eecff4810b2dca7d02c8944bb723062e1e2a9c17d314863b1b696f6b`.
+- The run used `publish_release=false`; it did not create or update a public GitHub Release.

@@ -51,4 +51,4 @@ Out of scope:
 
 ## Current Status
 
-RB001-RB013 of the single-process Rust migration are implemented. The source, package configuration, documentation, and v0.3.0 release metadata now describe the final architecture. RB014 remains the Windows x64 gate for real MSI/Portable payload, runtime, shutdown, media protocol, and upgrade/rollback compatibility evidence.
+RB001-RB014 of the single-process Rust migration are complete. Windows workflow run `29605770705` built the real MSI and single-file Portable assets and passed payload, runtime, shutdown, schema-v2 upgrade, rollback, and artifact gates without publishing a GitHub Release.

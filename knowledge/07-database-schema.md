@@ -4,7 +4,7 @@
 
 The authoritative implementation is `src-tauri/src/workbench/database/schema.rs`; compatibility fixtures live under `tests/fixtures/backend-contracts/`. The database file is `<工作区数据目录>/workbench.sqlite3`, SQLite foreign keys are enabled for every opened connection, and the current schema version is **2**.
 
-v0.3.0 adds no schema migration. It keeps the schema-v2 format used by v0.2.3 so the same workspace is intended to be readable before and after the Rust cutover. RB014 must still prove the complete Windows upgrade and rollback procedure against a copied real workspace before release.
+v0.3.0 adds no schema migration. It keeps the schema-v2 format used by v0.2.3 so the same workspace remains readable before and after the Rust cutover. RB014 proved the complete Windows upgrade and rollback procedure against a copied schema-v2 workspace in workflow run `29605770705`.
 
 ## Tables
 
@@ -112,4 +112,4 @@ If any v2 step fails, all v2 changes roll back. Existing v1 sessions keep their 
 - Image paths remain relative `images/<filename>` entries and movable with the workspace.
 - `settings.json`, `images/`, and `uploads/` remain in the same movable payload.
 - `storage-location.json` remains outside the payload in the fixed configuration directory.
-- Source-level fixtures prove v1-to-v2 migration and v2 preservation. Real Windows upgrade and rollback evidence is intentionally deferred to RB014 and must not be inferred from schema tests alone.
+- Source-level fixtures prove v1-to-v2 migration and v2 preservation. Windows workflow run `29605770705` separately proved the v0.2.3 to v0.3.0 upgrade and v0.2.3 rollback path against the schema-v2 fixture.
