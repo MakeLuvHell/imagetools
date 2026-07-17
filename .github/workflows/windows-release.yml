@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build-windows-x64:
-    name: Build Windows x64 installers
+    name: Build Windows x64 release
     runs-on: windows-latest
 
     steps:
@@ -36,7 +36,7 @@ jobs:
         shell: pwsh
         run: mise run install
 
-      - name: Build Windows x64 installers
+      - name: Build Windows x64 MSI
         shell: pwsh
         env:
           TAURI_TARGET_TRIPLE: x86_64-pc-windows-msvc
@@ -47,20 +47,62 @@ jobs:
             npm run desktop:build:windows
           '
 
-      - name: List installer outputs
+      - name: Stage MSI and portable assets
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          Get-ChildItem src-tauri\target\x86_64-pc-windows-msvc\release\bundle -Recurse -File |
-            Select-Object FullName, Length |
-            Format-Table -AutoSize
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
 
-      - name: Upload installers as workflow artifact
+          if ($env:RELEASE_TAG -cnotmatch '^[A-Za-z0-9._-]+$') {
+            throw "Release tag contains characters that are unsafe in asset filenames: $($env:RELEASE_TAG)"
+          }
+
+          $assetDirectory = "release-assets"
+          $msiDirectory = "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi"
+          $msiFiles = @(Get-ChildItem $msiDirectory -Filter "*.msi" -File)
+          if ($msiFiles.Count -ne 1) {
+            throw "Expected exactly one MSI in $msiDirectory; found $($msiFiles.Count)."
+          }
+
+          New-Item -ItemType Directory -Path $assetDirectory -Force | Out-Null
+          $msiOutput = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi"
+          $portableOutput = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip"
+          Copy-Item -LiteralPath $msiFiles[0].FullName -Destination $msiOutput -Force
+
+          $portableExecutable = "src-tauri\target\x86_64-pc-windows-msvc\release\Image Tools.exe"
+          & pwsh -NoProfile -File scripts/package_windows_portable.ps1 `
+            -Executable $portableExecutable `
+            -Output $portableOutput
+          if ($LASTEXITCODE -ne 0) {
+            throw "Portable packaging failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Verify Windows single-process release
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          $msiAsset = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi"
+          $portableAsset = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip"
+          & pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
+            -Msi $msiAsset `
+            -PortableZip $portableAsset
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows single-process verification failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload Windows release assets as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-x64-installers
+          name: image-tools-${{ inputs.release_tag }}-windows-x64
           path: |
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64.msi
+            release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-Portable.zip
           if-no-files-found: error
 
       - name: Ensure GitHub Release exists
@@ -92,24 +134,26 @@ jobs:
             }
           }
 
-      - name: Upload installers to GitHub Release
+      - name: Upload Windows assets to GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
           $assets = @(
-            Get-ChildItem "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
-            Get-ChildItem "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi" -Filter "*.msi" -Recurse -ErrorAction SilentlyContinue
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi",
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip"
           )
 
-          if ($assets.Count -eq 0) {
-            throw "No Windows installer assets were produced."
-          }
-
           foreach ($asset in $assets) {
-            & gh release upload $env:RELEASE_TAG $asset.FullName --repo $env:GITHUB_REPOSITORY --clobber
+            if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Release asset is missing: $asset"
+            }
+            & gh release upload $env:RELEASE_TAG $asset --repo $env:GITHUB_REPOSITORY --clobber
             if ($LASTEXITCODE -ne 0) {
-              throw "Unable to upload $($asset.Name) to GitHub Release $($env:RELEASE_TAG)."
+              throw "Unable to upload $asset to GitHub Release $($env:RELEASE_TAG)."
             }
           }

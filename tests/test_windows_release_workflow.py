@@ -27,6 +27,14 @@ def windows_release_workflow() -> str:
     return Path(".github/workflows/windows-release.yml").read_text()
 
 
+def portable_packager() -> str:
+    return Path("scripts/package_windows_portable.ps1").read_text()
+
+
+def single_process_verifier() -> str:
+    return Path("scripts/verify_windows_single_process.ps1").read_text()
+
+
 def test_windows_release_workflow_is_manual_and_tag_driven():
     workflow = windows_release_workflow()
 
@@ -54,16 +62,80 @@ def test_windows_release_workflow_uses_official_rustup_dist_on_windows():
     assert "mise exec -- pwsh" in workflow
 
 
-def test_windows_release_workflow_uploads_installers_to_release():
+def test_windows_release_workflow_packages_and_uploads_two_stable_assets():
     workflow = windows_release_workflow()
 
     assert "actions/upload-artifact@v4" in workflow
     assert "gh release upload" in workflow
-    assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe" in workflow
-    assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi" in workflow
-    assert "*.exe" in workflow
-    assert "*.msi" in workflow
+    assert "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi" in workflow
+    assert (
+        "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip"
+        in workflow
+    )
+    assert "release-assets/*" not in workflow
+    assert "bundle/nsis" not in workflow.lower()
+    assert "nsis" not in workflow.lower()
     assert "--clobber" in workflow
+
+
+def test_windows_release_workflow_selects_one_msi_and_builds_portable_from_main_exe():
+    workflow = windows_release_workflow()
+
+    assert 'Get-ChildItem $msiDirectory -Filter "*.msi" -File' in workflow
+    assert "$msiFiles.Count -ne 1" in workflow
+    assert 'release\\Image Tools.exe' in workflow
+    assert "scripts/package_windows_portable.ps1" in workflow
+    assert "scripts/verify_windows_single_process.ps1" in workflow
+    assert workflow.index("scripts/verify_windows_single_process.ps1") < workflow.index(
+        "actions/upload-artifact@v4"
+    )
+
+
+def test_portable_packager_enforces_a_single_branded_executable_entry():
+    script = portable_packager()
+
+    assert "Set-StrictMode -Version Latest" in script
+    assert "$ErrorActionPreference = \"Stop\"" in script
+    assert '[Parameter(Mandatory = $true)]' in script
+    assert "Test-Path -LiteralPath $Executable -PathType Leaf" in script
+    assert 'Name -cne "Image Tools.exe"' in script
+    assert 'Copy-Item -LiteralPath $resolvedExecutable -Destination $stagedExecutable' in script
+    assert "Compress-Archive" in script
+    assert "[System.IO.Compression.ZipFile]::OpenRead" in script
+    assert '$expectedEntries = @("Image Tools.exe")' in script
+    assert "$entryNames.Count -ne $expectedEntries.Count" in script
+    assert "$entryNames[0] -cne $expectedEntries[0]" in script
+    assert "[System.IO.File]::Move($temporaryZip, $resolvedOutput, $true)" in script
+    assert "finally" in script
+    assert "Remove-Item -LiteralPath $temporaryRoot -Recurse -Force" in script
+
+
+def test_windows_single_process_verifier_covers_payload_install_runtime_and_cleanup():
+    script = single_process_verifier()
+
+    assert "Set-StrictMode -Version Latest" in script
+    assert "$ErrorActionPreference = \"Stop\"" in script
+    assert '[Parameter(Mandatory = $true)]' in script
+    assert "[System.IO.Compression.ZipFile]::OpenRead" in script
+    assert 'Image Tools.exe' in script
+    assert "msiexec.exe" in script
+    assert '"/a"' in script
+    assert '"/i"' in script
+    assert '"/x"' in script
+    assert "Get-UninstallEntries" in script
+    assert '$displayNameProperty.Value -cne "Image Tools"' in script
+    assert "InstallLocation" in script
+    assert "DisplayIcon" in script
+    assert "IMAGE_TOOLS_DATA_DIR" in script
+    assert "IMAGE_TOOLS_CONFIG_DIR" in script
+    assert "MainWindowHandle" in script
+    assert "Get-NetTCPConnection" in script
+    assert "netstat" in script
+    assert "CloseMainWindow" in script
+    assert "10" in script
+    assert "imagetools-backend" in script
+    assert "finally" in script
+    assert "Stop-Process -Id" in script
 
 
 def test_windows_release_workflow_creates_a_missing_release_before_upload():
@@ -94,10 +166,7 @@ def test_readme_mentions_windows_release_assets_are_built_by_github_actions():
 def test_windows_installers_use_generated_icon_and_simplified_chinese():
     windows = tauri_config()["bundle"]["windows"]
 
-    assert windows["nsis"]["installerIcon"] == "icons/icon.ico"
-    assert windows["nsis"]["uninstallerIcon"] == "icons/icon.ico"
-    assert windows["nsis"]["languages"] == ["SimpChinese"]
-    assert windows["nsis"]["displayLanguageSelector"] is False
+    assert "nsis" not in windows
     assert windows["wix"]["language"] == "zh-CN"
 
 

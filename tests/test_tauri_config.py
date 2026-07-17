@@ -14,6 +14,10 @@ def test_tauri_linux_bundle_targets_are_installers_without_appimage_download():
     assert tauri_config()["bundle"]["targets"] == ["deb", "rpm"]
 
 
+def test_tauri_main_binary_name_is_the_branded_windows_executable():
+    assert tauri_config()["mainBinaryName"] == "Image Tools"
+
+
 def test_tauri_bundle_uses_project_icon():
     icons = tauri_config()["bundle"]["icon"]
 
@@ -23,6 +27,13 @@ def test_tauri_bundle_uses_project_icon():
 
 def test_tauri_windows_icon_file_exists():
     assert Path("src-tauri/icons/icon.ico").is_file()
+
+
+def test_tauri_windows_bundle_is_wix_only_and_simplified_chinese():
+    windows = tauri_config()["bundle"]["windows"]
+
+    assert windows == {"wix": {"language": "zh-CN"}}
+    assert "nsis" not in json.dumps(tauri_config()).lower()
 
 
 def test_tauri_windows_release_app_uses_gui_subsystem():
