@@ -729,7 +729,7 @@ Windows release workflow，并提供单进程、无监听端口和退出检查�
 
 ## RB013: 更新架构知识与发布文档
 
-Status: Ready
+Status: Done
 
 ### What to build
 
