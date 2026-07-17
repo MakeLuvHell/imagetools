@@ -149,14 +149,28 @@ function Wait-ForMainWindow {
     )
 
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    $stableHandle = [IntPtr]::Zero
+    $stableSince = [DateTime]::MinValue
     while ([DateTime]::UtcNow -lt $deadline) {
         $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
         if ($null -eq $process) {
             throw "$Label exited before opening its main window."
         }
         $process.Refresh()
-        if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
-            return $process
+        $handle = $process.MainWindowHandle
+        if ($handle -eq [IntPtr]::Zero) {
+            $stableHandle = [IntPtr]::Zero
+            $stableSince = [DateTime]::MinValue
+        }
+        elseif ($handle -ne $stableHandle) {
+            $stableHandle = $handle
+            $stableSince = [DateTime]::UtcNow
+        }
+        elseif ($handle -eq $stableHandle -and ([DateTime]::UtcNow - $stableSince).TotalMilliseconds -ge 1000) {
+            $process.Refresh()
+            if ($process.MainWindowHandle -eq $stableHandle) {
+                return $process
+            }
         }
         Start-Sleep -Milliseconds 200
     }

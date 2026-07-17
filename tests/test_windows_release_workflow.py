@@ -190,6 +190,15 @@ def test_windows_single_process_verifier_removes_only_test_created_default_app_d
     assert "Remove-Item -LiteralPath $defaultConfigDirectory -Recurse -Force" in script
 
 
+def test_windows_verifiers_wait_for_a_stable_main_window_before_closing():
+    for script in (single_process_verifier(), upgrade_rollback_verifier()):
+        assert "$stableHandle" in script
+        assert "$stableSince" in script
+        assert "$handle -eq $stableHandle" in script
+        assert "TotalMilliseconds -ge 1000" in script
+        assert "$process.Refresh()" in script
+
+
 def test_upgrade_fixture_is_schema_v2_linked_and_secret_free():
     script = upgrade_fixture_script()
 
