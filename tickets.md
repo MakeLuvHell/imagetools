@@ -653,7 +653,7 @@ adapter，`app.js` 仍走 REST。
 
 ## RB010: 一次性切换前端与 Tauri 到 IPC
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -683,7 +683,7 @@ adapter，切换 Tauri 到 bundled assets、Rust state、生产命令和媒体�
 
 ## RB011: 删除 Python sidecar 生产路径
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
