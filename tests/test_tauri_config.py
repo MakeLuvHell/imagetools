@@ -42,6 +42,19 @@ def test_tauri_windows_release_app_uses_gui_subsystem():
     assert 'windows_subsystem = "windows"' in main_rs
 
 
+def test_tauri_registers_shutdown_handler_before_the_event_loop_starts():
+    main_rs = Path("src-tauri/src/main.rs").read_text()
+
+    handler = ".on_window_event(|window, event| {"
+    assert handler in main_rs
+    assert main_rs.index(handler) < main_rs.index(".run(tauri::generate_context!())")
+    assert "window.on_window_event" not in main_rs
+    shutdown_handler = main_rs[main_rs.index(handler) : main_rs.index(".run(tauri::generate_context!())")]
+    assert shutdown_handler.index("std::thread::spawn") < shutdown_handler.index(
+        "window.app_handle().exit(0)"
+    )
+
+
 def test_tauri_loads_bundled_assets_without_a_sidecar_or_dev_server():
     config = tauri_config()
 
