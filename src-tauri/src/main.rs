@@ -91,7 +91,11 @@ fn empty_media_response(status: StatusCode) -> tauri::http::Response<Vec<u8>> {
 }
 
 fn should_exit_after_window_event(label: &str, event: &tauri::WindowEvent) -> bool {
-    label == "main" && matches!(event, tauri::WindowEvent::Destroyed)
+    label == "main"
+        && matches!(
+            event,
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+        )
 }
 
 fn theme_override(mode: &str) -> Result<Option<tauri::Theme>, String> {
@@ -331,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn exits_only_after_the_main_window_is_destroyed() {
+    fn exits_only_after_a_terminal_main_window_event() {
         assert!(should_exit_after_window_event(
             "main",
             &tauri::WindowEvent::Destroyed
