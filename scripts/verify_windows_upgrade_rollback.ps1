@@ -337,6 +337,18 @@ function Test-AppRuntime {
     if (-not $windowProcess.CloseMainWindow()) {
         throw "$Label main window did not accept a close request."
     }
+    if ($AllowLegacyBackend) {
+        $legacyExitDeadline = [DateTime]::UtcNow.AddSeconds(2)
+        while (
+            @(Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -ne 0 -and
+            [DateTime]::UtcNow -lt $legacyExitDeadline
+        ) {
+            Start-Sleep -Milliseconds 200
+        }
+        if (@(Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -ne 0) {
+            Stop-TestProcess -ProcessId $started.Id -ExecutablePath $ExecutablePath
+        }
+    }
     Wait-ForExecutableExit -ExecutablePath $ExecutablePath -TimeoutSeconds 10 -Label $Label
 
     if ($AllowLegacyBackend) {

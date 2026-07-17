@@ -255,6 +255,8 @@ def test_upgrade_rollback_verifier_cleans_all_test_owned_legacy_backend_workers(
     assert "Test-PathWithinDirectory" not in script
     assert normalized_script.count("stop-testbackendprocesses -baselineprocessids $backendbaseline") >= 2
     assert "get-testbackendprocesses -baselineprocessids $backendbaseline" in normalized_script
+    assert "Stop-TestProcess -ProcessId $started.Id -ExecutablePath $ExecutablePath" in script
+    assert "$legacyExitDeadline" in script
 
 
 def test_windows_release_workflow_creates_a_missing_release_before_upload():
