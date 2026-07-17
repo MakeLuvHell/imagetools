@@ -177,6 +177,19 @@ def test_windows_single_process_verifier_covers_payload_install_runtime_and_clea
     assert "Stop-Process -Id" in script
 
 
+def test_windows_single_process_verifier_removes_only_test_created_default_app_data():
+    script = single_process_verifier()
+
+    assert '$defaultDataDirectory = Join-Path $env:APPDATA "com.imagetools.desktop"' in script
+    assert '$defaultConfigDirectory = Join-Path $env:LOCALAPPDATA "com.imagetools.desktop"' in script
+    assert "$defaultDataExisted = Test-Path -LiteralPath $defaultDataDirectory" in script
+    assert "$defaultConfigExisted = Test-Path -LiteralPath $defaultConfigDirectory" in script
+    assert "-not $defaultDataExisted -and (Test-Path -LiteralPath $defaultDataDirectory)" in script
+    assert "-not $defaultConfigExisted -and (Test-Path -LiteralPath $defaultConfigDirectory)" in script
+    assert "Remove-Item -LiteralPath $defaultDataDirectory -Recurse -Force" in script
+    assert "Remove-Item -LiteralPath $defaultConfigDirectory -Recurse -Force" in script
+
+
 def test_upgrade_fixture_is_schema_v2_linked_and_secret_free():
     script = upgrade_fixture_script()
 

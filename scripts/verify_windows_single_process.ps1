@@ -291,6 +291,10 @@ $installedProduct = $false
 $startedProcesses = [System.Collections.Generic.List[object]]::new()
 $originalDataDirectory = [System.Environment]::GetEnvironmentVariable("IMAGE_TOOLS_DATA_DIR", "Process")
 $originalConfigDirectory = [System.Environment]::GetEnvironmentVariable("IMAGE_TOOLS_CONFIG_DIR", "Process")
+$defaultDataDirectory = Join-Path $env:APPDATA "com.imagetools.desktop"
+$defaultConfigDirectory = Join-Path $env:LOCALAPPDATA "com.imagetools.desktop"
+$defaultDataExisted = Test-Path -LiteralPath $defaultDataDirectory
+$defaultConfigExisted = Test-Path -LiteralPath $defaultConfigDirectory
 
 try {
     $resolvedMsi = Resolve-RequiredFile -Path $Msi -Description "MSI"
@@ -428,6 +432,12 @@ finally {
         [System.Environment]::SetEnvironmentVariable("IMAGE_TOOLS_CONFIG_DIR", $originalConfigDirectory, "Process")
         if ($null -ne $temporaryRoot -and (Test-Path -LiteralPath $temporaryRoot)) {
             Remove-Item -LiteralPath $temporaryRoot -Recurse -Force
+        }
+        if (-not $defaultDataExisted -and (Test-Path -LiteralPath $defaultDataDirectory)) {
+            Remove-Item -LiteralPath $defaultDataDirectory -Recurse -Force
+        }
+        if (-not $defaultConfigExisted -and (Test-Path -LiteralPath $defaultConfigDirectory)) {
+            Remove-Item -LiteralPath $defaultConfigDirectory -Recurse -Force
         }
     }
 }
