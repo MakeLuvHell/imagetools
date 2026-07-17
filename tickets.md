@@ -706,7 +706,7 @@ shell plugin 和已被 Rust 覆盖的 Python 应用测试，保留必要的 Pyth
 
 ## RB012: 生成 MSI 和单文件便携发布物
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -729,7 +729,7 @@ Windows release workflow，并提供单进程、无监听端口和退出检查�
 
 ## RB013: 更新架构知识与发布文档
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
