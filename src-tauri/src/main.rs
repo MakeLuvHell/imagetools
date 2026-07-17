@@ -212,18 +212,24 @@ fn main() {
                 return Ok(());
             };
             app.manage(state);
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("Image Tools")
-                .inner_size(1280.0, 860.0)
-                .min_inner_size(960.0, 640.0)
-                .on_navigation(is_allowed_navigation)
-                .build()?;
+            let window =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Image Tools")
+                    .inner_size(1280.0, 860.0)
+                    .min_inner_size(960.0, 640.0)
+                    .on_navigation(is_allowed_navigation)
+                    .build()?;
+            let app_handle = app.handle().clone();
+            window.on_window_event(move |event| {
+                if should_exit_after_window_event("main", event) {
+                    app_handle.exit(0);
+                    std::thread::spawn(|| {
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                        std::process::exit(0);
+                    });
+                }
+            });
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if should_exit_after_window_event(window.label(), event) {
-                window.app_handle().exit(0);
-            }
         })
         .run(tauri::generate_context!())
         .expect("failed to run Image Tools desktop app");
