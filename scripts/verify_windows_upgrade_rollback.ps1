@@ -226,7 +226,7 @@ function Wait-ForExecutableExit {
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {
-        if ((Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -eq 0) {
+        if (@(Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -eq 0) {
             return
         }
         Start-Sleep -Milliseconds 200
@@ -296,7 +296,7 @@ function Test-AppRuntime {
         -not [System.IO.Path]::IsPathFullyQualified($resolvedConfigDirectory)) {
         throw "$Label requires absolute isolated data and config directories."
     }
-    if ((Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -ne 0) {
+    if (@(Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -ne 0) {
         throw "$Label is already running at the test executable path."
     }
 
@@ -309,7 +309,7 @@ function Test-AppRuntime {
     $StartedProcesses.Add([pscustomobject]@{ ProcessId = $started.Id; ExecutablePath = $ExecutablePath }) | Out-Null
     $windowProcess = Wait-ForMainWindow -ProcessId $started.Id -Label $Label
 
-    $matchingProcesses = Get-ProcessesAtPath -ExecutablePath $ExecutablePath
+    $matchingProcesses = @(Get-ProcessesAtPath -ExecutablePath $ExecutablePath)
     if ($matchingProcesses.Count -ne 1 -or $matchingProcesses[0].ProcessId -ne $started.Id) {
         throw "$Label did not keep exactly one Image Tools.exe process at its installed path."
     }

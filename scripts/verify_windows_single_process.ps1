@@ -218,12 +218,12 @@ function Wait-ForExecutableExit {
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {
-        if ((Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -eq 0) {
+        if (@(Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -eq 0) {
             return
         }
         Start-Sleep -Milliseconds 200
     }
-    $remaining = Get-ProcessesAtPath -ExecutablePath $ExecutablePath
+    $remaining = @(Get-ProcessesAtPath -ExecutablePath $ExecutablePath)
     throw "$Label left Image Tools process IDs running after $TimeoutSeconds seconds: $($remaining.ProcessId -join ', ')."
 }
 
@@ -257,7 +257,7 @@ function Test-AppRuntime {
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$StartedProcesses
     )
 
-    if ((Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -ne 0) {
+    if (@(Get-ProcessesAtPath -ExecutablePath $ExecutablePath).Count -ne 0) {
         throw "$Label executable is already running; refusing to interact with a pre-existing process: $ExecutablePath"
     }
 
@@ -270,7 +270,7 @@ function Test-AppRuntime {
     $StartedProcesses.Add([pscustomobject]@{ ProcessId = $started.Id; ExecutablePath = $ExecutablePath }) | Out-Null
     $windowProcess = Wait-ForMainWindow -ProcessId $started.Id -Label $Label
 
-    $matchingProcesses = Get-ProcessesAtPath -ExecutablePath $ExecutablePath
+    $matchingProcesses = @(Get-ProcessesAtPath -ExecutablePath $ExecutablePath)
     if ($matchingProcesses.Count -ne 1 -or $matchingProcesses[0].ProcessId -ne $started.Id) {
         throw "$Label must have exactly one Image Tools.exe process at its full path; found IDs: $($matchingProcesses.ProcessId -join ', ')."
     }
