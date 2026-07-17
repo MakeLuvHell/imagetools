@@ -683,7 +683,7 @@ adapter，切换 Tauri 到 bundled assets、Rust state、生产命令和媒体�
 
 ## RB011: 删除 Python sidecar 生产路径
 
-Status: Ready
+Status: Done
 
 ### What to build
 
@@ -706,7 +706,7 @@ shell plugin 和已被 Rust 覆盖的 Python 应用测试，保留必要的 Pyth
 
 ## RB012: 生成 MSI 和单文件便携发布物
 
-Status: Blocked
+Status: Ready
 
 ### What to build
 
