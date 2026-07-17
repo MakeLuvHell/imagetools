@@ -238,6 +238,16 @@ def test_upgrade_rollback_verifier_is_isolated_versioned_and_self_cleaning():
     assert "1605" in script
 
 
+def test_upgrade_rollback_verifier_cleans_all_test_owned_legacy_backend_workers():
+    script = upgrade_rollback_verifier()
+    normalized_script = script.lower()
+
+    assert "function Stop-TestBackendProcesses" in script
+    assert "Test-PathWithinDirectory" not in script
+    assert normalized_script.count("stop-testbackendprocesses -baselineprocessids $backendbaseline") >= 2
+    assert "get-testbackendprocesses -baselineprocessids $backendbaseline" in normalized_script
+
+
 def test_windows_release_workflow_creates_a_missing_release_before_upload():
     workflow = windows_release_workflow()
 

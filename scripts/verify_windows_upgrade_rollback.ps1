@@ -169,30 +169,12 @@ function Get-ProcessesAtPath {
     )
 }
 
-function Test-PathWithinDirectory {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Directory
-    )
-
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $fullDirectory = [System.IO.Path]::GetFullPath($Directory).TrimEnd('\') + '\'
-    return $fullPath.StartsWith($fullDirectory, [System.StringComparison]::OrdinalIgnoreCase)
-}
-
 function Get-TestBackendProcesses {
-    param(
-        [Parameter(Mandatory = $true)][string]$InstallDirectory,
-        [Parameter(Mandatory = $true)][AllowEmptyCollection()][int[]]$BaselineProcessIds
-    )
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][int[]]$BaselineProcessIds)
 
     return @(
         Get-CimInstance -ClassName Win32_Process -Filter "Name = 'imagetools-backend.exe'" -ErrorAction SilentlyContinue |
-            Where-Object {
-                $_.ProcessId -notin $BaselineProcessIds -and
-                -not [string]::IsNullOrWhiteSpace($_.ExecutablePath) -and
-                (Test-PathWithinDirectory -Path $_.ExecutablePath -Directory $InstallDirectory)
-            }
+            Where-Object { $_.ProcessId -notin $BaselineProcessIds }
     )
 }
 
@@ -252,6 +234,25 @@ function Stop-TestProcess {
     ) {
         Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Stop-TestBackendProcesses {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][int[]]$BaselineProcessIds)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        $backendProcesses = @(Get-TestBackendProcesses -BaselineProcessIds $BaselineProcessIds)
+        if ($backendProcesses.Count -eq 0) {
+            return
+        }
+        foreach ($backend in $backendProcesses) {
+            Stop-Process -Id $backend.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Milliseconds 200
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    $remaining = @(Get-TestBackendProcesses -BaselineProcessIds $BaselineProcessIds)
+    throw "Legacy Image Tools backend processes remain after cleanup: $($remaining.ProcessId -join ', ')."
 }
 
 function Invoke-FixtureTool {
@@ -314,14 +315,7 @@ function Test-AppRuntime {
         throw "$Label did not keep exactly one Image Tools.exe process at its installed path."
     }
 
-    $installDirectory = Split-Path -Parent $ExecutablePath
-    $testBackends = @(Get-TestBackendProcesses -InstallDirectory $installDirectory -BaselineProcessIds $BackendBaseline)
-    foreach ($backend in $testBackends) {
-        $StartedProcesses.Add([pscustomobject]@{
-            ProcessId = [int]$backend.ProcessId
-            ExecutablePath = [string]$backend.ExecutablePath
-        }) | Out-Null
-    }
+    $testBackends = @(Get-TestBackendProcesses -BaselineProcessIds $BackendBaseline)
     if (-not $AllowLegacyBackend -and $testBackends.Count -ne 0) {
         throw "$Label started an unexpected imagetools-backend process."
     }
@@ -331,8 +325,14 @@ function Test-AppRuntime {
     }
     Wait-ForExecutableExit -ExecutablePath $ExecutablePath -TimeoutSeconds 10 -Label $Label
 
-    foreach ($backend in $testBackends) {
-        Stop-TestProcess -ProcessId $backend.ProcessId -ExecutablePath $backend.ExecutablePath
+    if ($AllowLegacyBackend) {
+        Stop-TestBackendProcesses -BaselineProcessIds $BackendBaseline
+    }
+    else {
+        $lateBackends = @(Get-TestBackendProcesses -BaselineProcessIds $BackendBaseline)
+        if ($lateBackends.Count -ne 0) {
+            throw "$Label left an unexpected imagetools-backend process running."
+        }
     }
 }
 
@@ -348,6 +348,8 @@ $originalDataDirectory = [System.Environment]::GetEnvironmentVariable("IMAGE_TOO
 $originalConfigDirectory = [System.Environment]::GetEnvironmentVariable("IMAGE_TOOLS_CONFIG_DIR", "Process")
 $legacyStateOwned = $false
 $installationStarted = $false
+$backendBaseline = @()
+$backendBaselineCaptured = $false
 
 try {
     $resolvedOldMsi = Resolve-RequiredFile -Path $OldMsi -Description "v0.2.3 MSI"
@@ -376,6 +378,7 @@ try {
         Get-CimInstance -ClassName Win32_Process -Filter "Name = 'imagetools-backend.exe'" -ErrorAction SilentlyContinue |
             ForEach-Object { [int]$_.ProcessId }
     )
+    $backendBaselineCaptured = $true
     if ($backendBaseline.Count -ne 0) {
         throw "imagetools-backend is already running; test-owned legacy sidecars cannot be identified safely."
     }
@@ -457,6 +460,9 @@ finally {
     try {
         foreach ($startedProcess in $startedProcesses) {
             Stop-TestProcess -ProcessId $startedProcess.ProcessId -ExecutablePath $startedProcess.ExecutablePath
+        }
+        if ($backendBaselineCaptured) {
+            Stop-TestBackendProcesses -BaselineProcessIds $backendBaseline
         }
         if ($installationStarted -and $null -ne $resolvedNewMsi) {
             Invoke-MsiExec -Operation "v0.3.0 cleanup uninstall" -AllowAbsentProduct -Arguments @(
