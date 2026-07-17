@@ -287,7 +287,7 @@ function Test-AppRuntime {
         [Parameter(Mandatory = $true)][string]$ConfigDirectory,
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][int[]]$BackendBaseline,
         [Parameter(Mandatory = $true)][bool]$AllowLegacyBackend,
-        [Parameter(Mandatory = $true)][System.Collections.Generic.List[object]]$StartedProcesses
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$StartedProcesses
     )
 
     $resolvedDataDirectory = [System.IO.Path]::GetFullPath($DataDirectory)
