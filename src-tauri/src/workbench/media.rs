@@ -24,6 +24,13 @@ pub struct ResolvedMedia {
     pub file: cap_std::fs::File,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct SaveableMedia {
+    pub bytes: Vec<u8>,
+    pub filename: String,
+    pub mime_type: &'static str,
+}
+
 #[derive(Clone)]
 pub struct MediaResolver {
     database: Arc<Database>,
@@ -112,6 +119,23 @@ impl MediaResolver {
 
     pub fn read(&self, image_id: i64) -> Result<(Vec<u8>, &'static str), CommandError> {
         read_resolved_media(self.resolve(image_id)?)
+    }
+
+    pub fn read_for_save(&self, image_id: i64) -> Result<SaveableMedia, CommandError> {
+        let resolved = self.resolve(image_id)?;
+        let filename = resolved
+            .path
+            .file_name()
+            .and_then(|filename| filename.to_str())
+            .filter(|filename| !filename.is_empty() && !filename.chars().any(char::is_control))
+            .ok_or_else(media_not_found)?
+            .to_owned();
+        let (bytes, mime_type) = read_resolved_media(resolved)?;
+        Ok(SaveableMedia {
+            bytes,
+            filename,
+            mime_type,
+        })
     }
 }
 
@@ -455,6 +479,20 @@ mod tests {
         assert_eq!(response.headers()["x-content-type-options"], "nosniff");
         assert_eq!(response.headers()["access-control-allow-origin"], "*");
         assert_eq!(response.body(), bytes);
+    }
+
+    #[test]
+    fn save_payload_uses_bounded_handle_bytes_and_detected_metadata() {
+        let fixture = MediaFixture::new();
+        let bytes = b"\x89PNG\r\n\x1a\nstored image";
+        fs::write(fixture.data_root.join("images/result.png"), bytes).unwrap();
+        let image_id = fixture.insert_image("images/result.png", "text/html");
+
+        let media = fixture.resolver.read_for_save(image_id).unwrap();
+
+        assert_eq!(media.bytes, bytes);
+        assert_eq!(media.filename, "result.png");
+        assert_eq!(media.mime_type, "image/png");
     }
 
     #[test]

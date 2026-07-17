@@ -295,45 +295,46 @@ fn prepare_generation_reference(
             "reference.conflicting_sources",
             "只能选择一种参考图来源。",
         )),
-        (token @ Some(_), None) => Ok(PreparedGenerationReference {
-            token,
-            internally_staged_token: None,
-        }),
+        (token @ Some(_), None) => Ok(PreparedGenerationReference { token }),
         (None, Some(image_id)) => {
             let token = state.stage_existing_reference(image_id)?.token;
             Ok(PreparedGenerationReference {
                 token: Some(token.clone()),
-                internally_staged_token: Some(token),
             })
         }
-        (None, None) => Ok(PreparedGenerationReference {
-            token: None,
-            internally_staged_token: None,
-        }),
+        (None, None) => Ok(PreparedGenerationReference { token: None }),
     }
 }
 
 #[derive(Debug)]
 struct PreparedGenerationReference {
     token: Option<String>,
-    internally_staged_token: Option<String>,
 }
 
 async fn generate_image_with_state(
     mut input: GenerateInput,
     state: &WorkbenchState,
 ) -> Result<GenerateResultDto, CommandError> {
-    let prepared = prepare_generation_reference(
+    let submitted_token = input.reference_token.take();
+    let prepared = match prepare_generation_reference(
         state,
-        input.reference_token.take(),
+        submitted_token.clone(),
         input.reference_image_id.take(),
-    )?;
+    ) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            let cleanup = submitted_token
+                .as_deref()
+                .map_or(Ok(()), |token| state.references.discard(token));
+            return Err(merge_cleanup_error(error, cleanup));
+        }
+    };
+    let cleanup_token = prepared.token.clone();
     input.reference_token = prepared.token;
     match state.generation.generate(input).await {
         Ok(result) => Ok(result),
         Err(error) => {
-            let cleanup = prepared
-                .internally_staged_token
+            let cleanup = cleanup_token
                 .as_deref()
                 .map_or(Ok(()), |token| state.references.discard(token));
             Err(merge_cleanup_error(error, cleanup))
@@ -605,7 +606,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn uploaded_reference_survives_preconsume_validation_failure() {
+    async fn uploaded_reference_is_discarded_on_preconsume_validation_failure() {
         let fixture = CommandFixture::new();
         let state = fixture.app.state::<WorkbenchState>();
         let staged = state
@@ -621,7 +622,34 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error.code, "generation.prompt_required");
-        assert!(state.references.lookup(&staged.token).is_ok());
+        assert_eq!(
+            state.references.lookup(&staged.token).unwrap_err().code,
+            "reference.not_found"
+        );
+    }
+
+    #[tokio::test]
+    async fn uploaded_reference_is_discarded_when_reference_sources_conflict() {
+        let fixture = CommandFixture::new();
+        let image_id = fixture.insert_image("source.png", PNG, "image/png");
+        let state = fixture.app.state::<WorkbenchState>();
+        let staged = state
+            .references
+            .stage("upload.png", "image/png", PNG)
+            .unwrap();
+
+        let error = generate_image_with_state(
+            invalid_prompt_input(Some(staged.token.clone()), Some(image_id)),
+            &state,
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, "reference.conflicting_sources");
+        assert_eq!(
+            state.references.lookup(&staged.token).unwrap_err().code,
+            "reference.not_found"
+        );
     }
 
     #[tauri::command]

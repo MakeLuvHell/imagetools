@@ -206,6 +206,7 @@ async function installApiMocks(page, overrides = {}) {
       return { ...session };
     }
     if (method === "listSessionRuns") return (state.runs[Number(args[0])] || []).map((run) => ({ ...run }));
+    if (method === "saveImage") return true;
     if (method === "stageReference") {
       const [reference] = args;
       state.stagedReferences.push(reference);
@@ -253,7 +254,7 @@ async function installApiMocks(page, overrides = {}) {
       "listProviders", "createProvider", "getProvider", "updateProvider", "deleteProvider",
       "setDefaultProvider", "listProjects", "createProject", "updateProject", "deleteProject",
       "listSessions", "createSession", "getSession", "updateSession", "deleteSession",
-      "setSessionPinned", "listSessionRuns", "stageReference", "generate",
+      "setSessionPinned", "listSessionRuns", "saveImage", "stageReference", "generate",
     ];
     window.__IMAGE_TOOLS_DESKTOP_API_MOCK__ = Object.fromEntries(
       methods.map((method) => [method, (...args) => window.__imageToolsDesktopApiCall(method, args)]),

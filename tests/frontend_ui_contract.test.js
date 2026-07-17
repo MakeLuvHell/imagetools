@@ -150,6 +150,9 @@ test("production frontend uses only the desktop API and bundled media DTO URLs",
   assert.match(app, /reference_image_id/);
   assert.doesNotMatch(app, /referenceToken\s*=\s*referenceSource\?\.url/);
   assert.doesNotMatch(html, /\/static\//);
+  assert.match(app, /desktopApi\.saveImage\(image\.id\)/);
+  assert.doesNotMatch(app, /createElement\(["']a["']\)/);
+  assert.doesNotMatch(app, /\.download\s*=/);
 });
 
 test("Tauri loads bundled assets without a sidecar or development URL", () => {

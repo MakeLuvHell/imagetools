@@ -120,12 +120,57 @@ fn pick_data_directory(app: tauri::AppHandle) -> Result<Option<String>, String> 
         .map_err(|_| "系统目录选择器未返回结果。".to_string())
 }
 
+fn save_result_failed() -> workbench::error::CommandError {
+    workbench::error::CommandError::new("media.save_failed", "无法保存图片。")
+}
+
+async fn write_selected_media(
+    selection: Option<tauri_plugin_dialog::FilePath>,
+    media: workbench::media::SaveableMedia,
+) -> Result<bool, workbench::error::CommandError> {
+    let Some(selection) = selection else {
+        return Ok(false);
+    };
+    let destination = selection.into_path().map_err(|_| save_result_failed())?;
+    tokio::fs::write(destination, media.bytes)
+        .await
+        .map_err(|_| save_result_failed())?;
+    Ok(true)
+}
+
+#[tauri::command]
+async fn save_result_image(
+    image_id: i64,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, workbench::commands::WorkbenchState>,
+) -> Result<bool, workbench::error::CommandError> {
+    let media = state.media_resolver().read_for_save(image_id)?;
+    let extension = match media.mime_type {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/webp" => "webp",
+        _ => return Err(save_result_failed()),
+    };
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("保存图片")
+        .set_file_name(&media.filename)
+        .add_filter("图片文件", &[extension])
+        .save_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selection = receiver.await.map_err(|_| save_result_failed())?;
+    write_selected_media(selection, media).await
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(generate_workbench_handler![
             pick_data_directory,
+            save_result_image,
             set_app_theme
         ])
         .register_uri_scheme_protocol("imagetools-media", |context, request| {
@@ -274,6 +319,36 @@ mod tests {
         assert!(exit_codes.lock().unwrap().is_empty());
         completion.lock().unwrap().take().unwrap()();
         assert_eq!(*exit_codes.lock().unwrap(), [1]);
+    }
+
+    #[tokio::test]
+    async fn save_result_write_returns_false_when_the_dialog_is_cancelled() {
+        let media = crate::workbench::media::SaveableMedia {
+            bytes: b"image".to_vec(),
+            filename: "result.png".into(),
+            mime_type: "image/png",
+        };
+
+        assert!(!super::write_selected_media(None, media).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn save_result_write_persists_only_to_the_native_selection() {
+        let temporary = tempfile::tempdir().unwrap();
+        let destination = temporary.path().join("chosen.png");
+        let media = crate::workbench::media::SaveableMedia {
+            bytes: b"image bytes".to_vec(),
+            filename: "result.png".into(),
+            mime_type: "image/png",
+        };
+
+        assert!(super::write_selected_media(
+            Some(tauri_plugin_dialog::FilePath::Path(destination.clone())),
+            media,
+        )
+        .await
+        .unwrap());
+        assert_eq!(std::fs::read(destination).unwrap(), b"image bytes");
     }
 
     #[test]

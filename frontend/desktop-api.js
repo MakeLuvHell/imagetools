@@ -118,6 +118,7 @@
       setSessionPinned: (sessionId, isPinned) =>
         call("set_session_pinned", { sessionId, isPinned }),
       listSessionRuns: (sessionId) => call("list_session_runs", { sessionId }),
+      saveImage: (imageId) => call("save_result_image", { imageId }),
       stageReference: ({ name, type, bytes }) =>
         call("stage_reference_image", bytes, {
           headers: {

@@ -42,6 +42,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
   await api.deleteSession(11);
   await api.setSessionPinned(11, true);
   await api.listSessionRuns(11);
+  await api.saveImage(42);
 
   assert.deepEqual(calls, [
     ["get_settings"],
@@ -65,6 +66,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     ["delete_session", { sessionId: 11 }],
     ["set_session_pinned", { sessionId: 11, isPinned: true }],
     ["list_session_runs", { sessionId: 11 }],
+    ["save_result_image", { imageId: 42 }],
   ]);
   assert.deepEqual(Object.keys(api).sort(), [
     "createProject",
@@ -82,6 +84,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     "listProviders",
     "listSessionRuns",
     "listSessions",
+    "saveImage",
     "setDefaultProvider",
     "setSessionPinned",
     "stageReference",

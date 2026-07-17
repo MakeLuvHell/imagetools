@@ -349,11 +349,15 @@ function cancelImagePreview(event) {
   closeImagePreview();
 }
 
-function downloadImage(image) {
-  const link = document.createElement("a");
-  link.href = image.url;
-  link.download = image.filename || "image-tools-result.png";
-  link.click();
+async function downloadImage(image) {
+  try {
+    const saved = await desktopApi.saveImage(image.id);
+    if (saved) {
+      showToast("图片已保存");
+    }
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 async function copyImageLink(url) {
