@@ -97,11 +97,16 @@ function Get-DisplayIconPath {
 }
 
 function Resolve-InstalledExecutable {
-    param([Parameter(Mandatory = $true)][object]$Entry)
+    param(
+        [Parameter(Mandatory = $true)][object]$Entry,
+        [string[]]$ExpectedNames = @("Image Tools.exe")
+    )
 
     $candidates = [System.Collections.Generic.List[string]]::new()
     if (-not [string]::IsNullOrWhiteSpace($Entry.InstallLocation)) {
-        $candidates.Add((Join-Path $Entry.InstallLocation "Image Tools.exe"))
+        foreach ($expectedName in $ExpectedNames) {
+            $candidates.Add((Join-Path $Entry.InstallLocation $expectedName))
+        }
     }
     $displayIconPath = Get-DisplayIconPath -DisplayIcon $Entry.DisplayIcon
     if (-not [string]::IsNullOrWhiteSpace($displayIconPath)) {
@@ -112,11 +117,11 @@ function Resolve-InstalledExecutable {
         $candidates |
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
             ForEach-Object { (Get-Item -LiteralPath $_).FullName } |
-            Where-Object { (Split-Path -Leaf $_) -ceq "Image Tools.exe" } |
+            Where-Object { $ExpectedNames -ccontains (Split-Path -Leaf $_) } |
             Select-Object -Unique
     )
     if ($existing.Count -ne 1) {
-        throw "Unable to resolve exactly one Image Tools.exe from InstallLocation or DisplayIcon."
+        throw "Unable to resolve exactly one expected Image Tools executable from InstallLocation or DisplayIcon."
     }
     return $existing[0]
 }
@@ -150,8 +155,9 @@ function Get-ProcessesAtPath {
     param([Parameter(Mandatory = $true)][string]$ExecutablePath)
 
     $comparisonPath = [System.IO.Path]::GetFullPath($ExecutablePath)
+    $processName = (Split-Path -Leaf $comparisonPath).Replace("'", "''")
     return @(
-        Get-CimInstance -ClassName Win32_Process -Filter "Name = 'Image Tools.exe'" -ErrorAction SilentlyContinue |
+        Get-CimInstance -ClassName Win32_Process -Filter "Name = '$processName'" -ErrorAction SilentlyContinue |
             Where-Object {
                 -not [string]::IsNullOrWhiteSpace($_.ExecutablePath) -and
                 [string]::Equals(
@@ -393,7 +399,9 @@ try {
         "/i", $resolvedOldMsi, "/qn", "/norestart"
     )
     $oldEntry = Wait-ForInstalledVersion -ExpectedVersion "0.2.3"
-    $oldExecutable = Resolve-InstalledExecutable -Entry $oldEntry
+    $oldExecutable = Resolve-InstalledExecutable `
+        -Entry $oldEntry `
+        -ExpectedNames @("Image Tools.exe", "imagetools.exe")
     Set-LegacyWorkspaceBootstrap -BootstrapPath $legacyBootstrapPath -Workspace $upgradeWorkspace
     Test-AppRuntime `
         -Label "Image Tools 0.2.3 before upgrade" `
@@ -429,7 +437,9 @@ try {
         "/i", $resolvedOldMsi, "/qn", "/norestart"
     )
     $rollbackEntry = Wait-ForInstalledVersion -ExpectedVersion "0.2.3"
-    $rollbackExecutable = Resolve-InstalledExecutable -Entry $rollbackEntry
+    $rollbackExecutable = Resolve-InstalledExecutable `
+        -Entry $rollbackEntry `
+        -ExpectedNames @("Image Tools.exe", "imagetools.exe")
     Set-LegacyWorkspaceBootstrap -BootstrapPath $legacyBootstrapPath -Workspace $rollbackWorkspace
     Test-AppRuntime `
         -Label "Image Tools 0.2.3 after rollback" `

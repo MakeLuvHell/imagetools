@@ -181,8 +181,8 @@ def test_upgrade_fixture_is_schema_v2_linked_and_secret_free():
     script = upgrade_fixture_script()
 
     assert "argparse" in script
-    assert 'add_parser("create"' in script
-    assert 'add_parser("verify"' in script
+    assert 'for name in ("create", "verify")' in script
+    assert "commands.add_parser(name" in script
     assert "PRAGMA foreign_keys = ON" in script
     assert "schema_migrations" in script
     assert "providers" in script
@@ -209,6 +209,7 @@ def test_upgrade_rollback_verifier_is_isolated_versioned_and_self_cleaning():
     assert "DisplayVersion" in script
     assert '"0.2.3"' in script
     assert '"0.3.0"' in script
+    assert '"imagetools.exe"' in script
     assert "IMAGE_TOOLS_DATA_DIR" in script
     assert "IMAGE_TOOLS_CONFIG_DIR" in script
     assert "prepare_windows_upgrade_fixture.py" in script
