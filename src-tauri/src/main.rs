@@ -167,7 +167,6 @@ async fn save_result_image(
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(generate_workbench_handler![
             pick_data_directory,
             save_result_image,

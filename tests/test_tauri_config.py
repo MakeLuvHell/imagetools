@@ -31,45 +31,47 @@ def test_tauri_windows_release_app_uses_gui_subsystem():
     assert 'windows_subsystem = "windows"' in main_rs
 
 
-def test_tauri_dev_uses_reloadable_source_backend():
-    config = json.loads(Path("src-tauri/tauri.dev.conf.json").read_text())
-    command = config["build"]["beforeDevCommand"]
+def test_tauri_loads_bundled_assets_without_a_sidecar_or_dev_server():
+    config = tauri_config()
 
-    assert command["cwd"] == ".."
-    assert command["wait"] is False
-    assert command["script"] == "python scripts/run_desktop_dev_backend.py"
-    assert config["bundle"]["externalBin"] == []
-
-
-def test_desktop_dev_uses_dev_overlay_without_bundling_sidecar():
-    package = json.loads(Path("package.json").read_text())
-    command = package["scripts"]["desktop:dev"]
-
-    assert command == "node scripts/run_desktop_dev.js"
-    assert "backend:bundle" not in command
+    assert config["build"] == {
+        "beforeDevCommand": "",
+        "beforeBuildCommand": "",
+        "frontendDist": "../frontend",
+    }
+    assert "externalBin" not in config["bundle"]
+    assert not Path("src-tauri/tauri.dev.conf.json").exists()
 
 
-def test_desktop_dev_rejects_release_profile_that_needs_a_sidecar():
-    script = Path("scripts/run_desktop_dev.js").read_text()
+def test_desktop_scripts_invoke_tauri_directly():
+    scripts = json.loads(Path("package.json").read_text())["scripts"]
 
-    assert "--release" in script
-    assert "not supported" in script
+    assert scripts["desktop:dev"] == "tauri dev"
+    assert scripts["desktop:build"] == "tauri build"
+    assert "backend:bundle" not in scripts
 
 
-def test_tauri_rust_selects_source_backend_only_for_debug_builds():
+def test_python_sidecar_sources_and_shell_plugin_are_absent():
+    cargo = Path("src-tauri/Cargo.toml").read_text()
     main_rs = Path("src-tauri/src/main.rs").read_text()
 
-    assert "const DEV_BACKEND_PORT: u16 = 7860;" in main_rs
-    assert "#[cfg(debug_assertions)]" in main_rs
-    assert "#[cfg(not(debug_assertions))]" in main_rs
-    assert "prepare_backend(app)" in main_rs
+    assert not Path("backend").exists()
+    assert not Path("scripts/bundle_backend.py").exists()
+    assert not Path("scripts/run_desktop_dev_backend.py").exists()
+    assert not Path("scripts/run_desktop_dev.js").exists()
+    assert "tauri-plugin-shell" not in cargo
+    assert "tauri_plugin_shell" not in main_rs
 
 
-def test_tauri_release_sidecar_receives_a_stable_storage_config_directory():
+def test_tauri_initializes_workbench_from_absolute_app_directories_and_overrides():
     main_rs = Path("src-tauri/src/main.rs").read_text()
 
-    assert "app_local_data_dir()" in main_rs
-    assert '"IMAGE_TOOLS_CONFIG_DIR"' in main_rs
+    assert "app.path().app_data_dir()?" in main_rs
+    assert "app.path().app_local_data_dir()?" in main_rs
+    assert 'std::env::var_os("IMAGE_TOOLS_DATA_DIR")' in main_rs
+    assert 'std::env::var_os("IMAGE_TOOLS_CONFIG_DIR")' in main_rs
+    assert "path.is_absolute()" in main_rs
+    assert "WorkbenchState::initialize(&data_dir, &config_dir)" in main_rs
 
 
 def test_tauri_exposes_a_native_directory_picker_command():
@@ -80,7 +82,8 @@ def test_tauri_exposes_a_native_directory_picker_command():
     assert "tauri-plugin-dialog" in cargo
     assert "tauri_plugin_dialog::init()" in main_rs
     assert "pick_data_directory" in main_rs
-    assert "generate_handler![pick_data_directory, set_app_theme]" in main_rs
+    assert "save_result_image" in main_rs
+    assert "generate_workbench_handler![" in main_rs
     assert config["app"]["withGlobalTauri"] is True
 
 
@@ -90,12 +93,4 @@ def test_tauri_exposes_native_window_theme_sync():
     assert "fn theme_override" in main_rs
     assert "fn set_app_theme" in main_rs
     assert "window.set_theme(theme)" in main_rs
-    assert "generate_handler![pick_data_directory, set_app_theme]" in main_rs
-
-
-def test_tauri_debug_backend_requires_the_launcher_token():
-    main_rs = Path("src-tauri/src/main.rs").read_text()
-
-    assert "DEV_BACKEND_TOKEN_PATH" in main_rs
-    assert "read_dev_backend_token" in main_rs
-    assert "wait_for_dev_backend" in main_rs
+    assert "set_app_theme" in main_rs

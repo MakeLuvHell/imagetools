@@ -13,10 +13,9 @@ const app = fs.readFileSync(path.join(root, "frontend", "app.js"), "utf8");
 const tauriConfig = JSON.parse(
   fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"),
 );
-const desktopDevLauncher = fs.readFileSync(
-  path.join(root, "scripts", "run_desktop_dev.js"),
-  "utf8",
-);
+const packageScripts = JSON.parse(
+  fs.readFileSync(path.join(root, "package.json"), "utf8"),
+).scripts;
 
 function parseHexColor(value) {
   const match = /^#([0-9a-f]{6})$/i.exec(value);
@@ -160,7 +159,8 @@ test("Tauri loads bundled assets without a sidecar or development URL", () => {
   assert.equal(Object.hasOwn(tauriConfig.build, "devUrl"), false);
   assert.equal(Object.hasOwn(tauriConfig.bundle, "externalBin"), false);
   assert.equal(fs.existsSync(path.join(root, "src-tauri", "tauri.dev.conf.json")), false);
-  assert.doesNotMatch(desktopDevLauncher, /tauri\.dev\.conf\.json/);
+  assert.equal(packageScripts["desktop:dev"], "tauri dev");
+  assert.equal(packageScripts["desktop:build"], "tauri build");
 });
 
 test("shell follows system themes and keeps Windows desktop geometry", () => {
