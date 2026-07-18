@@ -102,3 +102,14 @@ The final clean-worktree gate passed after UI012-UI019 were complete:
 - Playwright: 65 passed.
 - Rust: 135 passed.
 - `cargo fmt --check`, `mise run desktop-check`, and `git diff --check`: exit 0.
+
+### Responsive Interaction Windows Gate
+
+Workflow run [`29651658576`](https://github.com/MakeLuvHell/imagetools/actions/runs/29651658576) built commit `7a91a47b59257601be400b988362a8155dd46560` with `publish_release=false` and completed successfully:
+
+- Windows x64 MSI build and single-executable Portable staging: success.
+- MSI/Portable payload, process, listener, window-close, and exit verification: success.
+- v0.2.3 baseline download and schema-v2 upgrade/rollback verification: success.
+- Artifact upload: `8431714800`, `image-tools-v0.3.0-windows-x64`, 10,805,716 bytes.
+- GitHub Release creation and asset publication: skipped.
+- The immutable `v0.3.0` tag still resolves to `cc56df12b2ab85dffcb10a3e4887978bc21ec2b1`.

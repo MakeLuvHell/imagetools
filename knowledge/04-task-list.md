@@ -41,7 +41,7 @@
 | UI017 | Composer | Place validation and clear accepted prompts | Snapshot-based prompt/reference handoff | UI016 | Done |
 | UI018 | Motion | Animate optimistic prompt handoff | Telegram-style 250ms motion with safe cleanup | UI017 | Done |
 | UI019 | Testing | Refresh interaction and visual coverage | Focused behavior matrix and 24 affected baselines | UI012-UI018 | Done |
-| UI020 | Release | Preserve knowledge and run centralized gates | Final source and Windows evidence | UI019 | In Progress |
+| UI020 | Release | Preserve knowledge and run centralized gates | Final source and Windows evidence | UI019 | Done |
 
 ## Recommended Order
 

@@ -796,7 +796,7 @@ Source: `docs/superpowers/specs/2026-07-18-responsive-settings-composer-session-
 | UI017 | Composer validation and accepted handoff | UI016 | Done | Playwright notice placement, focus, immediate clear, parameter retention, and reference tests |
 | UI018 | Telegram prompt motion | UI017 | Done | DOM and Playwright 250ms, reduced-motion, resize/switch, and animation-failure tests |
 | UI019 | Interaction and visual regression matrix | UI012-UI018 | Done | Eight focused interaction checks and reproducible 24-image shell/settings baseline update |
-| UI020 | Knowledge and centralized release gates | UI019 | In Progress | Knowledge and consolidated non-Windows gate complete; one non-publishing Windows run pending |
+| UI020 | Knowledge and centralized release gates | UI019 | Done | Non-Windows gate and non-publishing Windows run `29651658576` passed; artifact `8431714800` uploaded |
 
 Acceptance boundary:
 
