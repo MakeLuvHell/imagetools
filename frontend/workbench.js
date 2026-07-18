@@ -312,6 +312,7 @@
             ...run,
             status: "failed",
             error: String(error || "生成失败"),
+            error_message: String(error || "生成失败"),
           },
         },
       },

@@ -918,6 +918,21 @@ summary:focus-visible {
   text-decoration: none;
 }
 
+.composer-stack {
+  width: 100%;
+  min-width: 0;
+}
+
+.composer-notice {
+  width: min(var(--composer-width), calc(100% - 48px));
+  min-height: 22px;
+  margin: 0 auto 6px;
+  padding: 0 12px;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 22px;
+}
+
 .composer {
   width: min(var(--composer-width), calc(100% - 48px));
   min-height: 116px;

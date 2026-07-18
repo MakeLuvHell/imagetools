@@ -24,6 +24,7 @@ async function installApiMocks(page, overrides = {}) {
     sessionsCreated: 0,
     requestLog: [],
     generateBodies: [],
+    generationStarted: 0,
     stagedReferences: [],
     nextRunId: 20,
     sessions: overrides.sessions || [{
@@ -217,11 +218,16 @@ async function installApiMocks(page, overrides = {}) {
     if (method === "saveImage") return true;
     if (method === "stageReference") {
       const [reference] = args;
+      if (overrides.stageReferenceError) {
+        throw commandError(overrides.stageReferenceError, "reference.stage_failed");
+      }
       state.stagedReferences.push(reference);
       return { token: `reference-token-${state.stagedReferences.length}` };
     }
     if (method === "generate") {
       const [body] = args;
+      state.generationStarted += 1;
+      await delay(Number(overrides.generateDelayMs || 0));
       state.requestLog.push("generate");
       state.generateBodies.push(body);
       if (overrides.generateFailure) throw commandError("桌面后端请求失败。", "desktop.invoke_failed");

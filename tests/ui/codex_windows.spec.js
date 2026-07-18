@@ -206,15 +206,96 @@ test("failed pointer drop restores authoritative sessions and clears visuals", a
   await expect(page.locator(".session-drag-preview, .is-drop-target, .is-drag-source")).toHaveCount(0);
 });
 
-test("missing Provider opens settings without creating a session", async ({ page }) => {
+test("Composer validation appears above the input and preserves invalid drafts", async ({ page }) => {
   const requests = await installApiMocks(page, { providers: [] });
   await page.goto("/");
   const prompt = page.getByPlaceholder("描述你想创作的图片");
   await prompt.fill("夏季饮品海报");
   await prompt.press("Enter");
-  await expect(page.getByRole("dialog", { name: "设置" })).toBeVisible();
-  await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
+  const notice = page.locator("#composerNotice");
+  await expect(notice).toHaveText("请先配置 Provider");
+  await expect(prompt).toHaveValue("夏季饮品海报");
+  await expect(page.getByRole("dialog", { name: "设置" })).toBeHidden();
+  await expect(page.locator("#providerSelect")).toBeFocused();
+  const [noticeBox, composerBox] = await Promise.all([
+    notice.boundingBox(),
+    page.locator("#composerForm").boundingBox(),
+  ]);
+  expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(composerBox.y);
   await expect.poll(() => requests.sessionsCreated).toBe(0);
+});
+
+test("empty prompt validation focuses the Composer and clears when corrected", async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto("/");
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.focus();
+  await prompt.press("Enter");
+  await expect(page.locator("#composerNotice")).toHaveText("请先输入提示词");
+  await expect(prompt).toBeFocused();
+  await prompt.fill("已补充提示词");
+  await expect(page.locator("#composerNotice")).toBeHidden();
+});
+
+test("accepted submit clears prompt immediately and preserves common parameters", async ({ page }) => {
+  const requests = await installApiMocks(page, { generateDelayMs: 500 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+  await page.getByRole("button", { name: "图片参数" }).click();
+  await page.locator("#ratioSelect").selectOption("16:9");
+  await page.locator("#resolutionSelect").selectOption("medium");
+  await page.locator("#qualitySelect").selectOption("high");
+  await page.locator("#countSelect").selectOption("2");
+  await page.keyboard.press("Escape");
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("立即发送这条提示词");
+  const startedAt = Date.now();
+  await prompt.press("Enter");
+  await expect.poll(async () => prompt.inputValue(), { timeout: 200 }).toBe("");
+  expect(Date.now() - startedAt).toBeLessThan(200);
+  await expect(page.locator("#ratioSelect")).toHaveValue("16:9");
+  await expect(page.locator("#resolutionSelect")).toHaveValue("medium");
+  await expect(page.locator("#qualitySelect")).toHaveValue("high");
+  await expect(page.locator("#countSelect")).toHaveValue("2");
+  await expect.poll(() => requests.generationStarted).toBe(1);
+});
+
+test("reference staging failure preserves the selected Composer reference", async ({ page }) => {
+  await installApiMocks(page, { stageReferenceError: "参考图暂存失败。" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+  await page.locator("#referenceInput").setInputFiles({
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("89504e470d0a1a0a", "hex"),
+  });
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("参考这个构图");
+  await prompt.press("Enter");
+
+  await expect(prompt).toHaveValue("");
+  await expect(page.locator("#referencePreview")).toBeVisible();
+  await expect(page.locator("#referenceName")).toHaveText("reference.png");
+  await expect(page.locator(".run-error")).toContainText("参考图暂存失败。");
+});
+
+test("accepted reference handoff clears Composer before generation completes", async ({ page }) => {
+  const requests = await installApiMocks(page, { generateDelayMs: 500 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+  await page.locator("#referenceInput").setInputFiles({
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("89504e470d0a1a0a", "hex"),
+  });
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("参考这个构图");
+  await prompt.press("Enter");
+
+  await expect.poll(() => requests.generationStarted).toBe(1);
+  expect(requests.generateBodies).toHaveLength(0);
+  await expect(page.locator("#referencePreview")).toBeHidden();
+  await expect(page.locator("#referenceInput")).toHaveValue("");
 });
 
 test("parameter menu closes with Escape and restores trigger focus", async ({ page }) => {
@@ -281,7 +362,9 @@ test("historical result references submit an image id without refetching bytes",
     },
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "夏季饮品广告图" }).click();
+  await page
+    .getByRole("button", { name: "夏季饮品广告图", exact: true })
+    .click();
   await page.getByRole("button", { name: "设为参考图" }).click();
   const prompt = page.getByPlaceholder("描述你想创作的图片");
   await prompt.fill("继续优化");
@@ -1467,7 +1550,10 @@ test("running success and failure remain stable in one task stream", async ({ pa
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.goto("/");
   await settleUi(page);
-  const session = page.getByRole("button", { name: "夏季饮品广告图" });
+  const session = page.getByRole("button", {
+    name: "夏季饮品广告图",
+    exact: true,
+  });
   await session.click();
   await expect(page.locator(".timeline")).toHaveScreenshot("task-running.png");
 

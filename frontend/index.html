@@ -76,7 +76,9 @@
           </div>
         </section>
 
-        <form id="composerForm" class="composer" aria-label="图片生成输入">
+        <div class="composer-stack">
+          <p id="composerNotice" class="composer-notice" role="alert" hidden></p>
+          <form id="composerForm" class="composer" aria-label="图片生成输入">
           <div class="composer-context">
             <div id="referencePreview" class="reference-preview" hidden>
               <i data-lucide="image" aria-hidden="true"></i>
@@ -149,7 +151,8 @@
               <i data-lucide="arrow-up"></i>
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </main>
     </div>
 

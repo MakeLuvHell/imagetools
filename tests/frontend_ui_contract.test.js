@@ -199,6 +199,16 @@ test("Composer keeps controls in context and popover layers", () => {
   assert.doesNotMatch(html, /class="composer-controls"/);
 });
 
+test("Composer notice precedes the form in normal layout flow", () => {
+  const stackStart = html.indexOf('class="composer-stack"');
+  const noticeStart = html.indexOf('id="composerNotice"');
+  const formStart = html.indexOf('id="composerForm"');
+  assert.ok(stackStart !== -1, "Composer stack exists");
+  assert.ok(noticeStart > stackStart, "notice is inside the stack");
+  assert.ok(formStart > noticeStart, "notice precedes the form");
+  assert.match(html, /id="composerNotice"[^>]*role="alert"[^>]*hidden/);
+});
+
 test("Provider settings uses a scan-first list and dedicated task dialogs", () => {
   for (const id of [
     "providerList",

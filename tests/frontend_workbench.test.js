@@ -162,6 +162,10 @@ test("pending runs stay isolated by session and submission id", () => {
   state = workbench.failPendingRun(state, 3, "a", "网络不可用");
   assert.equal(workbench.pendingRunsForSession(state, 3)[0].status, "failed");
   assert.equal(workbench.pendingRunsForSession(state, 3)[0].error, "网络不可用");
+  assert.equal(
+    workbench.pendingRunsForSession(state, 3)[0].error_message,
+    "网络不可用",
+  );
   assert.equal(workbench.pendingRunsForSession(state, 4)[0].status, "running");
 
   state = workbench.removePendingRun(state, 3, "a");

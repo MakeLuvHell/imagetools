@@ -19,6 +19,7 @@ const sidebarStatus = document.querySelector("#sidebarStatus");
 const currentSessionTitle = document.querySelector("#currentSessionTitle");
 const currentSessionSubtitle = document.querySelector("#currentSessionSubtitle");
 const timeline = document.querySelector("#timeline");
+const composerNotice = document.querySelector("#composerNotice");
 const composerForm = document.querySelector("#composerForm");
 const promptInput = document.querySelector("#prompt");
 const referenceBtn = document.querySelector("#referenceBtn");
@@ -167,6 +168,25 @@ function showToast(message) {
 
 function setSidebarStatus(message = "", tone = "") {
   setInlineStatus(sidebarStatus, message, tone);
+}
+
+function setComposerNotice(message = "") {
+  composerNotice.textContent = message;
+  composerNotice.hidden = !message;
+}
+
+function clearSubmittedReference(uploadedFile, submittedReference) {
+  const uploadIsCurrent =
+    uploadedFile && referenceInput.files[0] === uploadedFile;
+  const resultIsCurrent =
+    submittedReference && referenceSource === submittedReference;
+  if (!uploadIsCurrent && !resultIsCurrent) return;
+  referenceInput.value = "";
+  referenceSource = null;
+  referencePreview.hidden = true;
+  referenceName.textContent = "";
+  syncReferenceState();
+  saveActiveDraft();
 }
 
 function persistCollapsedProjects() {
@@ -1050,16 +1070,17 @@ async function handleComposerSubmit(event) {
     providerSelect.value,
   );
   const prompt = promptInput.value.trim();
-  if (!provider) {
-    showToast("请先配置 Provider");
-    openSettingsView("providers", providersBtn);
-    return;
-  }
   if (!prompt) {
-    showToast("请先输入提示词");
+    setComposerNotice("请先输入提示词");
     promptInput.focus();
     return;
   }
+  if (!provider) {
+    setComposerNotice("请先配置 Provider");
+    providerSelect.focus();
+    return;
+  }
+  setComposerNotice();
 
   const locksNewTask = state.selectedSessionId == null;
   if (locksNewTask && newTaskSubmissionLocked) return;
@@ -1071,6 +1092,8 @@ async function handleComposerSubmit(event) {
   let pendingRun = null;
   let previousServerCount = 0;
   let requestError = null;
+  const uploadedFile = referenceInput.files[0] || null;
+  const submittedReference = referenceSource;
   try {
     sessionId = await ensureSessionForSubmit(prompt);
     previousServerCount = (runsBySession[sessionId] || []).length;
@@ -1094,12 +1117,6 @@ async function handleComposerSubmit(event) {
       sessionId,
       pendingRun,
     );
-    renderCurrentSession();
-    renderTimelineRuns([
-      ...(runsBySession[sessionId] || []),
-      ...window.ImageToolsWorkbench.pendingRunsForSession(state, sessionId),
-    ]);
-    generateBtn.setAttribute("aria-label", "生成中");
     const fields = window.ImageToolsWorkbench.buildGenerationFields(
       {
         sessionId,
@@ -1117,18 +1134,32 @@ async function handleComposerSubmit(event) {
       },
       window.ImageToolsPreferences,
     );
+    promptInput.value = "";
+    if (wasNewTask) {
+      localStorage.removeItem(
+        window.ImageToolsWorkbench.draftStorageKey(null),
+      );
+    }
+    saveActiveDraft();
+    resizePrompt();
+    renderCurrentSession();
+    renderTimelineRuns([
+      ...(runsBySession[sessionId] || []),
+      ...window.ImageToolsWorkbench.pendingRunsForSession(state, sessionId),
+    ]);
+    generateBtn.setAttribute("aria-label", "生成中");
     let referenceToken = null;
-    let referenceImageId = referenceSource?.imageId || null;
-    if (referenceInput.files[0]) {
-      const file = referenceInput.files[0];
+    let referenceImageId = submittedReference?.imageId || null;
+    if (uploadedFile) {
       const staged = await desktopApi.stageReference({
-        name: file.name,
-        type: file.type,
-        bytes: new Uint8Array(await file.arrayBuffer()),
+        name: uploadedFile.name,
+        type: uploadedFile.type,
+        bytes: new Uint8Array(await uploadedFile.arrayBuffer()),
       });
       referenceToken = staged.token;
       referenceImageId = null;
     }
+    clearSubmittedReference(uploadedFile, submittedReference);
     await desktopApi.generate({
       ...fields,
       session_id: Number(fields.session_id),
@@ -1143,7 +1174,6 @@ async function handleComposerSubmit(event) {
     showToast("生成完成");
   } catch (error) {
     requestError = error.message;
-    showToast(error.message);
   } finally {
     if (sessionId && pendingRun) {
       const serverRuns = await desktopApi.listSessionRuns(sessionId)
@@ -1166,21 +1196,6 @@ async function handleComposerSubmit(event) {
             submissionId,
             localError,
           );
-      if (persisted) {
-        localStorage.removeItem(
-          window.ImageToolsWorkbench.draftStorageKey(sessionId),
-        );
-        if (wasNewTask) {
-          localStorage.removeItem(window.ImageToolsWorkbench.draftStorageKey(null));
-        }
-        promptInput.value = "";
-        referenceInput.value = "";
-        referenceSource = null;
-        referencePreview.hidden = true;
-        referenceName.textContent = "";
-        syncReferenceState();
-        resizePrompt();
-      }
       if (state.selectedSessionId === sessionId) {
         renderTimelineRuns(
           persisted
@@ -1969,7 +1984,15 @@ document.addEventListener("pointercancel", handleSessionDragCancel);
 sessionFilter.addEventListener("input", renderSessions);
 composerForm.addEventListener("submit", handleComposerSubmit);
 composerForm.addEventListener("input", saveDraftFromInput);
-promptInput.addEventListener("input", resizePrompt);
+promptInput.addEventListener("input", () => {
+  resizePrompt();
+  if (
+    composerNotice.textContent === "请先输入提示词" &&
+    promptInput.value.trim()
+  ) {
+    setComposerNotice();
+  }
+});
 promptInput.addEventListener("keydown", handlePromptKeydown);
 parameterMenu.addEventListener("input", saveDraftFromInput);
 parameterMenu.addEventListener("change", saveDraftFromInput);
@@ -1987,6 +2010,9 @@ providerSelect.addEventListener("change", () => {
     providerSelect.value,
   );
   if (provider) {
+    if (composerNotice.textContent === "请先配置 Provider") {
+      setComposerNotice();
+    }
     modelInput.value = provider.defaultModel;
     syncTransparentBackground();
     saveActiveDraft();
