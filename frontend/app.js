@@ -7,17 +7,15 @@ const newSessionBtn = document.querySelector("#newSessionBtn");
 const newProjectBtn = document.querySelector("#newProjectBtn");
 const providersBtn = document.querySelector("#providersBtn");
 const settingsBtn = document.querySelector("#settingsBtn");
-const taskMenuBtn = document.querySelector("#taskMenuBtn");
-const taskMenu = document.querySelector("#taskMenu");
-const renameSessionBtn = document.querySelector("#renameSessionBtn");
-const deleteSessionBtn = document.querySelector("#deleteSessionBtn");
-const pinSessionBtn = document.querySelector("#pinSessionBtn");
-const organizeSessionBtn = document.querySelector("#organizeSessionBtn");
 const sidebarMenu = document.querySelector("#sidebarMenu");
 const sidebarMenuPinBtn = document.querySelector("#sidebarMenuPinBtn");
 const sidebarMenuOrganizeBtn = document.querySelector("#sidebarMenuOrganizeBtn");
+const sidebarMenuRenameSessionBtn = document.querySelector("#sidebarMenuRenameSessionBtn");
+const sidebarMenuSeparator = document.querySelector("#sidebarMenuSeparator");
+const sidebarMenuDeleteSessionBtn = document.querySelector("#sidebarMenuDeleteSessionBtn");
 const sidebarMenuRenameProjectBtn = document.querySelector("#sidebarMenuRenameProjectBtn");
 const sidebarMenuDeleteProjectBtn = document.querySelector("#sidebarMenuDeleteProjectBtn");
+const sidebarStatus = document.querySelector("#sidebarStatus");
 const currentSessionTitle = document.querySelector("#currentSessionTitle");
 const currentSessionSubtitle = document.querySelector("#currentSessionSubtitle");
 const timeline = document.querySelector("#timeline");
@@ -124,6 +122,15 @@ let sessionDialogMode = null;
 let sessionDialogTarget = null;
 let sidebarMenuTarget = null;
 let sidebarMenuTrigger = null;
+let collapsedProjectIds = new Set(
+  window.ImageToolsWorkbench.parseCollapsedProjectIds(
+    localStorage.getItem(
+      window.ImageToolsWorkbench.COLLAPSED_PROJECTS_STORAGE_KEY,
+    ),
+  ),
+);
+let dragState = null;
+let suppressedSessionClickId = null;
 let editingProviderId = null;
 let providerSettingsStatus = "loading";
 let providerSettingsError = "";
@@ -158,6 +165,27 @@ function showToast(message) {
   toastTimer = setTimeout(() => {
     void window.ImageToolsUi.closeLayer(toast);
   }, 2400);
+}
+
+function setSidebarStatus(message = "", tone = "") {
+  setInlineStatus(sidebarStatus, message, tone);
+}
+
+function persistCollapsedProjects() {
+  localStorage.setItem(
+    window.ImageToolsWorkbench.COLLAPSED_PROJECTS_STORAGE_KEY,
+    window.ImageToolsWorkbench.serializeCollapsedProjectIds(
+      collapsedProjectIds,
+    ),
+  );
+}
+
+function setProjectExpanded(projectId, expanded, { persist = true } = {}) {
+  const numericId = Number(projectId);
+  if (expanded) collapsedProjectIds.delete(numericId);
+  else collapsedProjectIds.add(numericId);
+  if (persist) persistCollapsedProjects();
+  renderSessions();
 }
 
 function filteredSessions() {
@@ -278,9 +306,16 @@ function renderSessions() {
     window.ImageToolsWorkbench.groupSessions(sessions, projects),
     state.selectedSessionId,
     {
-      onSelect: selectExistingSession,
+      collapsedProjectIds,
+      onSelect: (sessionId) => {
+        if (suppressedSessionClickId === Number(sessionId)) return;
+        void selectExistingSession(sessionId);
+      },
       onSessionAction: openSidebarSessionMenu,
       onProjectAction: openSidebarProjectMenu,
+      onProjectToggle: (projectId) =>
+        setProjectExpanded(projectId, collapsedProjectIds.has(Number(projectId))),
+      onSessionPointerDown: beginSessionDrag,
     },
   );
   if (!sessions.length) {
@@ -440,14 +475,6 @@ function renderCurrentSession() {
     currentSessionSubtitle,
     session,
   );
-  taskMenuBtn.disabled = !hasSession;
-  renameSessionBtn.disabled = !hasSession;
-  deleteSessionBtn.disabled = !hasSession;
-  pinSessionBtn.disabled = !hasSession;
-  organizeSessionBtn.disabled = !hasSession;
-  if (session) {
-    pinSessionBtn.querySelector("span").textContent = session.isPinned ? "取消置顶" : "置顶";
-  }
   referenceBtn.disabled = false;
   generateBtn.disabled = !hasProvider || hasInFlight;
   promptInput.disabled = false;
@@ -465,6 +492,13 @@ async function loadSessions() {
       desktopApi.listProjects(),
     ]);
     projects = window.ImageToolsWorkbench.normalizeProjects(loadedProjects);
+    collapsedProjectIds = new Set(
+      window.ImageToolsWorkbench.normalizeCollapsedProjectIds(
+        [...collapsedProjectIds],
+        projects,
+      ),
+    );
+    persistCollapsedProjects();
     state = window.ImageToolsWorkbench.applySessionList(state, sessions);
     render();
     await loadTimeline(state.selectedSessionId);
@@ -759,6 +793,14 @@ async function selectExistingSession(sessionId) {
     return;
   }
   saveActiveDraft();
+  const projectId = window.ImageToolsWorkbench.projectIdForSession(
+    state.sessions,
+    sessionId,
+  );
+  if (projectId != null && collapsedProjectIds.has(projectId)) {
+    collapsedProjectIds.delete(projectId);
+    persistCollapsedProjects();
+  }
   state = window.ImageToolsWorkbench.selectSession(state, sessionId);
   restoreActiveDraft();
   render();
@@ -780,33 +822,35 @@ async function ensureSessionForSubmit(prompt) {
   return session.id;
 }
 
-function closeTaskMenu(options) {
-  return window.ImageToolsUi.closeLayer(taskMenu, taskMenuBtn, options);
-}
-
 function closeSidebarMenu(options) {
   return window.ImageToolsUi.closeLayer(sidebarMenu, sidebarMenuTrigger, options);
 }
 
 function openSidebarSessionMenu(session, trigger) {
-  sidebarMenuTarget = { type: "session", value: session };
+  sidebarMenuTarget = { kind: "session", value: session, trigger };
   sidebarMenuTrigger = trigger;
   sidebarMenuPinBtn.hidden = false;
   sidebarMenuOrganizeBtn.hidden = false;
+  sidebarMenuRenameSessionBtn.hidden = false;
+  sidebarMenuDeleteSessionBtn.hidden = false;
   sidebarMenuRenameProjectBtn.hidden = true;
   sidebarMenuDeleteProjectBtn.hidden = true;
+  sidebarMenuSeparator.hidden = false;
   sidebarMenuPinBtn.querySelector("span").textContent = session.isPinned ? "取消置顶" : "置顶";
   window.ImageToolsUi.openAnchoredLayer(sidebarMenu, trigger);
   sidebarMenuPinBtn.focus();
 }
 
 function openSidebarProjectMenu(project, trigger) {
-  sidebarMenuTarget = { type: "project", value: project };
+  sidebarMenuTarget = { kind: "project", value: project, trigger };
   sidebarMenuTrigger = trigger;
   sidebarMenuPinBtn.hidden = true;
   sidebarMenuOrganizeBtn.hidden = true;
+  sidebarMenuRenameSessionBtn.hidden = true;
+  sidebarMenuDeleteSessionBtn.hidden = true;
   sidebarMenuRenameProjectBtn.hidden = false;
   sidebarMenuDeleteProjectBtn.hidden = false;
+  sidebarMenuSeparator.hidden = false;
   window.ImageToolsUi.openAnchoredLayer(sidebarMenu, trigger);
   sidebarMenuRenameProjectBtn.focus();
 }
@@ -828,7 +872,6 @@ function populateProjectSelect(selectedProjectId) {
 
 function openOrganizeSessionDialog(session, opener) {
   void closeSidebarMenu();
-  void closeTaskMenu();
   sessionDialogMode = "organize";
   sessionDialogTarget = session;
   sessionDialogTitle.textContent = "整理会话";
@@ -838,7 +881,7 @@ function openOrganizeSessionDialog(session, opener) {
   populateProjectSelect(session.projectId);
   sessionDialogSubmit.textContent = "保存";
   sessionDialogSubmit.classList.remove("danger");
-  window.ImageToolsUi.openDialog(sessionDialog, opener || sidebarMenuTrigger || taskMenuBtn);
+  window.ImageToolsUi.openDialog(sessionDialog, opener || sidebarMenuTrigger);
   sessionProjectSelect.focus();
 }
 
@@ -873,13 +916,11 @@ function openDeleteProjectDialog(project, opener) {
   window.ImageToolsUi.openDialog(sessionDialog, opener);
 }
 
-function openRenameDialog() {
-  const session = window.ImageToolsWorkbench.selectedSession(state);
-  if (!session) {
-    return;
-  }
-  closeTaskMenu();
+function openRenameDialog(session, opener) {
+  if (!session) return;
+  void closeSidebarMenu();
   sessionDialogMode = "rename";
+  sessionDialogTarget = session;
   sessionDialogTitle.textContent = "重命名会话";
   sessionDialogMessage.hidden = true;
   sessionTitleField.hidden = false;
@@ -889,17 +930,15 @@ function openRenameDialog() {
   sessionProjectField.hidden = true;
   sessionDialogSubmit.textContent = "保存";
   sessionDialogSubmit.classList.remove("danger");
-  window.ImageToolsUi.openDialog(sessionDialog, taskMenuBtn);
+  window.ImageToolsUi.openDialog(sessionDialog, opener || sidebarMenuTrigger);
   sessionTitleInput.select();
 }
 
-function openDeleteDialog() {
-  const session = window.ImageToolsWorkbench.selectedSession(state);
-  if (!session) {
-    return;
-  }
-  closeTaskMenu();
+function openDeleteDialog(session, opener) {
+  if (!session) return;
+  void closeSidebarMenu();
   sessionDialogMode = "delete";
+  sessionDialogTarget = session;
   sessionDialogTitle.textContent = "删除会话";
   sessionDialogMessage.textContent = `确定删除“${session.title}”及其生成记录吗？`;
   sessionDialogMessage.hidden = false;
@@ -908,11 +947,10 @@ function openDeleteDialog() {
   sessionProjectField.hidden = true;
   sessionDialogSubmit.textContent = "删除";
   sessionDialogSubmit.classList.add("danger");
-  window.ImageToolsUi.openDialog(sessionDialog, taskMenuBtn);
+  window.ImageToolsUi.openDialog(sessionDialog, opener || sidebarMenuTrigger);
 }
 
-async function renameSession(title) {
-  const session = window.ImageToolsWorkbench.selectedSession(state);
+async function renameSession(session, title) {
   if (!session) return;
   try {
     await desktopApi.updateSession(session.id, { title: title.trim() });
@@ -924,17 +962,19 @@ async function renameSession(title) {
   }
 }
 
-async function deleteSession() {
-  const session = window.ImageToolsWorkbench.selectedSession(state);
+async function deleteSession(session) {
   if (!session) return;
   try {
     await desktopApi.deleteSession(session.id);
     localStorage.removeItem(window.ImageToolsWorkbench.draftStorageKey(session.id));
-    state = window.ImageToolsWorkbench.selectNewTask(state);
+    const deletedCurrent = state.selectedSessionId === session.id;
+    if (deletedCurrent) state = window.ImageToolsWorkbench.selectNewTask(state);
     await loadSessions();
-    restoreActiveDraft();
-    render();
-    window.ImageToolsUi.renderNewTask(timeline);
+    if (deletedCurrent) {
+      restoreActiveDraft();
+      render();
+      window.ImageToolsUi.renderNewTask(timeline);
+    }
     return true;
   } catch (error) {
     showToast(error.message);
@@ -945,6 +985,10 @@ async function deleteSession() {
 async function updateSessionProject(session, projectId) {
   try {
     await desktopApi.updateSession(session.id, { project_id: projectId });
+    if (projectId != null) {
+      collapsedProjectIds.delete(Number(projectId));
+      persistCollapsedProjects();
+    }
     await loadSessions();
     return true;
   } catch (error) {
@@ -967,7 +1011,9 @@ async function setSessionPinned(session) {
 async function saveProject(mode, project, name) {
   try {
     if (mode === "project-create") {
-      await desktopApi.createProject({ name });
+      const created = await desktopApi.createProject({ name });
+      collapsedProjectIds.delete(Number(created.id));
+      persistCollapsedProjects();
     } else {
       await desktopApi.updateProject(project.id, { name });
     }
@@ -982,6 +1028,8 @@ async function saveProject(mode, project, name) {
 async function deleteProject(project) {
   try {
     await desktopApi.deleteProject(project.id);
+    collapsedProjectIds.delete(Number(project.id));
+    persistCollapsedProjects();
     await loadSessions();
     return true;
   } catch (error) {
@@ -1161,9 +1209,9 @@ async function handleSessionDialogSubmit(event) {
       sessionTitleInput.focus();
       return;
     }
-    if (!(await renameSession(title))) return;
+    if (!(await renameSession(sessionDialogTarget, title))) return;
   } else if (sessionDialogMode === "delete") {
-    if (!(await deleteSession())) return;
+    if (!(await deleteSession(sessionDialogTarget))) return;
   } else if (sessionDialogMode === "organize") {
     const projectId = sessionProjectSelect.value ? Number(sessionProjectSelect.value) : null;
     if (!(await updateSessionProject(sessionDialogTarget, projectId))) return;
@@ -1495,8 +1543,166 @@ async function handleStorageLocationSubmit(event) {
   }
 }
 
+function clearDragExpansionTimer(current) {
+  if (!current?.expandTimer) return;
+  clearTimeout(current.expandTimer);
+  current.expandTimer = null;
+}
+
+function setDragTarget(current, projectId) {
+  const numericId = projectId == null ? null : Number(projectId);
+  if (current.targetProjectId === numericId) return;
+  clearDragExpansionTimer(current);
+  document
+    .querySelector(`[data-project-id="${current.targetProjectId}"]`)
+    ?.classList.remove("is-drop-target");
+  current.targetProjectId = numericId;
+  if (numericId == null) return;
+  document
+    .querySelector(`[data-project-id="${numericId}"]`)
+    ?.classList.add("is-drop-target");
+  if (!collapsedProjectIds.has(numericId)) return;
+  current.expandTimer = setTimeout(() => {
+    if (dragState !== current || current.targetProjectId !== numericId) return;
+    current.replacingTree = true;
+    collapsedProjectIds.delete(numericId);
+    persistCollapsedProjects();
+    renderSessions();
+    current.replacingTree = false;
+    document
+      .querySelector(`[data-project-id="${numericId}"]`)
+      ?.classList.add("is-drop-target");
+  }, 500);
+}
+
+function positionDragPreview(current, point) {
+  if (!current.preview) return;
+  current.preview.style.left = `${point.x + 12}px`;
+  current.preview.style.top = `${point.y + 12}px`;
+}
+
+function activateSessionDrag(current, point) {
+  current.active = true;
+  current.sourceRow.classList.add("is-drag-source");
+  current.sourceRow.setPointerCapture?.(current.pointerId);
+  current.sourceRow.addEventListener(
+    "lostpointercapture",
+    () => {
+      if (
+        dragState?.sourceRow === current.sourceRow &&
+        !dragState.replacingTree
+      ) {
+        void finishSessionDrag({ commit: false });
+      }
+    },
+    { once: true },
+  );
+  current.preview = document.createElement("div");
+  current.preview.className = "session-drag-preview";
+  current.preview.textContent = current.session.title;
+  document.body.appendChild(current.preview);
+  positionDragPreview(current, point);
+}
+
+function beginSessionDrag(session, event) {
+  if (!event.isPrimary || event.button !== 0) return;
+  void closeSidebarMenu();
+  const sourceRow = event.currentTarget;
+  dragState = {
+    pointerId: event.pointerId,
+    session,
+    sourceRow,
+    start: { x: event.clientX, y: event.clientY },
+    active: false,
+    targetProjectId: null,
+    preview: null,
+    expandTimer: null,
+    replacingTree: false,
+  };
+}
+
+function handleSessionDragMove(event) {
+  const current = dragState;
+  if (!current || event.pointerId !== current.pointerId) return;
+  const point = { x: event.clientX, y: event.clientY };
+  if (
+    !current.active &&
+    !window.ImageToolsWorkbench.exceedsDragThreshold(current.start, point)
+  ) {
+    return;
+  }
+  if (!current.active) activateSessionDrag(current, point);
+  event.preventDefault();
+  positionDragPreview(current, point);
+  const projectRow = document
+    .elementFromPoint(event.clientX, event.clientY)
+    ?.closest?.("[data-project-id]");
+  setDragTarget(current, projectRow?.dataset.projectId ?? null);
+}
+
+async function finishSessionDrag({ commit = false } = {}) {
+  const current = dragState;
+  if (!current) return;
+  dragState = null;
+  clearDragExpansionTimer(current);
+  current.preview?.remove();
+  current.sourceRow.classList.remove("is-drag-source");
+  document
+    .querySelector(`[data-project-id="${current.targetProjectId}"]`)
+    ?.classList.remove("is-drop-target");
+  if (current.sourceRow.hasPointerCapture?.(current.pointerId)) {
+    current.sourceRow.releasePointerCapture(current.pointerId);
+  }
+  if (current.active) {
+    suppressedSessionClickId = current.session.id;
+    setTimeout(() => {
+      if (suppressedSessionClickId === current.session.id) {
+        suppressedSessionClickId = null;
+      }
+    });
+  }
+  if (!commit || !current.active || current.targetProjectId == null) return;
+
+  const project = projects.find(
+    (item) => item.id === Number(current.targetProjectId),
+  );
+  collapsedProjectIds.delete(Number(current.targetProjectId));
+  persistCollapsedProjects();
+  setSidebarStatus("正在移动会话。");
+  try {
+    await desktopApi.updateSession(
+      current.session.id,
+      window.ImageToolsWorkbench.sessionDropPatch(
+        current.session,
+        current.targetProjectId,
+      ),
+    );
+    await loadSessions();
+    setSidebarStatus(`已移动到项目“${project?.name || "未命名项目"}”。`);
+  } catch (error) {
+    await loadSessions();
+    setSidebarStatus(error.message, "error");
+  }
+}
+
+function handleSessionDragEnd(event) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  if (dragState.active) event.preventDefault();
+  void finishSessionDrag({ commit: true });
+}
+
+function handleSessionDragCancel(event) {
+  if (!dragState || event.pointerId !== dragState.pointerId) return;
+  void finishSessionDrag({ commit: false });
+}
+
 function handleEscape(event) {
   if (event.key !== "Escape") return;
+  if (dragState) {
+    event.preventDefault();
+    void finishSessionDrag({ commit: false });
+    return;
+  }
   if (
     providerDialog.open ||
     providerDeleteDialog.open ||
@@ -1509,10 +1715,6 @@ function handleEscape(event) {
   if (window.ImageToolsUi.isLayerOpen(providerMenu)) {
     event.preventDefault();
     void closeProviderMenu({ restoreFocus: true });
-    return;
-  }
-  if (window.ImageToolsUi.isLayerOpen(taskMenu)) {
-    void closeTaskMenu({ restoreFocus: true });
     return;
   }
   if (window.ImageToolsUi.isLayerOpen(sidebarMenu)) {
@@ -1538,18 +1740,6 @@ function handleEscape(event) {
   }
 }
 
-function toggleTaskMenu() {
-  const opening = !window.ImageToolsUi.isLayerOpen(taskMenu);
-  if (opening) {
-    window.ImageToolsUi.openLayer(taskMenu, taskMenuBtn, {
-      placement: "bottom",
-    });
-    renameSessionBtn.focus();
-  } else {
-    void closeTaskMenu({ restoreFocus: true });
-  }
-}
-
 function closeParameterMenu(options) {
   return window.ImageToolsUi.closeLayer(
     parameterMenu,
@@ -1560,7 +1750,6 @@ function closeParameterMenu(options) {
 
 function toggleParameterMenu() {
   const opening = !window.ImageToolsUi.isLayerOpen(parameterMenu);
-  void closeTaskMenu();
   void closeReferenceMenu();
   if (opening) {
     window.ImageToolsUi.openAnchoredLayer(parameterMenu, parameterMenuBtn);
@@ -1594,7 +1783,6 @@ function closeReferenceMenu(options) {
 
 function toggleReferenceMenu() {
   const opening = !window.ImageToolsUi.isLayerOpen(referenceMenu);
-  void closeTaskMenu();
   void closeParameterMenu();
   if (opening) {
     window.ImageToolsUi.openAnchoredLayer(referenceMenu, referenceBtn);
@@ -1720,34 +1908,32 @@ storageLocationForm.addEventListener("submit", handleStorageLocationSubmit);
 storageBrowseBtn.addEventListener("click", () => void browseStorageDirectory());
 imagePreviewClose.addEventListener("click", closeImagePreview);
 imagePreviewDialog.addEventListener("cancel", cancelImagePreview);
-taskMenuBtn.addEventListener("click", toggleTaskMenu);
-renameSessionBtn.addEventListener("click", openRenameDialog);
-deleteSessionBtn.addEventListener("click", openDeleteDialog);
-pinSessionBtn.addEventListener("click", async () => {
-  const session = window.ImageToolsWorkbench.selectedSession(state);
-  if (session) await setSessionPinned(session);
-  void closeTaskMenu({ restoreFocus: true });
-});
-organizeSessionBtn.addEventListener("click", () => {
-  const session = window.ImageToolsWorkbench.selectedSession(state);
-  if (session) openOrganizeSessionDialog(session, taskMenuBtn);
-});
 sidebarMenuPinBtn.addEventListener("click", async () => {
-  if (sidebarMenuTarget?.type === "session") await setSessionPinned(sidebarMenuTarget.value);
+  if (sidebarMenuTarget?.kind === "session") await setSessionPinned(sidebarMenuTarget.value);
   void closeSidebarMenu({ restoreFocus: true });
 });
 sidebarMenuOrganizeBtn.addEventListener("click", () => {
-  if (sidebarMenuTarget?.type === "session") {
+  if (sidebarMenuTarget?.kind === "session") {
     openOrganizeSessionDialog(sidebarMenuTarget.value, sidebarMenuTrigger);
   }
 });
+sidebarMenuRenameSessionBtn.addEventListener("click", () => {
+  if (sidebarMenuTarget?.kind === "session") {
+    openRenameDialog(sidebarMenuTarget.value, sidebarMenuTrigger);
+  }
+});
+sidebarMenuDeleteSessionBtn.addEventListener("click", () => {
+  if (sidebarMenuTarget?.kind === "session") {
+    openDeleteDialog(sidebarMenuTarget.value, sidebarMenuTrigger);
+  }
+});
 sidebarMenuRenameProjectBtn.addEventListener("click", () => {
-  if (sidebarMenuTarget?.type === "project") {
+  if (sidebarMenuTarget?.kind === "project") {
     openProjectDialog("project-rename", sidebarMenuTarget.value, sidebarMenuTrigger);
   }
 });
 sidebarMenuDeleteProjectBtn.addEventListener("click", () => {
-  if (sidebarMenuTarget?.type === "project") {
+  if (sidebarMenuTarget?.kind === "project") {
     openDeleteProjectDialog(sidebarMenuTarget.value, sidebarMenuTrigger);
   }
 });
@@ -1757,6 +1943,9 @@ sessionDialog.addEventListener("cancel", handleDialogCancel);
 parameterMenuBtn.addEventListener("click", toggleParameterMenu);
 document.addEventListener("keydown", handleEscape);
 document.addEventListener("pointerdown", handleOutsideClick);
+document.addEventListener("pointermove", handleSessionDragMove);
+document.addEventListener("pointerup", handleSessionDragEnd);
+document.addEventListener("pointercancel", handleSessionDragCancel);
 sessionFilter.addEventListener("input", renderSessions);
 composerForm.addEventListener("submit", handleComposerSubmit);
 composerForm.addEventListener("input", saveDraftFromInput);
@@ -1771,7 +1960,7 @@ advancedParamsPanel.addEventListener("toggle", () => {
 });
 parameterMenu.addEventListener("keydown", handleMenuKeydown);
 referenceMenu.addEventListener("keydown", handleMenuKeydown);
-taskMenu.addEventListener("keydown", handleMenuKeydown);
+sidebarMenu.addEventListener("keydown", handleMenuKeydown);
 providerSelect.addEventListener("change", () => {
   const provider = window.ImageToolsWorkbench.selectedProvider(
     providers,
@@ -1806,7 +1995,10 @@ clearReferenceBtn.addEventListener("click", () => {
 });
 modelInput.addEventListener("input", syncTransparentBackground);
 outputFormatSelect.addEventListener("change", syncTransparentBackground);
-window.addEventListener("resize", repositionComposerMenus);
+window.addEventListener("resize", () => {
+  repositionComposerMenus();
+  if (dragState) void finishSessionDrag({ commit: false });
+});
 
 initializeThemePreference();
 render();

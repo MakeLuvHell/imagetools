@@ -85,8 +85,6 @@ test("transitional shell preserves controls consumed by the current app", () => 
   for (const id of [
     "currentSessionTitle",
     "currentSessionSubtitle",
-    "renameSessionBtn",
-    "deleteSessionBtn",
     "prompt",
     "providerSelect",
     "modelInput",
@@ -103,6 +101,25 @@ test("transitional shell preserves controls consumed by the current app", () => 
     "generateBtn",
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
+  }
+});
+
+test("session commands live in row menus and the task header menu is absent", () => {
+  assert.doesNotMatch(html, /id="taskMenuBtn"/);
+  assert.doesNotMatch(html, /id="taskMenu"/);
+  const menu = html.match(/<div id="sidebarMenu"[\s\S]*?<\/div>/)?.[0] || "";
+  const orderedIds = [
+    "sidebarMenuPinBtn",
+    "sidebarMenuOrganizeBtn",
+    "sidebarMenuRenameSessionBtn",
+    "sidebarMenuSeparator",
+    "sidebarMenuDeleteSessionBtn",
+  ];
+  let position = -1;
+  for (const id of orderedIds) {
+    const next = menu.indexOf(`id="${id}"`);
+    assert.ok(next > position, `${id} follows the approved menu order`);
+    position = next;
   }
 });
 

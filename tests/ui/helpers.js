@@ -31,6 +31,7 @@ async function installApiMocks(page, overrides = {}) {
       title: "夏季饮品广告图",
       updated_at: "2026-07-10T12:00:00Z",
     }],
+    sessionRequests: [],
     projects: overrides.projects || [],
     providers: initialProviders,
     providerRequests: [],
@@ -191,17 +192,24 @@ async function installApiMocks(page, overrides = {}) {
       const [sessionId, body] = args;
       const session = state.sessions.find((item) => Number(item.id) === Number(sessionId));
       if (!session) throw commandError("会话不存在。", "session.not_found");
+      state.sessionRequests.push({ method: "PATCH", sessionId: Number(sessionId), body });
+      if (overrides.sessionUpdateError) {
+        throw commandError(overrides.sessionUpdateError, "session.update_failed");
+      }
       if (Object.hasOwn(body, "title")) session.title = body.title;
       if (Object.hasOwn(body, "project_id")) session.project_id = body.project_id;
+      if (Object.hasOwn(body, "is_pinned")) session.is_pinned = body.is_pinned;
       return { ...session };
     }
     if (method === "deleteSession") {
+      state.sessionRequests.push({ method: "DELETE", sessionId: Number(args[0]), body: null });
       state.sessions = state.sessions.filter((item) => Number(item.id) !== Number(args[0]));
       return null;
     }
     if (method === "setSessionPinned") {
       const [sessionId, pinned] = args;
       const session = state.sessions.find((item) => Number(item.id) === Number(sessionId));
+      state.sessionRequests.push({ method: "PIN", sessionId: Number(sessionId), body: pinned });
       session.is_pinned = pinned;
       return { ...session };
     }

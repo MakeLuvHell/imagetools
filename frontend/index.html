@@ -51,6 +51,7 @@
           </button>
         </div>
         <nav id="sessionList" class="session-list" aria-label="历史会话"></nav>
+        <p id="sidebarStatus" class="sidebar-status" role="status" hidden></p>
 
         <footer class="workspace-account">
           <span>本地工作区</span>
@@ -65,59 +66,6 @@
           <div class="task-heading">
             <h2 id="currentSessionTitle">新任务</h2>
             <p id="currentSessionSubtitle">图片创作</p>
-          </div>
-          <div class="workspace-actions">
-            <button
-              id="taskMenuBtn"
-              type="button"
-              class="icon-button"
-              aria-label="会话操作"
-              title="会话操作"
-              aria-haspopup="menu"
-              aria-expanded="false"
-              disabled
-            >
-              <i data-lucide="ellipsis"></i>
-            </button>
-            <div id="taskMenu" class="task-menu" role="menu" hidden>
-            <button
-              id="pinSessionBtn"
-              type="button"
-              role="menuitem"
-              disabled
-            >
-              <i data-lucide="pin"></i>
-              <span>置顶</span>
-            </button>
-            <button
-              id="organizeSessionBtn"
-              type="button"
-              role="menuitem"
-              disabled
-            >
-              <i data-lucide="folder-input"></i>
-              <span>移动到项目</span>
-            </button>
-            <button
-              id="renameSessionBtn"
-              type="button"
-              role="menuitem"
-              disabled
-            >
-              <i data-lucide="pencil"></i>
-              <span>重命名</span>
-            </button>
-            <button
-              id="deleteSessionBtn"
-              type="button"
-              class="danger-menu-item"
-              role="menuitem"
-              disabled
-            >
-              <i data-lucide="trash-2"></i>
-              <span>删除</span>
-            </button>
-            </div>
           </div>
         </header>
 
@@ -551,9 +499,18 @@
         <i data-lucide="folder-input"></i>
         <span>移动到项目</span>
       </button>
+      <button id="sidebarMenuRenameSessionBtn" type="button" role="menuitem">
+        <i data-lucide="pencil"></i>
+        <span>重命名</span>
+      </button>
       <button id="sidebarMenuRenameProjectBtn" type="button" role="menuitem" hidden>
         <i data-lucide="pencil"></i>
         <span>重命名项目</span>
+      </button>
+      <hr id="sidebarMenuSeparator" role="separator" />
+      <button id="sidebarMenuDeleteSessionBtn" type="button" class="danger-menu-item" role="menuitem">
+        <i data-lucide="trash-2"></i>
+        <span>删除</span>
       </button>
       <button id="sidebarMenuDeleteProjectBtn" type="button" class="danger-menu-item" role="menuitem" hidden>
         <i data-lucide="trash-2"></i>

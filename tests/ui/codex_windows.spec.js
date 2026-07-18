@@ -68,12 +68,142 @@ test("sidebar session menu can remove a pinned session from the pinned group", a
     runs: { 1: [] },
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "整理会话" }).click();
+  await page.getByRole("button", { name: "会话操作 置顶灵感" }).click();
   await page.getByRole("menuitem", { name: "取消置顶" }).click();
 
   await expect(page.locator(".session-group-title")).toHaveText(["项目"]);
   await expect(page.locator(".project-row")).toHaveText("品牌视觉");
   await expect(page.locator(".session-item")).toHaveText(["置顶灵感"]);
+});
+
+test("session row menu renames and deletes a non-selected session", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    sessions: [
+      { id: 1, title: "当前会话" },
+      { id: 2, title: "待整理会话" },
+    ],
+    runs: { 1: [], 2: [] },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "当前会话", exact: true }).click();
+  await expect(page.locator("#currentSessionTitle")).toHaveText("当前会话");
+
+  await page.getByRole("button", { name: "会话操作 待整理会话" }).click();
+  await page.getByRole("menuitem", { name: "重命名" }).click();
+  const renameDialog = page.getByRole("dialog", { name: "重命名会话" });
+  await renameDialog.getByLabel("名称").fill("已重命名");
+  await renameDialog.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("button", { name: "已重命名", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "当前会话" })).toBeVisible();
+
+  await page.getByRole("button", { name: "会话操作 已重命名" }).click();
+  await page.getByRole("menuitem", { name: "删除", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "删除会话" })
+    .getByRole("button", { name: "删除", exact: true })
+    .click();
+  await expect(page.getByRole("button", { name: "已重命名", exact: true })).toHaveCount(0);
+  expect(requests.sessionRequests).toEqual([
+    { method: "PATCH", sessionId: 2, body: { title: "已重命名" } },
+    { method: "DELETE", sessionId: 2, body: null },
+  ]);
+});
+
+test("project collapse persists and selected sessions expand their project", async ({ page }) => {
+  await installApiMocks(page, {
+    projects: [{ id: 8, name: "品牌视觉" }],
+    sessions: [{ id: 2, title: "产品海报", project_id: 8 }],
+    runs: { 2: [] },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "收起项目 品牌视觉" }).click();
+  await expect(page.locator('[data-project-sessions="8"]')).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "展开项目 品牌视觉" })).toBeVisible();
+
+  await page.locator('[data-session-id="2"] .session-item').evaluate((element) => element.click());
+  await expect(page.getByRole("button", { name: "收起项目 品牌视觉" })).toBeVisible();
+  await expect(page.locator('[data-project-sessions="8"]')).toBeVisible();
+});
+
+test("pointer drag moves ordinary and pinned sessions atomically", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    projects: [{ id: 8, name: "品牌视觉" }],
+    sessions: [
+      { id: 1, title: "置顶灵感", is_pinned: true },
+      { id: 2, title: "独立尝试" },
+    ],
+    runs: { 1: [], 2: [] },
+  });
+  await page.goto("/");
+
+  for (const title of ["独立尝试", "置顶灵感"]) {
+    const source = page.getByRole("button", { name: title, exact: true });
+    const target = page.locator('[data-project-id="8"]');
+    const sourceBox = await source.boundingBox();
+    const targetBox = await target.boundingBox();
+    await page.mouse.move(sourceBox.x + 12, sourceBox.y + sourceBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(sourceBox.x + 20, sourceBox.y + sourceBox.height / 2, { steps: 2 });
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(() => requests.sessionRequests.length).toBe(title === "独立尝试" ? 1 : 2);
+  }
+
+  expect(requests.sessionRequests).toEqual([
+    { method: "PATCH", sessionId: 2, body: { project_id: 8 } },
+    { method: "PATCH", sessionId: 1, body: { project_id: 8, is_pinned: false } },
+  ]);
+});
+
+test("collapsed drag target expands after hover and Escape cancels mutation", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    projects: [{ id: 8, name: "品牌视觉" }],
+    sessions: [{ id: 2, title: "独立尝试" }],
+    runs: { 2: [] },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "收起项目 品牌视觉" }).click();
+  const sourceBox = await page
+    .getByRole("button", { name: "独立尝试", exact: true })
+    .boundingBox();
+  const targetBox = await page.locator('[data-project-id="8"]').boundingBox();
+  await page.mouse.move(sourceBox.x + 12, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(sourceBox.x + 20, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+  await page.waitForTimeout(550);
+  await expect(page.getByRole("button", { name: "收起项目 品牌视觉" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  expect(requests.sessionRequests).toEqual([]);
+  await expect(page.locator(".session-drag-preview")).toHaveCount(0);
+});
+
+test("failed pointer drop restores authoritative sessions and clears visuals", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    projects: [{ id: 8, name: "品牌视觉" }],
+    sessions: [{ id: 2, title: "独立尝试" }],
+    runs: { 2: [] },
+    sessionUpdateError: "移动会话失败。",
+  });
+  await page.goto("/");
+  const source = page.getByRole("button", { name: "独立尝试", exact: true });
+  const target = page.locator('[data-project-id="8"]');
+  const sourceBox = await source.boundingBox();
+  const targetBox = await target.boundingBox();
+  await page.mouse.move(sourceBox.x + 12, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(sourceBox.x + 20, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+  await page.mouse.up();
+
+  await expect(page.locator("#sidebarStatus")).toHaveText("移动会话失败。");
+  expect(requests.sessionRequests).toEqual([
+    { method: "PATCH", sessionId: 2, body: { project_id: 8 } },
+  ]);
+  await expect(page.locator('[data-project-sessions="8"] .session-item')).toHaveCount(0);
+  await expect(page.locator(".session-drag-preview, .is-drop-target, .is-drag-source")).toHaveCount(0);
 });
 
 test("missing Provider opens settings without creating a session", async ({ page }) => {
