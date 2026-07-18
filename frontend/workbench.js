@@ -1,4 +1,5 @@
 (function initWorkbench(globalScope) {
+  const COLLAPSED_PROJECTS_STORAGE_KEY = "imagetools:collapsed-projects";
   const RESOLUTION_LABELS = {
     standard: "标准",
     medium: "高清",
@@ -58,6 +59,52 @@
         (session) => session.projectId == null || !projectIds.has(session.projectId),
       ),
     };
+  }
+
+  function parseCollapsedProjectIds(raw) {
+    try {
+      const values = JSON.parse(raw ?? "[]");
+      if (!Array.isArray(values)) return [];
+      return [
+        ...new Set(
+          values
+            .map(Number)
+            .filter((id) => Number.isInteger(id) && id > 0),
+        ),
+      ].sort((left, right) => left - right);
+    } catch {
+      return [];
+    }
+  }
+
+  function normalizeCollapsedProjectIds(ids, projects) {
+    const known = new Set(projects.map((project) => Number(project.id)));
+    return [...new Set(ids.map(Number).filter((id) => known.has(id)))].sort(
+      (left, right) => left - right,
+    );
+  }
+
+  function serializeCollapsedProjectIds(ids) {
+    return JSON.stringify(
+      [...ids].map(Number).sort((left, right) => left - right),
+    );
+  }
+
+  function exceedsDragThreshold(start, current, threshold = 6) {
+    return Math.hypot(current.x - start.x, current.y - start.y) >= threshold;
+  }
+
+  function sessionDropPatch(session, projectId) {
+    const patch = { project_id: Number(projectId) };
+    if (session.isPinned) patch.is_pinned = false;
+    return patch;
+  }
+
+  function projectIdForSession(sessions, sessionId) {
+    return (
+      sessions.find((session) => session.id === Number(sessionId))?.projectId ??
+      null
+    );
   }
 
   function normalizeProviders(providers = []) {
@@ -391,10 +438,17 @@
   }
 
   const api = {
+    COLLAPSED_PROJECTS_STORAGE_KEY,
     defaultWorkbenchState,
     normalizeSessions,
     normalizeProjects,
     groupSessions,
+    parseCollapsedProjectIds,
+    normalizeCollapsedProjectIds,
+    serializeCollapsedProjectIds,
+    exceedsDragThreshold,
+    sessionDropPatch,
+    projectIdForSession,
     normalizeProviders,
     applySessionList,
     selectSession,

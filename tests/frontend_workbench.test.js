@@ -83,6 +83,54 @@ test("groupSessions separates pinned, project, and ordinary sessions without dup
   });
 });
 
+test("collapsed project storage parses normalizes and serializes stable ids", () => {
+  assert.deepEqual(workbench.parseCollapsedProjectIds('[7,"8",7,-1]'), [7, 8]);
+  assert.deepEqual(workbench.parseCollapsedProjectIds("broken"), []);
+  assert.deepEqual(
+    workbench.normalizeCollapsedProjectIds(
+      [7, 8, 99],
+      [{ id: 8 }, { id: 7 }],
+    ),
+    [7, 8],
+  );
+  assert.equal(
+    workbench.serializeCollapsedProjectIds(new Set([8, 7])),
+    "[7,8]",
+  );
+});
+
+test("drag threshold requires six pixels of pointer movement", () => {
+  assert.equal(
+    workbench.exceedsDragThreshold({ x: 10, y: 10 }, { x: 16, y: 10 }),
+    true,
+  );
+  assert.equal(
+    workbench.exceedsDragThreshold({ x: 10, y: 10 }, { x: 15, y: 12 }),
+    false,
+  );
+});
+
+test("drop patch atomically unpins only pinned sessions", () => {
+  assert.deepEqual(workbench.sessionDropPatch({ isPinned: true }, 9), {
+    project_id: 9,
+    is_pinned: false,
+  });
+  assert.deepEqual(workbench.sessionDropPatch({ isPinned: false }, 9), {
+    project_id: 9,
+  });
+});
+
+test("session project lookup supports selection auto-expansion", () => {
+  const sessions = [
+    { id: 1, projectId: 7 },
+    { id: 2, projectId: null },
+  ];
+
+  assert.equal(workbench.projectIdForSession(sessions, 1), 7);
+  assert.equal(workbench.projectIdForSession(sessions, 2), null);
+  assert.equal(workbench.projectIdForSession(sessions, 99), null);
+});
+
 test("deriveSessionTitle normalizes the first line and limits it to 36 characters", () => {
   assert.equal(
     workbench.deriveSessionTitle("  夏季   饮品海报\n第二行  "),
