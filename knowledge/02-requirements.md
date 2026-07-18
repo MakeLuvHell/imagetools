@@ -16,7 +16,9 @@
 - Persist every run created by the Rust backend as succeeded or failed, including unexpected errors after creation.
 - Keep references bounded and one-use; generation accepts either a staged `reference_token` or a persisted `reference_image_id`, never both.
 - Open Settings as a centered native modal sized approximately `75vw` by `78vh`, capped at `1040x760`, with internal content scrolling and nested-dialog focus restoration.
-- Clear an accepted Composer prompt immediately while retaining common parameters, place pre-submit validation directly above the Composer, and animate the prompt into its optimistic timeline bubble unless reduced motion is requested.
+- Clear an accepted Composer prompt immediately while retaining common parameters, place pre-submit validation directly above the Composer, and coordinate the prompt's 250ms optimistic-bubble handoff with following the latest timeline record unless reduced motion is requested.
+- Enter an existing session at its latest generation run. Later backend reconciliation must preserve the current timeline position instead of causing a second follow jump.
+- Keep result actions distinct: preview, save, copy the link, or set the image as a reference. Do not expose a combined "continue from result" action that duplicates reference and parameter workflows.
 - Expose pin, move, rename, and delete on each sidebar session row; projects expand/collapse with device-local persistence and accept pointer-driven session moves.
 - Move and unpin a pinned session in one `update_session` command and one SQLite transaction.
 
@@ -31,7 +33,7 @@
 
 ### Continue From History
 
-1. Select a session from the sidebar.
+1. Select a session from the sidebar; its timeline opens at the latest generation run.
 2. Inspect chronological prompts, parameters, errors, and ID-only image URLs.
 3. Preview, save, or use a result as a reference.
 4. Refine and submit from the same Composer.
@@ -78,6 +80,7 @@
 - An invalid custom workspace root fails visibly instead of silently opening a different history.
 - Startup failure is shown in a native dialog and terminates the application.
 - Resize, session switch, reduced motion, animation failure, pointer cancel, and an outside drop leave no transient prompt or drag layer behind.
+- Accepted submissions follow their optimistic run once; durable generation reconciliation does not trigger another scroll.
 
 ## Non-Functional Requirements
 

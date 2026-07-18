@@ -259,3 +259,13 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Pure collapse/drop helpers keep localStorage and mutation decisions testable; Pointer Events avoid WebView2 file-drag conflicts; one Rust transaction prevents a pinned session from being moved without being unpinned. A native Settings dialog supplies focus trapping and top-layer behavior without replacing the workspace.
 
 **Consequences:** Collapsed IDs and theme remain device-local; projects remain metadata groupings; drag has a row-menu keyboard alternative; animation failure never blocks generation; schema v2, the single-process runtime, MSI/Portable packaging, and immutable `v0.3.0` release boundaries remain unchanged.
+
+### 2026-07-19: Follow The Latest Run Only On Explicit User Actions
+
+**Decision:** Align an existing session to its latest run after history loads, and coordinate an accepted prompt's timeline movement with the existing 250ms optimistic-bubble handoff. Do not initiate another follow movement when the backend history replaces the optimistic run. Remove the combined “基于结果继续” result action while retaining separate reference and parameter-copy actions.
+
+**Context:** Session entry previously showed the oldest record, and prompt animation could fly toward an optimistic target below the viewport. The combined continuation command also duplicated two clearer existing actions.
+
+**Reasoning:** Entering a session and sending a prompt explicitly express intent to see the newest work. Backend reconciliation is an implementation event and should not move the user's viewport again. Coordinating scroll distance with the bubble's final geometry keeps the transient clone and its real target visually connected.
+
+**Consequences:** Normal send motion and timeline follow share one 250ms cycle. Reduced motion, missing geometry, cleanup, and animation failure align directly to the latest record. Historical reading position is otherwise preserved, and result actions have one clear responsibility each.

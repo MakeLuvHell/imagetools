@@ -320,6 +320,77 @@ test("Telegram prompt handoff settles into the optimistic timeline bubble", asyn
   await expect(page.locator('.task-run[data-submission-id] .run-response')).toBeVisible();
 });
 
+test("entering a long session and sending both follow the latest record", async ({ page }) => {
+  const historicalRuns = Array.from({ length: 14 }, (_, index) => ({
+    id: index + 1,
+    status: "failed",
+    prompt: `历史提示词 ${index + 1}`,
+    provider_name: "Default",
+    model: "gpt-image-2",
+    parameters: {},
+    error_message: "历史生成失败",
+    images: [],
+  }));
+  await installApiMocks(page, {
+    generateDelayMs: 500,
+    runs: { 1: historicalRuns },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+
+  const timeline = page.locator("#timeline");
+  await expect.poll(() => timeline.evaluate((element) => ({
+    top: element.scrollTop,
+    max: element.scrollHeight - element.clientHeight,
+  }))).toEqual(expect.objectContaining({
+    top: expect.any(Number),
+    max: expect.any(Number),
+  }));
+  await expect.poll(() => timeline.evaluate((element) =>
+    Math.abs(element.scrollTop - (element.scrollHeight - element.clientHeight)),
+  )).toBeLessThanOrEqual(1);
+
+  const beforeSubmit = await timeline.evaluate((element) => element.scrollTop);
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("跟随最新记录");
+  await prompt.press("Enter");
+  await expect(page.locator(".prompt-handoff")).toHaveCount(1);
+  await expect.poll(() => timeline.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+    beforeSubmit,
+  );
+  await expect(page.locator(".prompt-handoff")).toHaveCount(0, { timeout: 400 });
+  await expect.poll(() => timeline.evaluate((element) =>
+    Math.abs(element.scrollTop - (element.scrollHeight - element.clientHeight)),
+  )).toBeLessThanOrEqual(1);
+  await expect(page.locator('.task-run[data-submission-id] .run-response')).toBeInViewport();
+});
+
+test("successful result actions omit the redundant continuation command", async ({ page }) => {
+  await installApiMocks(page, {
+    runs: {
+      1: [{
+        id: 10,
+        status: "succeeded",
+        prompt: "初稿",
+        provider_name: "Default",
+        model: "gpt-image-2",
+        parameters: { count: 1 },
+        images: [{
+          id: 42,
+          url: "/assets/app-icon.png",
+          filename: "result.png",
+          mime_type: "image/png",
+        }],
+      }],
+    },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: "设为参考图" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "基于结果继续" })).toHaveCount(0);
+});
+
 test("reduced motion skips positional prompt handoff", async ({ page }) => {
   await installApiMocks(page, { generateDelayMs: 500 });
   await page.emulateMedia({ reducedMotion: "reduce" });

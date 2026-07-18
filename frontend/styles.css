@@ -795,7 +795,6 @@ summary:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-.continue-button,
 .copy-parameters-button,
 .run-failure-actions button {
   height: 30px;
@@ -807,11 +806,6 @@ summary:focus-visible {
   font-size: 12px;
 }
 
-.continue-button {
-  margin-left: auto;
-}
-
-.continue-button:hover,
 .copy-parameters-button:hover,
 .run-failure-actions button:hover {
   color: var(--text);

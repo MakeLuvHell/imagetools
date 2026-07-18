@@ -24,6 +24,8 @@
 - Capture the full Composer submission before clearing visible input; reference UI should clear at backend handoff, not at generation completion.
 - Delay pointer capture until movement exceeds the drag threshold. Capturing on `pointerdown` retargets the normal click away from the session button.
 - Treat transient UI as disposable: one cleanup path should handle completion, rejection, resize, session switch, rerender, Escape, pointer cancel, and outside drop.
+- When a transient bubble targets content inside a scrolling container, include the container's pending scroll distance in the bubble's final viewport coordinates and settle both motions through the same cleanup path.
+- Tie latest-record following to explicit navigation and submission; backend reconciliation should preserve position instead of producing a second jump.
 - Reload authoritative sessions after a drag mutation fails instead of preserving speculative grouping.
 
 ## Mistakes Or Pitfalls

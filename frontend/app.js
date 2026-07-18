@@ -371,6 +371,7 @@ function startPromptHandoff(submissionId, sourceRect, text) {
     document,
     sourceRect,
     target,
+    scrollContainer: timeline,
     text,
     reducedMotion: window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -400,11 +401,6 @@ function renderTimelineRuns(runs) {
     onDownload: downloadImage,
     onCopyLink: (image) => copyImageLink(image.url),
     onSetReference: (image) => setReferenceFromImage(image),
-    onContinue: async (image, run) => {
-      applyRunToComposer(run);
-      await setReferenceFromImage(image);
-      promptInput.focus();
-    },
     onRetry: (run) => {
       if (run.optimistic && run.submissionId) {
         state = window.ImageToolsWorkbench.removePendingRun(
@@ -859,6 +855,9 @@ async function selectExistingSession(sessionId) {
   restoreActiveDraft();
   render();
   await loadTimeline(sessionId);
+  if (state.selectedSessionId === Number(sessionId)) {
+    window.ImageToolsUi.scrollTimelineToLatest(timeline);
+  }
 }
 
 async function ensureSessionForSubmit(prompt) {

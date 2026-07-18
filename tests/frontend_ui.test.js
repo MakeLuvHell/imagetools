@@ -243,6 +243,16 @@ test("renderTaskRuns keeps success and failure in one chronological stream", () 
 
   assert.equal(dom.window.document.querySelectorAll(".task-run").length, 2);
   assert.equal(dom.window.document.querySelectorAll(".result-image").length, 1);
+  assert.equal(
+    dom.window.document.querySelectorAll('button[aria-label="设为参考图"]').length,
+    1,
+  );
+  assert.equal(
+    [...dom.window.document.querySelectorAll("button")].some(
+      (button) => button.textContent === "基于结果继续",
+    ),
+    false,
+  );
   assert.match(dom.window.document.querySelector(".run-error").textContent, /上游超时/);
 });
 
@@ -268,37 +278,63 @@ test("renderTaskRuns exposes optimistic prompt handoff targets", () => {
 });
 
 test("prompt handoff creates a transient clone and cleans up after motion", async () => {
-  const dom = new JSDOM('<div id="target">发送中的提示词</div>');
+  const dom = new JSDOM('<section id="timeline"><div id="target">发送中的提示词</div></section>');
+  const timeline = dom.window.document.querySelector("#timeline");
   const target = dom.window.document.querySelector("#target");
+  Object.defineProperties(timeline, {
+    scrollHeight: { value: 900 },
+    clientHeight: { value: 300 },
+  });
+  timeline.scrollTop = 100;
   target.getBoundingClientRect = () => ({
     left: 400,
-    top: 160,
+    top: 700,
     width: 180,
     height: 40,
     right: 580,
-    bottom: 200,
+    bottom: 740,
   });
   let resolveAnimation;
-  dom.window.HTMLElement.prototype.animate = () => ({
-    finished: new Promise((resolve) => {
-      resolveAnimation = resolve;
-    }),
-  });
+  let keyframes;
+  dom.window.HTMLElement.prototype.animate = (frames) => {
+    keyframes = frames;
+    return {
+      finished: new Promise((resolve) => {
+        resolveAnimation = resolve;
+      }),
+    };
+  };
 
   const handoff = ui.startPromptHandoff({
     document: dom.window.document,
     sourceRect: { left: 200, top: 500, width: 300, height: 44 },
     target,
+    scrollContainer: timeline,
     text: "发送中的提示词",
     reducedMotion: false,
   });
 
   assert.equal(dom.window.document.querySelectorAll(".prompt-handoff").length, 1);
   assert.equal(target.classList.contains("is-handoff-hidden"), true);
+  assert.equal(timeline.scrollTop, 600);
+  assert.match(keyframes[1].transform, /translate\(200px, -300px\)/);
   resolveAnimation();
   await handoff.finished;
   assert.equal(dom.window.document.querySelectorAll(".prompt-handoff").length, 0);
   assert.equal(target.classList.contains("is-handoff-hidden"), false);
+});
+
+test("scrollTimelineToLatest aligns a history container to its newest record", () => {
+  const dom = new JSDOM('<section id="timeline"></section>');
+  const timeline = dom.window.document.querySelector("#timeline");
+  Object.defineProperties(timeline, {
+    scrollHeight: { value: 1280 },
+    clientHeight: { value: 480 },
+  });
+
+  ui.scrollTimelineToLatest(timeline);
+
+  assert.equal(timeline.scrollTop, 800);
 });
 
 test("prompt handoff reduced motion and animation failure always reveal the target", async () => {

@@ -488,12 +488,6 @@
             actionButton(document, "copy", "复制链接", () => callbacks.onCopyLink?.(image, run)),
             actionButton(document, "image-plus", "设为参考图", () => callbacks.onSetReference?.(image, run)),
           );
-          const continueButton = document.createElement("button");
-          continueButton.type = "button";
-          continueButton.className = "continue-button";
-          continueButton.textContent = "基于结果继续";
-          continueButton.addEventListener("click", () => callbacks.onContinue?.(image, run));
-          actions.appendChild(continueButton);
           figure.append(preview, actions);
           grid.appendChild(figure);
         }
@@ -537,10 +531,22 @@
     refreshIcons();
   }
 
+  function latestScrollTop(container) {
+    if (!container) return 0;
+    return Math.max(0, Number(container.scrollHeight) - Number(container.clientHeight));
+  }
+
+  function scrollTimelineToLatest(container) {
+    const top = latestScrollTop(container);
+    if (container) container.scrollTop = top;
+    return top;
+  }
+
   function startPromptHandoff({
     document,
     sourceRect,
     target,
+    scrollContainer = null,
     text,
     reducedMotion = false,
   }) {
@@ -548,15 +554,22 @@
       cleanup() {},
       finished: Promise.resolve(),
     };
-    if (reducedMotion || !document?.body || !sourceRect || !target) return idle;
+    if (reducedMotion || !document?.body || !sourceRect || !target) {
+      scrollTimelineToLatest(scrollContainer);
+      return idle;
+    }
 
     const targetRect = target.getBoundingClientRect();
+    const scrollStart = Number(scrollContainer?.scrollTop || 0);
+    const scrollEnd = latestScrollTop(scrollContainer);
+    const scrollDistance = scrollEnd - scrollStart;
     if (
       !sourceRect.width ||
       !sourceRect.height ||
       !targetRect.width ||
       !targetRect.height
     ) {
+      scrollTimelineToLatest(scrollContainer);
       return idle;
     }
 
@@ -573,11 +586,25 @@
     run?.classList.add("is-handoff-pending");
 
     let animation = null;
+    let scrollFrame = null;
+    let resolveScroll = null;
+    let scrollSettled = false;
     let cleaned = false;
+    const finishScroll = () => {
+      if (scrollSettled) return;
+      scrollSettled = true;
+      if (scrollFrame != null) {
+        document.defaultView?.cancelAnimationFrame?.(scrollFrame);
+        scrollFrame = null;
+      }
+      scrollTimelineToLatest(scrollContainer);
+      resolveScroll?.();
+    };
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
       animation?.cancel?.();
+      finishScroll();
       clone.remove();
       target.classList.remove("is-handoff-hidden");
       run?.classList.remove("is-handoff-pending");
@@ -589,7 +616,7 @@
     }
 
     const translateX = targetRect.left - sourceRect.left;
-    const translateY = targetRect.top - sourceRect.top;
+    const translateY = targetRect.top - scrollDistance - sourceRect.top;
     const scaleX = targetRect.width / sourceRect.width;
     const scaleY = targetRect.height / sourceRect.height;
     animation = clone.animate(
@@ -606,9 +633,35 @@
         fill: "forwards",
       },
     );
-    const finished = Promise.resolve(animation.finished)
-      .catch(() => undefined)
-      .finally(cleanup);
+    const view = document.defaultView;
+    const scrollFinished = new Promise((resolve) => {
+      resolveScroll = resolve;
+      if (
+        !scrollContainer ||
+        scrollDistance === 0 ||
+        typeof view?.requestAnimationFrame !== "function"
+      ) {
+        finishScroll();
+        return;
+      }
+      const startedAt = view.performance.now();
+      const step = (timestamp) => {
+        if (scrollSettled) return;
+        const progress = Math.min(1, Math.max(0, (timestamp - startedAt) / 250));
+        const eased = 1 - Math.pow(1 - progress, 3);
+        scrollContainer.scrollTop = scrollStart + scrollDistance * eased;
+        if (progress >= 1) {
+          finishScroll();
+        } else {
+          scrollFrame = view.requestAnimationFrame(step);
+        }
+      };
+      scrollFrame = view.requestAnimationFrame(step);
+    });
+    const finished = Promise.all([
+      Promise.resolve(animation.finished).catch(() => undefined),
+      scrollFinished,
+    ]).finally(cleanup);
     return { cleanup, finished };
   }
 
@@ -683,6 +736,7 @@
     renderNewTask,
     renderProviderSettings,
     renderTaskRuns,
+    scrollTimelineToLatest,
     startPromptHandoff,
     renderTaskHeader,
     openDialog,
