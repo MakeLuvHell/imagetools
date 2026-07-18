@@ -17,7 +17,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
   const provider = { name: "Primary", base_url: "https://example.test/v1" };
   const project = { name: "Campaign" };
   const sessionCreate = { title: "Draft" };
-  const sessionUpdate = { title: "Final", project_id: 9 };
+  const sessionUpdate = { title: "Final", project_id: 9, is_pinned: false };
   const storage = { data_dir: "/workspace", migrate_existing: true };
   const settings = { base_url: "https://example.test/v1", api_key: "key", model: "gpt-image-2" };
 

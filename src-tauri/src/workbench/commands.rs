@@ -909,16 +909,16 @@ mod tests {
             fixture.ok("get_session", json!({"sessionId": session_id}))["title"],
             "Poster"
         );
-        assert_eq!(
-            fixture.ok(
-                "update_session",
-                json!({"sessionId": session_id, "input": {
-                    "title": "Poster v2",
-                    "project_id": project_id
-                }})
-            )["project_id"],
-            project_id
+        let moved = fixture.ok(
+            "update_session",
+            json!({"sessionId": session_id, "input": {
+                "title": "Poster v2",
+                "project_id": project_id,
+                "is_pinned": false
+            }}),
         );
+        assert_eq!(moved["project_id"], project_id);
+        assert_eq!(moved["is_pinned"], false);
         assert_eq!(
             fixture.ok(
                 "set_session_pinned",

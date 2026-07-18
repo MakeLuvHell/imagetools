@@ -101,8 +101,18 @@ impl HistoryService {
             Patch::Missing => None,
             Patch::Value(value) => Some(value),
         };
+        let pinned = match input.is_pinned {
+            Patch::Missing => None,
+            Patch::Value(Some(value)) => Some(value),
+            Patch::Value(None) => {
+                return Err(CommandError::new(
+                    "session.invalid_pinned",
+                    "会话置顶状态无效。",
+                ));
+            }
+        };
         self.repository
-            .update_session(id, title.as_deref(), project)
+            .update_session(id, title.as_deref(), project, pinned)
             .map(session_dto)
     }
     pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<SessionDto, CommandError> {
@@ -302,6 +312,7 @@ mod tests {
                 SessionUpdateInput {
                     title: None,
                     project_id: Patch::Value(Some(project.id)),
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();
@@ -321,6 +332,7 @@ mod tests {
                     SessionUpdateInput {
                         title: None,
                         project_id: Patch::Value(Some(project.id)),
+                        is_pinned: Patch::Missing,
                     },
                 )
                 .unwrap_err()
@@ -369,6 +381,7 @@ mod tests {
                 SessionUpdateInput {
                     title: Some("Renamed".into()),
                     project_id: Patch::Value(Some(first.id)),
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();
@@ -380,6 +393,7 @@ mod tests {
                 SessionUpdateInput {
                     title: None,
                     project_id: Patch::Missing,
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();
@@ -393,6 +407,7 @@ mod tests {
                 SessionUpdateInput {
                     title: Some("Newest".into()),
                     project_id: Patch::Missing,
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();
@@ -403,6 +418,7 @@ mod tests {
                 SessionUpdateInput {
                     title: None,
                     project_id: Patch::Value(Some(first.id)),
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();
@@ -415,6 +431,7 @@ mod tests {
                 SessionUpdateInput {
                     title: None,
                     project_id: Patch::Value(None),
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();
@@ -426,10 +443,103 @@ mod tests {
                 SessionUpdateInput {
                     title: None,
                     project_id: Patch::Value(Some(999)),
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap_err();
         assert_eq!(error.code, "project.not_found");
+    }
+
+    #[test]
+    fn session_update_moves_and_unpins_atomically() {
+        let fixture = HistoryFixture::new();
+        let project = fixture
+            .service
+            .create_project(ProjectInput {
+                name: "Campaign".into(),
+            })
+            .unwrap();
+        let session_id = fixture.create_session("Poster");
+        fixture.service.set_pinned(session_id, true).unwrap();
+
+        let moved = fixture
+            .service
+            .update_session(
+                session_id,
+                SessionUpdateInput {
+                    title: None,
+                    project_id: Patch::Value(Some(project.id)),
+                    is_pinned: Patch::Value(Some(false)),
+                },
+            )
+            .unwrap();
+
+        assert_eq!(moved.project_id, Some(project.id));
+        assert!(!moved.is_pinned);
+    }
+
+    #[test]
+    fn invalid_project_rolls_back_pin_change() {
+        let fixture = HistoryFixture::new();
+        let session_id = fixture.create_session("Poster");
+        fixture.service.set_pinned(session_id, true).unwrap();
+
+        let error = fixture
+            .service
+            .update_session(
+                session_id,
+                SessionUpdateInput {
+                    title: None,
+                    project_id: Patch::Value(Some(9_999_999)),
+                    is_pinned: Patch::Value(Some(false)),
+                },
+            )
+            .unwrap_err();
+
+        assert_eq!(error.code, "project.not_found");
+        let unchanged = fixture.service.get_session(session_id).unwrap();
+        assert_eq!(unchanged.project_id, None);
+        assert!(unchanged.is_pinned);
+    }
+
+    #[test]
+    fn missing_session_patches_preserve_existing_values() {
+        let fixture = HistoryFixture::new();
+        let project = fixture
+            .service
+            .create_project(ProjectInput {
+                name: "Campaign".into(),
+            })
+            .unwrap();
+        let session_id = fixture.create_session("Poster");
+        fixture
+            .service
+            .update_session(
+                session_id,
+                SessionUpdateInput {
+                    title: None,
+                    project_id: Patch::Value(Some(project.id)),
+                    is_pinned: Patch::Missing,
+                },
+            )
+            .unwrap();
+        fixture.service.set_pinned(session_id, true).unwrap();
+
+        let unchanged = fixture
+            .service
+            .update_session(
+                session_id,
+                SessionUpdateInput {
+                    title: None,
+                    project_id: Patch::Missing,
+                    is_pinned: Patch::Missing,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(unchanged.title, "Poster");
+        assert_eq!(unchanged.project_id, Some(project.id));
+        assert!(unchanged.is_pinned);
     }
 
     #[test]
@@ -522,6 +632,7 @@ mod tests {
                 SessionUpdateInput {
                     title: Some("Patched".into()),
                     project_id: Patch::Missing,
+                    is_pinned: Patch::Missing,
                 },
             )
             .unwrap();

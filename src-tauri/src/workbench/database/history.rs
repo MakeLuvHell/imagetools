@@ -158,6 +158,7 @@ impl HistoryRepository {
         id: i64,
         title: Option<&str>,
         project_id: Option<Option<i64>>,
+        is_pinned: Option<bool>,
     ) -> Result<SessionRecord, CommandError> {
         self.database.with_connection(|connection| {
             let tx = connection
@@ -175,20 +176,27 @@ impl HistoryRepository {
                     return Err(project_not_found());
                 }
             }
-            let changed = match (title, project_id) {
-                (Some(title), Some(project_id)) => tx.execute(
-                    "UPDATE sessions SET title = ?1, recent_thumbnail_path = NULL, project_id = ?2, updated_at = ?3 WHERE id = ?4 AND deleted_at IS NULL",
-                    params![title, project_id, utc_now(), id]),
-                (Some(title), None) => tx.execute(
-                    "UPDATE sessions SET title = ?1, recent_thumbnail_path = NULL, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-                    params![title, utc_now(), id]),
-                (None, Some(project_id)) => tx.execute(
-                    "UPDATE sessions SET recent_thumbnail_path = NULL, project_id = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-                    params![project_id, utc_now(), id]),
-                (None, None) => tx.execute(
-                    "UPDATE sessions SET recent_thumbnail_path = NULL, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
-                    params![utc_now(), id]),
-            }.map_err(database_error)?;
+            let changed = tx
+                .execute(
+                    "UPDATE sessions SET
+                       title = CASE WHEN ?1 THEN ?2 ELSE title END,
+                       recent_thumbnail_path = NULL,
+                       project_id = CASE WHEN ?3 THEN ?4 ELSE project_id END,
+                       is_pinned = CASE WHEN ?5 THEN ?6 ELSE is_pinned END,
+                       updated_at = ?7
+                     WHERE id = ?8 AND deleted_at IS NULL",
+                    params![
+                        title.is_some(),
+                        title,
+                        project_id.is_some(),
+                        project_id.flatten(),
+                        is_pinned.is_some(),
+                        is_pinned,
+                        utc_now(),
+                        id
+                    ],
+                )
+                .map_err(database_error)?;
             if changed == 0 { return Err(session_not_found()); }
             let session = query_session(&tx, id)?.ok_or_else(session_not_found)?;
             tx.commit().map_err(database_error)?;

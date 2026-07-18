@@ -64,6 +64,8 @@ pub struct SessionUpdateInput {
     pub title: Option<String>,
     #[serde(default, deserialize_with = "deserialize_patch")]
     pub project_id: Patch<i64>,
+    #[serde(default, deserialize_with = "deserialize_patch")]
+    pub is_pinned: Patch<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -269,6 +271,19 @@ mod tests {
         assert_eq!(missing.project_id, Patch::Missing);
         assert_eq!(null.project_id, Patch::Value(None));
         assert_eq!(value.project_id, Patch::Value(Some(42)));
+    }
+
+    #[test]
+    fn session_update_distinguishes_missing_null_and_boolean_pin_values() {
+        let missing: SessionUpdateInput = serde_json::from_value(serde_json::json!({})).unwrap();
+        let null: SessionUpdateInput =
+            serde_json::from_value(serde_json::json!({ "is_pinned": null })).unwrap();
+        let value: SessionUpdateInput =
+            serde_json::from_value(serde_json::json!({ "is_pinned": false })).unwrap();
+
+        assert_eq!(missing.is_pinned, Patch::Missing);
+        assert_eq!(null.is_pinned, Patch::Value(None));
+        assert_eq!(value.is_pinned, Patch::Value(Some(false)));
     }
 
     #[test]
