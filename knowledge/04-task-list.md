@@ -33,6 +33,15 @@
 | THM003 | Desktop | Synchronize the native window theme | Current-window Tauri command for system/light/dark | THM001, THM002 | Done |
 | THM004 | Testing | Cover theme visuals, failures, retries, and stale responses | Behavior, contrast, Rust, and 20-baseline regression coverage | THM001-THM003 | Done |
 | THM005 | Release | Preserve theme knowledge and run release-grade verification | Updated project knowledge and verified theme branch | THM004 | Done |
+| UI012 | Sessions | Update project and pin state atomically | Optional pin patch with rollback coverage | UI011 | Done |
+| UI013 | State | Model project collapse and session drops | Tested localStorage normalization and drop payloads | UI012 | Done |
+| UI014 | Sessions | Render a collapsible accessible session tree | Stable project and session row DOM | UI013 | Done |
+| UI015 | Interaction | Add row actions, persistence, and pointer moves | Complete sidebar workflow with failure recovery | UI014 | Done |
+| UI016 | Settings | Convert Settings to a responsive native modal | Nested modal lifecycle and target-size geometry | UI015 | Done |
+| UI017 | Composer | Place validation and clear accepted prompts | Snapshot-based prompt/reference handoff | UI016 | Done |
+| UI018 | Motion | Animate optimistic prompt handoff | Telegram-style 250ms motion with safe cleanup | UI017 | Done |
+| UI019 | Testing | Refresh interaction and visual coverage | Focused behavior matrix and 24 affected baselines | UI012-UI018 | Done |
+| UI020 | Release | Preserve knowledge and run centralized gates | Final source and Windows evidence | UI019 | In Progress |
 
 ## Recommended Order
 
@@ -49,6 +58,9 @@
 11. SET005 records the resolved design and testing boundaries before final branch verification.
 12. THM001-THM004 add the device-local three-mode Appearance preference, pre-paint restoration, native synchronization, and regression coverage.
 13. THM005 records the final theme boundaries and runs release-grade verification.
+14. UI012-UI015 make session grouping directly operable without changing schema or filesystem ownership.
+15. UI016-UI018 deliver the responsive Settings and Composer interaction contracts.
+16. UI019-UI020 refresh deterministic baselines, preserve decisions, and run the consolidated gates once.
 
 ## Single-Process Rust Migration
 

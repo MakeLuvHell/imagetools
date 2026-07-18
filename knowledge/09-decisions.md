@@ -249,3 +249,13 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** One Rust/Tauri executable provides the requested portable experience without shipping an interpreter or auxiliary runtime. MSI supplies Windows installation and uninstall semantics; stable names make workflow and release verification deterministic.
 
 **Consequences:** All version sources and workflow defaults use 0.3.0/v0.3.0. The workflow builds MSI, creates the Portable ZIP from the same release executable, runs `scripts/verify_windows_single_process.ps1`, and uploads both stable assets only after verification. Assets are unsigned and there is no automatic updater.
+
+### 2026-07-18: Keep Responsive Workbench Interactions Incremental
+
+**Decision:** Implement the responsive Settings, Composer handoff, row menus, collapsible projects, and Pointer Event session moves within the existing `workbench.js` state, `ui.js` DOM, and `app.js` orchestration boundaries. Extend `update_session` with an optional pin patch instead of adding a schema migration or drag library.
+
+**Context:** The workbench already had tested state/render/orchestration layers, project and pin columns, native dialog helpers, and deterministic Playwright mocks. The requested behavior crosses those existing surfaces but does not introduce a new domain or persistence model.
+
+**Reasoning:** Pure collapse/drop helpers keep localStorage and mutation decisions testable; Pointer Events avoid WebView2 file-drag conflicts; one Rust transaction prevents a pinned session from being moved without being unpinned. A native Settings dialog supplies focus trapping and top-layer behavior without replacing the workspace.
+
+**Consequences:** Collapsed IDs and theme remain device-local; projects remain metadata groupings; drag has a row-menu keyboard alternative; animation failure never blocks generation; schema v2, the single-process runtime, MSI/Portable packaging, and immutable `v0.3.0` release boundaries remain unchanged.

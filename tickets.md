@@ -781,3 +781,24 @@ Status: Done
 - MSI SHA-256: `8b3ab00ceb3ef5871c48a536d4fc24cb2c4e5d5b27d472b43c8ce38dd1a881bd`.
 - Portable ZIP SHA-256: `ef0180f2eecff4810b2dca7d02c8944bb723062e1e2a9c17d314863b1b696f6b`.
 - The run used `publish_release=false`; it did not create or update a public GitHub Release.
+
+## UI012-UI020: Responsive Workbench Interactions
+
+Source: `docs/superpowers/specs/2026-07-18-responsive-settings-composer-session-tree-design.md` and `docs/superpowers/plans/2026-07-18-responsive-settings-composer-session-tree.md`.
+
+| ID | Deliverable | Blocked by | Status | Acceptance evidence |
+| --- | --- | --- | --- | --- |
+| UI012 | Atomic project and pin session update | UI011 | Done | Rust move/unpin, invalid-project rollback, missing-patch, model, IPC, and adapter tests |
+| UI013 | Pure collapse and drop decisions | UI012 | Done | Workbench parse/normalize/serialize, threshold, payload, and selection tests |
+| UI014 | Accessible collapsible session tree | UI013 | Done | jsdom toggle, `aria-expanded`, row action, drop target, and pointer callback tests |
+| UI015 | Row actions, persistence, and Pointer moves | UI014 | Done | Playwright rename/delete targeting, persistence, ordinary/pinned drop, hover/cancel/failure tests |
+| UI016 | Responsive native Settings modal | UI015 | Done | Playwright geometry, backdrop, focus return, child Escape, and short-viewport tests |
+| UI017 | Composer validation and accepted handoff | UI016 | Done | Playwright notice placement, focus, immediate clear, parameter retention, and reference tests |
+| UI018 | Telegram prompt motion | UI017 | Done | DOM and Playwright 250ms, reduced-motion, resize/switch, and animation-failure tests |
+| UI019 | Interaction and visual regression matrix | UI012-UI018 | Done | Eight focused interaction checks and reproducible 24-image shell/settings baseline update |
+| UI020 | Knowledge and centralized release gates | UI019 | In Progress | Knowledge updated; consolidated non-Windows and one non-publishing Windows run pending |
+
+Acceptance boundary:
+
+- No schema migration, project filesystem movement, credential exposure, second process, packaging change, version change, tag move, or Release publication.
+- Focused RED/GREEN checks run per ticket; the complete non-Windows gate and expensive Windows gate run only after UI012-UI019 are complete.

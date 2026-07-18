@@ -15,6 +15,10 @@
 - Isolate drafts and optimistic runs by session and submission ID.
 - Persist every run created by the Rust backend as succeeded or failed, including unexpected errors after creation.
 - Keep references bounded and one-use; generation accepts either a staged `reference_token` or a persisted `reference_image_id`, never both.
+- Open Settings as a centered native modal sized approximately `75vw` by `78vh`, capped at `1040x760`, with internal content scrolling and nested-dialog focus restoration.
+- Clear an accepted Composer prompt immediately while retaining common parameters, place pre-submit validation directly above the Composer, and animate the prompt into its optimistic timeline bubble unless reduced motion is requested.
+- Expose pin, move, rename, and delete on each sidebar session row; projects expand/collapse with device-local persistence and accept pointer-driven session moves.
+- Move and unpin a pinned session in one `update_session` command and one SQLite transaction.
 
 ## User Flows
 
@@ -38,6 +42,13 @@
 2. Create, edit, delete, or select the default Provider.
 3. Leave API Key empty during edit to preserve the stored secret.
 
+### Organize Sessions
+
+1. Expand or collapse project groups in the sidebar; the collapsed set remains local to the device.
+2. Use a session row menu for pin, move, rename, or delete without changing the current selection.
+3. Drag a session row onto a project after the 6px movement threshold; hovering over a collapsed project expands it after about 500ms.
+4. Reload authoritative sessions after the move; a pinned session is moved and unpinned atomically.
+
 ### Workspace Location
 
 1. Select an absolute destination with the native picker or enter it manually.
@@ -56,6 +67,7 @@
 ## Edge Cases
 
 - Malformed localStorage drafts and theme values fall back safely.
+- Malformed or stale collapsed-project IDs normalize to known positive project IDs.
 - Rapid double submit creates one session and one generation.
 - A retry after an IPC failure reuses an already-created session when appropriate.
 - Late responses cannot mutate another session's optimistic state.
@@ -65,6 +77,7 @@
 - Oversized, malformed, unsupported, escaped, nested, linked, or replaced media files are rejected.
 - An invalid custom workspace root fails visibly instead of silently opening a different history.
 - Startup failure is shown in a native dialog and terminates the application.
+- Resize, session switch, reduced motion, animation failure, pointer cancel, and an outside drop leave no transient prompt or drag layer behind.
 
 ## Non-Functional Requirements
 

@@ -21,6 +21,10 @@
 - Test application shutdown by closing the native main window and waiting for process exit. Killing a launcher does not prove lifecycle correctness.
 - In automated Windows lifecycle checks, wait until the native main-window handle is stable before sending the close request; the first nonzero handle can race Tauri/WebView initialization.
 - A PyInstaller one-file sidecar can replace its launcher PID with workers in a temporary extraction directory. Legacy cleanup must re-enumerate all test-owned backend processes instead of trusting the initially observed PID or install path.
+- Capture the full Composer submission before clearing visible input; reference UI should clear at backend handoff, not at generation completion.
+- Delay pointer capture until movement exceeds the drag threshold. Capturing on `pointerdown` retargets the normal click away from the session button.
+- Treat transient UI as disposable: one cleanup path should handle completion, rejection, resize, session switch, rerender, Escape, pointer cancel, and outside drop.
+- Reload authoritative sessions after a drag mutation fails instead of preserving speculative grouping.
 
 ## Mistakes Or Pitfalls
 
@@ -33,6 +37,8 @@
 - A schema fixture proving v2 preservation cannot by itself prove user upgrade and rollback; exercise a copied real workspace with both release versions.
 - Soft-deleting sessions preserves rows; command services must still reject operations against inactive sessions and late generation completion.
 - Stored media metadata is untrusted input. Validate the relative path, opened file, size, signature, and response headers at the read boundary.
+- A local optimistic failure must populate the same `error_message` field consumed by the timeline renderer; a private `error` field alone degrades to a generic message.
+- Native dialog element screenshots are cropped to dialog bounds, so visual review must pair them with viewport geometry assertions to prove centering and backdrop behavior.
 
 ## Verification Notes
 

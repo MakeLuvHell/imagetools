@@ -69,3 +69,26 @@ RB014 Windows x64 evidence records:
 - Windows WebView2 media URL mapping, native theme synchronization, and target-size visual checks.
 
 Workflow run `29605770705` passed the MSI/Portable single-process verifier, v0.2.3 to v0.3.0 upgrade and v0.2.3 rollback verifier, and artifact upload. It ran with `publish_release=false`, so no tag or public Release was created.
+
+## Responsive Workbench Interaction Review
+
+### Product And Frontend
+
+- Settings is a centered native modal at approximately `75vw x 78vh`, capped at `1040x760`; Appearance, Provider, and Local Data scroll within the modal and child dialogs close before Settings.
+- Accepted prompts clear immediately after optimistic acceptance. Pre-submit validation stays above the Composer, while staging and generation failures remain in their generation round.
+- The transient prompt clone moves into the real optimistic bubble over 250ms. Reduced motion, resize, session switch, rerender, and animation rejection reveal the real prompt and remove the clone.
+- Sidebar row menus target the clicked session and contain pin, move, rename, and delete. The task-header menu has been removed.
+- Projects default expanded, persist collapsed IDs in localStorage, expand for selection/drop, and accept Pointer Event moves after a 6px threshold and 500ms collapsed-target hover.
+
+### Backend And Data
+
+- `SessionUpdateInput` now accepts an optional `is_pinned` patch. Title, project, and pin changes share one immediate SQLite transaction; invalid projects roll back all changes.
+- Schema remains version 2. Project movement changes metadata only and never moves workspace files.
+- The standalone pin command remains for existing menu compatibility; drag uses one `update_session` payload and never chains two mutations.
+
+### Focused Verification
+
+- Rust model, service, rollback, missing-patch, IPC lifecycle, and Desktop API adapter tests passed.
+- Node workbench/UI/static suites passed during each RED/GREEN cycle.
+- Playwright covered row targeting, collapse persistence, ordinary and pinned drops, hover expansion, cancel/failure cleanup, modal geometry/focus, validation, prompt/reference handoff, Telegram motion, reduced motion, resize/session switch, and animation failure.
+- Twenty-four affected shell/settings light/dark baselines at `1280x860` and `960x640` were regenerated, visually inspected, and reproduced without update mode.
