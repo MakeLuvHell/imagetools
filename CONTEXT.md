@@ -12,6 +12,10 @@ _Avoid_: Terminal UI, generic AI config center
 A creative theme or task, such as "产品海报主视觉". A session contains multiple generation runs and is not the same as a single API request.
 _Avoid_: Request, one-off generation
 
+**项目**:
+A local sidebar grouping container used to organize sessions. It is presented as a collapsible folder, but it is not a filesystem directory and moving a session between projects does not move workspace files.
+_Avoid_: Disk folder, workspace data directory
+
 **生成轮次**:
 One submitted image generation request plus its status, prompt, parameter snapshot, provider/model snapshot, results, or error.
 _Avoid_: Session, image file
