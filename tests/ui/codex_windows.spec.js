@@ -20,7 +20,7 @@ async function expectTopStartAnchor(page, trigger, layer) {
 
 async function openStorageSettings(page) {
   await page.getByRole("button", { name: "设置" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
   await settings.getByRole("button", { name: "本地数据" }).click();
   await expect(page.locator("#settingsStoragePanel")).toBeVisible();
   return settings;
@@ -212,7 +212,7 @@ test("missing Provider opens settings without creating a session", async ({ page
   const prompt = page.getByPlaceholder("描述你想创作的图片");
   await prompt.fill("夏季饮品海报");
   await prompt.press("Enter");
-  await expect(page.getByRole("region", { name: "设置" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "设置" })).toBeVisible();
   await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
   await expect.poll(() => requests.sessionsCreated).toBe(0);
 });
@@ -418,7 +418,7 @@ test("Provider settings adds and edits through a focused dialog", async ({ page 
   const requests = await installApiMocks(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Providers" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
   await expect(
     settings.getByRole("button", { name: "编辑 Provider Default" }),
   ).toBeVisible();
@@ -464,7 +464,7 @@ test("newest Provider reload wins when an older response finishes last", async (
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Providers" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
   await expect.poll(() => requests.providerListResponses).toBe(1);
   await expect(
     settings.getByRole("button", { name: "编辑 Provider Default" }),
@@ -534,7 +534,7 @@ test("Provider menu sets defaults and confirms deletion", async ({ page }) => {
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Providers" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
   const studioMenuButton = settings.getByRole("button", {
     name: "管理 Provider Studio",
   });
@@ -568,7 +568,7 @@ test("Escape closes the innermost settings layer before the settings page", asyn
   await page.goto("/");
   const opener = page.getByRole("button", { name: "Providers" });
   await opener.click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
   await settings.getByRole("button", { name: "添加 Provider" }).click();
   const dialog = page.getByRole("dialog", { name: "添加 Provider" });
 
@@ -577,6 +577,36 @@ test("Escape closes the innermost settings layer before the settings page", asyn
   await expect(settings).toBeVisible();
 
   await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test("settings modal scales with the viewport and backdrop restores focus", async ({ page }) => {
+  await installApiMocks(page);
+  for (const viewport of [
+    { width: 1280, height: 860 },
+    { width: 960, height: 640 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    const opener = page.getByRole("button", { name: "设置", exact: true });
+    await opener.click();
+    const settings = page.getByRole("dialog", { name: "设置" });
+    const box = await settings.boundingBox();
+    expect(Math.abs(box.width - Math.min(viewport.width * 0.75, 1040))).toBeLessThanOrEqual(16);
+    expect(Math.abs(box.height - Math.min(viewport.height * 0.78, 760))).toBeLessThanOrEqual(16);
+    expect(box.x).toBeGreaterThanOrEqual(16);
+    expect(box.y).toBeGreaterThanOrEqual(16);
+    await expect(settings.locator(".settings-main")).toHaveCSS("overflow-y", "auto");
+    await settings.getByRole("button", { name: "关闭设置" }).click();
+    await expect(settings).toBeHidden();
+    await expect(opener).toBeFocused();
+  }
+
+  const opener = page.getByRole("button", { name: "设置", exact: true });
+  await opener.click();
+  const settings = page.getByRole("dialog", { name: "设置" });
+  await page.mouse.click(4, 4);
   await expect(settings).toBeHidden();
   await expect(opener).toBeFocused();
 });
@@ -652,7 +682,7 @@ test("Provider list failures render an inline retry state", async ({ page }) => 
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Providers" }).click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
   const error = settings.getByRole("alert");
 
   await expect(error).toContainText("Provider 列表读取失败。");
@@ -664,10 +694,10 @@ test("settings opens Appearance and switches between all settings categories", a
   await page.goto("/");
   const opener = page.getByRole("button", { name: "设置" });
   await opener.click();
-  const settings = page.getByRole("region", { name: "设置" });
+  const settings = page.getByRole("dialog", { name: "设置" });
 
   await expect(settings).toBeVisible();
-  await expect(page.locator("#composerForm")).toBeHidden();
+  await expect(page.locator("#composerForm")).toBeVisible();
   await expect(page.locator("#settingsAppearancePanel")).toBeVisible();
   await settings.getByRole("button", { name: "Provider", exact: true }).click();
   await expect(page.locator("#settingsProvidersPanel")).toBeVisible();
@@ -675,7 +705,7 @@ test("settings opens Appearance and switches between all settings categories", a
   await expect(page.locator("#settingsStoragePanel")).toBeVisible();
   await settings.getByRole("button", { name: "外观" }).click();
   await expect(page.getByRole("radio", { name: "跟随系统" })).toBeFocused();
-  await page.getByRole("button", { name: "返回工作区" }).click();
+  await page.getByRole("button", { name: "关闭设置" }).click();
 
   await expect(settings).toBeHidden();
   await expect(opener).toBeFocused();
@@ -1061,7 +1091,7 @@ test("storage async ignores initial picker after settings lifecycle changes", as
     page.evaluate(() => window.__storagePickerControl.calls),
   ).toBe(1);
 
-  await page.getByRole("button", { name: "返回工作区" }).click();
+  await page.getByRole("button", { name: "关闭设置" }).click();
   await page.getByRole("button", { name: "Providers" }).click();
   const addProvider = settings.getByRole("button", { name: "添加 Provider" });
   await expect(addProvider).toBeFocused();
@@ -1320,7 +1350,7 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       await settleUi(page);
 
       await page.getByRole("button", { name: "设置" }).click();
-      const settings = page.getByRole("region", { name: "设置" });
+      const settings = page.getByRole("dialog", { name: "设置" });
       await expect(page.locator("#settingsAppearancePanel")).toBeVisible();
       await expect(settings).toHaveScreenshot(
         `settings-appearance-${viewport.width}x${viewport.height}-${colorScheme}.png`,
@@ -1398,7 +1428,7 @@ test("settings visual baselines cover both themes and target sizes", async ({ pa
       await expect(storageDialog.locator("#storageMigrateExisting")).toHaveCSS("height", "16px");
       await page.keyboard.press("Escape");
 
-      await page.getByRole("button", { name: "返回工作区" }).click();
+      await page.getByRole("button", { name: "关闭设置" }).click();
       await expect(settings).toBeHidden();
     }
   }

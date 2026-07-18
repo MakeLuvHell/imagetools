@@ -43,9 +43,8 @@ const parameterMenu = document.querySelector("#parameterMenu");
 const parameterMenuBtn = document.querySelector("#parameterMenuBtn");
 const parameterSummaryText = document.querySelector("#parameterSummaryText");
 const advancedParamsPanel = document.querySelector("#advancedParamsPanel");
-const workspace = document.querySelector(".workspace");
 const settingsView = document.querySelector("#settingsView");
-const settingsBackBtn = document.querySelector("#settingsBackBtn");
+const settingsCloseBtn = document.querySelector("#settingsCloseBtn");
 const settingsAppearanceNav = document.querySelector("#settingsAppearanceNav");
 const settingsAppearancePanel = document.querySelector("#settingsAppearancePanel");
 const themeModeGroup = document.querySelector("#themeModeGroup");
@@ -145,7 +144,6 @@ let storageViewGeneration = 0;
 let storageLoadGeneration = 0;
 let storageDialogGeneration = 0;
 let newTaskSubmissionLocked = false;
-let settingsOpener = null;
 const runsBySession = {};
 
 function setInlineStatus(element, message, tone = "") {
@@ -559,7 +557,7 @@ async function loadProviders({ showLoading = false } = {}) {
     providerSettingsStatus = "error";
     providerSettingsError = error.message;
     renderProviderManager();
-    if (settingsView.hidden) showToast(error.message);
+    if (!settingsView.open) showToast(error.message);
     return false;
   }
 }
@@ -1247,7 +1245,7 @@ function toggleSearch() {
 function isStorageViewCurrent(generation) {
   return (
     generation === storageViewGeneration &&
-    !settingsView.hidden &&
+    settingsView.open &&
     !settingsStoragePanel.hidden
   );
 }
@@ -1347,20 +1345,39 @@ function activateSettingsTab(tab) {
 }
 
 function openSettingsView(tab, opener) {
-  settingsOpener = opener;
-  settingsView.hidden = false;
-  workspace.classList.add("settings-open");
   setInlineStatus(providerActionStatus, "");
+  window.ImageToolsUi.openDialog(settingsView, opener);
   activateSettingsTab(tab);
 }
 
 function closeSettingsView() {
   void closeProviderMenu();
+  providerLoadToken += 1;
+  providerSaveToken += 1;
+  themeSyncGeneration += 1;
   invalidateStorageView();
-  settingsView.hidden = true;
-  workspace.classList.remove("settings-open");
-  settingsOpener?.focus();
-  settingsOpener = null;
+  storageDialogGeneration += 1;
+  return window.ImageToolsUi.closeDialog(settingsView);
+}
+
+function settingsChildLayerOpen() {
+  return (
+    providerDialog.open ||
+    providerDeleteDialog.open ||
+    storageDialog.open ||
+    window.ImageToolsUi.isLayerOpen(providerMenu)
+  );
+}
+
+function handleSettingsCancel(event) {
+  event.preventDefault();
+  if (!settingsChildLayerOpen()) void closeSettingsView();
+}
+
+function handleSettingsBackdropClick(event) {
+  if (event.target === settingsView && !settingsChildLayerOpen()) {
+    void closeSettingsView();
+  }
 }
 
 function renderStorageLocation(location, message = "") {
@@ -1735,8 +1752,9 @@ function handleEscape(event) {
     void closeReferenceMenu({ restoreFocus: true });
     return;
   }
-  if (!settingsView.hidden) {
-    closeSettingsView();
+  if (settingsView.open) {
+    event.preventDefault();
+    void closeSettingsView();
   }
 }
 
@@ -1862,7 +1880,9 @@ providersBtn.addEventListener("click", () => openSettingsView("providers", provi
 settingsBtn.addEventListener("click", () =>
   openSettingsView("appearance", settingsBtn),
 );
-settingsBackBtn.addEventListener("click", closeSettingsView);
+settingsCloseBtn.addEventListener("click", () => void closeSettingsView());
+settingsView.addEventListener("cancel", handleSettingsCancel);
+settingsView.addEventListener("click", handleSettingsBackdropClick);
 settingsAppearanceNav.addEventListener("click", () => {
   activateSettingsTab("appearance");
 });

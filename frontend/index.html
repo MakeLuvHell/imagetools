@@ -239,14 +239,10 @@
       </button>
     </div>
 
-    <section id="settingsView" class="settings-view" role="region" aria-label="设置" hidden>
+    <dialog id="settingsView" class="app-dialog settings-view" aria-labelledby="settingsTitle">
       <div class="settings-shell">
         <aside class="settings-sidebar">
-          <button id="settingsBackBtn" type="button" class="settings-back" aria-label="返回工作区">
-            <i data-lucide="arrow-left"></i>
-            <span>设置</span>
-          </button>
-          <p class="settings-nav-label">设置</p>
+          <h2 id="settingsTitle" class="settings-title">设置</h2>
           <nav class="settings-nav" aria-label="设置分类">
             <button id="settingsAppearanceNav" type="button" aria-current="page">
               <i data-lucide="palette"></i>
@@ -350,6 +346,9 @@
             </section>
           </section>
         </main>
+        <button id="settingsCloseBtn" type="button" class="icon-button settings-close" aria-label="关闭设置">
+          <i data-lucide="x"></i>
+        </button>
       </div>
       <div id="providerMenu" class="task-menu provider-menu" role="menu" aria-label="Provider 操作" hidden>
         <button id="providerMenuEditBtn" type="button" role="menuitem">
@@ -365,7 +364,7 @@
           <span>删除</span>
         </button>
       </div>
-    </section>
+    </dialog>
 
     <dialog id="providerDialog" class="app-dialog settings-dialog" aria-labelledby="providerEditorTitle">
       <header>

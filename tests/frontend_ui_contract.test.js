@@ -226,10 +226,10 @@ test("Provider settings uses a scan-first list and dedicated task dialogs", () =
   assert.match(app, /function openProviderDeleteDialog\(/);
 });
 
-test("settings uses a dedicated workspace view with separate provider and storage navigation", () => {
+test("settings uses a native modal with separate provider and storage navigation", () => {
   for (const id of [
     "settingsView",
-    "settingsBackBtn",
+    "settingsCloseBtn",
     "settingsAppearanceNav",
     "settingsProvidersNav",
     "settingsStorageNav",
@@ -241,12 +241,11 @@ test("settings uses a dedicated workspace view with separate provider and storag
   }
   assert.match(
     html,
-    /id="settingsView" class="settings-view" role="region" aria-label="设置" hidden/,
+    /<dialog id="settingsView" class="app-dialog settings-view" aria-labelledby="settingsTitle">/,
   );
   for (const className of [
     "settings-shell",
     "settings-sidebar",
-    "settings-nav-label",
     "settings-nav",
     "settings-main",
     "settings-page-heading",
@@ -265,6 +264,9 @@ test("settings uses a dedicated workspace view with separate provider and storag
   assert.match(app, /function closeSettingsView\(\)/);
   assert.match(styles, /\.settings-view/);
   assert.match(styles, /\.settings-nav/);
+  assert.match(styles, /width:\s*min\(75vw,\s*1040px\)/);
+  assert.match(styles, /height:\s*min\(78vh,\s*760px\)/);
+  assert.doesNotMatch(app, /workspace\.classList\.(?:add|remove)\("settings-open"\)/);
 });
 
 test("settings exposes an Appearance panel with a three-mode radio group", () => {
