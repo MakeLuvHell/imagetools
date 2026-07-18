@@ -298,6 +298,90 @@ test("accepted reference handoff clears Composer before generation completes", a
   await expect(page.locator("#referenceInput")).toHaveValue("");
 });
 
+test("Telegram prompt handoff settles into the optimistic timeline bubble", async ({ page }) => {
+  await installApiMocks(page, { generateDelayMs: 500 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("像 Telegram 一样发送");
+  await prompt.press("Enter");
+
+  const clone = page.locator(".prompt-handoff");
+  await expect(clone).toHaveCount(1);
+  await expect(clone).toHaveAttribute("data-duration", "250");
+  await expect(page.locator('.task-run[data-submission-id] .user-prompt')).toHaveClass(
+    /is-handoff-hidden/,
+  );
+  await expect(page.locator('.task-run[data-submission-id] .run-response')).toBeHidden();
+  await expect(clone).toHaveCount(0, { timeout: 400 });
+  await expect(page.locator('.task-run[data-submission-id] .user-prompt')).not.toHaveClass(
+    /is-handoff-hidden/,
+  );
+  await expect(page.locator('.task-run[data-submission-id] .run-response')).toBeVisible();
+});
+
+test("reduced motion skips positional prompt handoff", async ({ page }) => {
+  await installApiMocks(page, { generateDelayMs: 500 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("减少动态发送");
+  await prompt.press("Enter");
+
+  await expect(page.locator(".prompt-handoff")).toHaveCount(0);
+  await expect(page.locator('.task-run[data-submission-id] .user-prompt')).toBeVisible();
+  await expect(page.locator('.task-run[data-submission-id] .run-response')).toBeVisible();
+});
+
+test("prompt handoff cleanup handles resize and rapid session switching", async ({ page }) => {
+  await installApiMocks(page, {
+    generateDelayMs: 500,
+    sessions: [
+      { id: 1, title: "发送会话" },
+      { id: 2, title: "目标会话" },
+    ],
+    runs: { 1: [], 2: [] },
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "发送会话", exact: true }).click();
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("切换前发送");
+  await prompt.press("Enter");
+  await expect(page.locator(".prompt-handoff")).toHaveCount(1);
+  await page.setViewportSize({ width: 960, height: 640 });
+  await expect(page.locator(".prompt-handoff, .is-handoff-hidden")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "目标会话", exact: true }).click();
+  await expect(page.locator(".prompt-handoff, .is-handoff-hidden")).toHaveCount(0);
+  await expect(page.locator("#currentSessionTitle")).toHaveText("目标会话");
+});
+
+test("prompt animation failure never blocks generation", async ({ page }) => {
+  const requests = await installApiMocks(page, { generateDelayMs: 100 });
+  await page.addInitScript(() => {
+    const originalAnimate = HTMLElement.prototype.animate;
+    HTMLElement.prototype.animate = function animate(keyframes, options) {
+      if (this.classList.contains("prompt-handoff")) {
+        return {
+          cancel() {},
+          finished: Promise.reject(new Error("animation unavailable")),
+        };
+      }
+      return originalAnimate.call(this, keyframes, options);
+    };
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
+  const prompt = page.getByPlaceholder("描述你想创作的图片");
+  await prompt.fill("动画失败也发送");
+  await prompt.press("Enter");
+
+  await expect.poll(() => requests.generationStarted).toBe(1);
+  await expect(page.locator(".prompt-handoff, .is-handoff-hidden")).toHaveCount(0);
+  await expect.poll(() => requests.generateBodies.length).toBe(1);
+});
+
 test("parameter menu closes with Escape and restores trigger focus", async ({ page }) => {
   await installApiMocks(page);
   await page.goto("/");

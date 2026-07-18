@@ -131,6 +131,7 @@ let collapsedProjectIds = new Set(
 );
 let dragState = null;
 let suppressedSessionClickId = null;
+let activePromptHandoff = null;
 let editingProviderId = null;
 let providerSettingsStatus = "loading";
 let providerSettingsError = "";
@@ -356,7 +357,40 @@ function renderEmptyTimeline(message, detail) {
   timeline.appendChild(empty);
 }
 
+function cleanupPromptHandoff() {
+  activePromptHandoff?.cleanup();
+  activePromptHandoff = null;
+}
+
+function startPromptHandoff(submissionId, sourceRect, text) {
+  const target = [...timeline.querySelectorAll("[data-submission-id]")]
+    .find((element) => element.dataset.submissionId === String(submissionId))
+    ?.querySelector(".user-prompt");
+  if (!target) return;
+  const handoff = window.ImageToolsUi.startPromptHandoff({
+    document,
+    sourceRect,
+    target,
+    text,
+    reducedMotion: window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches,
+  });
+  const current = { ...handoff, submissionId };
+  activePromptHandoff = current;
+  void handoff.finished.finally(() => {
+    if (activePromptHandoff === current) activePromptHandoff = null;
+  });
+}
+
+async function settlePromptHandoff(submissionId) {
+  if (activePromptHandoff?.submissionId === submissionId) {
+    await activePromptHandoff.finished;
+  }
+}
+
 function renderTimelineRuns(runs) {
+  cleanupPromptHandoff();
   if (!runs.length) {
     renderEmptyTimeline("这个会话还没有生成记录", "从 Composer 开始新的生成。");
     return;
@@ -798,6 +832,7 @@ async function handleProviderSubmit(event) {
 }
 
 function startNewTask() {
+  cleanupPromptHandoff();
   saveActiveDraft();
   state = window.ImageToolsWorkbench.selectNewTask(state);
   restoreActiveDraft();
@@ -810,6 +845,7 @@ async function selectExistingSession(sessionId) {
   if (sessionId === state.selectedSessionId) {
     return;
   }
+  cleanupPromptHandoff();
   saveActiveDraft();
   const projectId = window.ImageToolsWorkbench.projectIdForSession(
     state.sessions,
@@ -1081,6 +1117,13 @@ async function handleComposerSubmit(event) {
     return;
   }
   setComposerNotice();
+  const promptRect = promptInput.getBoundingClientRect();
+  const promptSourceRect = {
+    left: promptRect.left + 4,
+    top: promptRect.top + 7,
+    width: Math.max(1, promptRect.width - 8),
+    height: Math.max(1, Math.min(promptRect.height - 14, 44)),
+  };
 
   const locksNewTask = state.selectedSessionId == null;
   if (locksNewTask && newTaskSubmissionLocked) return;
@@ -1147,6 +1190,7 @@ async function handleComposerSubmit(event) {
       ...(runsBySession[sessionId] || []),
       ...window.ImageToolsWorkbench.pendingRunsForSession(state, sessionId),
     ]);
+    startPromptHandoff(submissionId, promptSourceRect, prompt);
     generateBtn.setAttribute("aria-label", "生成中");
     let referenceToken = null;
     let referenceImageId = submittedReference?.imageId || null;
@@ -1178,6 +1222,7 @@ async function handleComposerSubmit(event) {
     if (sessionId && pendingRun) {
       const serverRuns = await desktopApi.listSessionRuns(sessionId)
         .catch(() => runsBySession[sessionId] || []);
+      await settlePromptHandoff(submissionId);
       runsBySession[sessionId] = serverRuns;
       const reconciled = window.ImageToolsWorkbench.reconcileSubmission(
         serverRuns,
@@ -2043,6 +2088,7 @@ modelInput.addEventListener("input", syncTransparentBackground);
 outputFormatSelect.addEventListener("change", syncTransparentBackground);
 window.addEventListener("resize", () => {
   repositionComposerMenus();
+  cleanupPromptHandoff();
   if (dragState) void finishSessionDrag({ commit: false });
 });
 

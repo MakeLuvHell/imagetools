@@ -677,6 +677,27 @@ summary:focus-visible {
   white-space: pre-wrap;
 }
 
+.prompt-handoff {
+  position: fixed;
+  z-index: 35;
+  max-width: min(78vw, 560px);
+  min-height: 34px;
+  padding: 9px 12px;
+  overflow: hidden;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-subtle);
+  line-height: 1.5;
+  pointer-events: none;
+  transform-origin: top left;
+  white-space: pre-wrap;
+}
+
+.user-prompt.is-handoff-hidden,
+.task-run.is-handoff-pending .run-response {
+  visibility: hidden;
+}
+
 .run-response {
   min-width: 0;
   display: grid;
@@ -1068,6 +1089,10 @@ summary:focus-visible {
   border-radius: 50%;
   color: #ffffff;
   background: var(--text);
+}
+
+.send-button:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 .send-button:hover:not(:disabled) {
@@ -1932,6 +1957,10 @@ summary:focus-visible {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
+  }
+
+  .send-button:active:not(:disabled) {
+    transform: none;
   }
 }
 

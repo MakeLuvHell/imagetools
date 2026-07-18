@@ -427,6 +427,9 @@
       const article = document.createElement("article");
       article.className = "task-run";
       article.dataset.runId = String(run.id);
+      if (run.submissionId) {
+        article.dataset.submissionId = String(run.submissionId);
+      }
 
       const prompt = document.createElement("div");
       prompt.className = "user-prompt";
@@ -534,6 +537,81 @@
     refreshIcons();
   }
 
+  function startPromptHandoff({
+    document,
+    sourceRect,
+    target,
+    text,
+    reducedMotion = false,
+  }) {
+    const idle = {
+      cleanup() {},
+      finished: Promise.resolve(),
+    };
+    if (reducedMotion || !document?.body || !sourceRect || !target) return idle;
+
+    const targetRect = target.getBoundingClientRect();
+    if (
+      !sourceRect.width ||
+      !sourceRect.height ||
+      !targetRect.width ||
+      !targetRect.height
+    ) {
+      return idle;
+    }
+
+    const clone = document.createElement("div");
+    clone.className = "prompt-handoff";
+    clone.textContent = String(text || "");
+    clone.dataset.duration = "250";
+    clone.style.left = `${sourceRect.left}px`;
+    clone.style.top = `${sourceRect.top}px`;
+    clone.style.width = `${sourceRect.width}px`;
+    document.body.appendChild(clone);
+    const run = target.closest?.(".task-run") || null;
+    target.classList.add("is-handoff-hidden");
+    run?.classList.add("is-handoff-pending");
+
+    let animation = null;
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      animation?.cancel?.();
+      clone.remove();
+      target.classList.remove("is-handoff-hidden");
+      run?.classList.remove("is-handoff-pending");
+    };
+
+    if (typeof clone.animate !== "function") {
+      cleanup();
+      return idle;
+    }
+
+    const translateX = targetRect.left - sourceRect.left;
+    const translateY = targetRect.top - sourceRect.top;
+    const scaleX = targetRect.width / sourceRect.width;
+    const scaleY = targetRect.height / sourceRect.height;
+    animation = clone.animate(
+      [
+        { transform: "translate(0, 0) scale(1, 1)", opacity: 1 },
+        {
+          transform: `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`,
+          opacity: 1,
+        },
+      ],
+      {
+        duration: 250,
+        easing: "cubic-bezier(0.2, 0, 0, 1)",
+        fill: "forwards",
+      },
+    );
+    const finished = Promise.resolve(animation.finished)
+      .catch(() => undefined)
+      .finally(cleanup);
+    return { cleanup, finished };
+  }
+
   function renderTaskHeader(titleElement, subtitleElement, session) {
     titleElement.textContent = session ? session.title : "新任务";
     subtitleElement.textContent = session ? "图片创作会话" : "图片创作";
@@ -605,6 +683,7 @@
     renderNewTask,
     renderProviderSettings,
     renderTaskRuns,
+    startPromptHandoff,
     renderTaskHeader,
     openDialog,
     closeDialog,

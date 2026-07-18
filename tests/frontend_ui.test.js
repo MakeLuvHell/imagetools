@@ -246,6 +246,99 @@ test("renderTaskRuns keeps success and failure in one chronological stream", () 
   assert.match(dom.window.document.querySelector(".run-error").textContent, /上游超时/);
 });
 
+test("renderTaskRuns exposes optimistic prompt handoff targets", () => {
+  const dom = new JSDOM('<section id="timeline"></section>');
+  const timeline = dom.window.document.querySelector("#timeline");
+  ui.renderTaskRuns(timeline, [
+    {
+      id: "pending-1",
+      submissionId: "pending-1",
+      optimistic: true,
+      status: "running",
+      prompt: "发送中的提示词",
+      parameters: { count: 1 },
+    },
+  ]);
+
+  assert.equal(
+    timeline.querySelector('[data-submission-id="pending-1"] .user-prompt')
+      .textContent,
+    "发送中的提示词",
+  );
+});
+
+test("prompt handoff creates a transient clone and cleans up after motion", async () => {
+  const dom = new JSDOM('<div id="target">发送中的提示词</div>');
+  const target = dom.window.document.querySelector("#target");
+  target.getBoundingClientRect = () => ({
+    left: 400,
+    top: 160,
+    width: 180,
+    height: 40,
+    right: 580,
+    bottom: 200,
+  });
+  let resolveAnimation;
+  dom.window.HTMLElement.prototype.animate = () => ({
+    finished: new Promise((resolve) => {
+      resolveAnimation = resolve;
+    }),
+  });
+
+  const handoff = ui.startPromptHandoff({
+    document: dom.window.document,
+    sourceRect: { left: 200, top: 500, width: 300, height: 44 },
+    target,
+    text: "发送中的提示词",
+    reducedMotion: false,
+  });
+
+  assert.equal(dom.window.document.querySelectorAll(".prompt-handoff").length, 1);
+  assert.equal(target.classList.contains("is-handoff-hidden"), true);
+  resolveAnimation();
+  await handoff.finished;
+  assert.equal(dom.window.document.querySelectorAll(".prompt-handoff").length, 0);
+  assert.equal(target.classList.contains("is-handoff-hidden"), false);
+});
+
+test("prompt handoff reduced motion and animation failure always reveal the target", async () => {
+  const dom = new JSDOM('<div id="target">提示词</div>');
+  const target = dom.window.document.querySelector("#target");
+  target.getBoundingClientRect = () => ({
+    left: 20,
+    top: 20,
+    width: 100,
+    height: 30,
+    right: 120,
+    bottom: 50,
+  });
+
+  const reduced = ui.startPromptHandoff({
+    document: dom.window.document,
+    sourceRect: { left: 10, top: 80, width: 200, height: 40 },
+    target,
+    text: "提示词",
+    reducedMotion: true,
+  });
+  await reduced.finished;
+  assert.equal(dom.window.document.querySelector(".prompt-handoff"), null);
+  assert.equal(target.classList.contains("is-handoff-hidden"), false);
+
+  dom.window.HTMLElement.prototype.animate = () => ({
+    finished: Promise.reject(new Error("animation cancelled")),
+  });
+  const failed = ui.startPromptHandoff({
+    document: dom.window.document,
+    sourceRect: { left: 10, top: 80, width: 200, height: 40 },
+    target,
+    text: "提示词",
+    reducedMotion: false,
+  });
+  await failed.finished;
+  assert.equal(dom.window.document.querySelector(".prompt-handoff"), null);
+  assert.equal(target.classList.contains("is-handoff-hidden"), false);
+});
+
 test("anchoredLayerPosition aligns a menu above the trigger", () => {
   assert.deepEqual(
     ui.anchoredLayerPosition({
