@@ -33,6 +33,10 @@ test("renderSessionList creates compact selectable text rows", () => {
 test("renderSessionList groups pinned and project sessions with compact actions", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM('<nav id="sessions"></nav>');
+  const toggles = [];
+  const projectActions = [];
+  const sessionActions = [];
+  const pointerStarts = [];
   ui.renderSessionList(
     dom.window.document.querySelector("#sessions"),
     {
@@ -46,16 +50,45 @@ test("renderSessionList groups pinned and project sessions with compact actions"
       ungrouped: [{ id: 3, title: "独立尝试" }],
     },
     2,
-    { onSelect() {} },
+    {
+      collapsedProjectIds: new Set([7]),
+      onSelect() {},
+      onProjectToggle: (id) => toggles.push(id),
+      onProjectAction: (project) => projectActions.push(project.id),
+      onSessionAction: (session) => sessionActions.push(session.id),
+      onSessionPointerDown: (session, event) =>
+        pointerStarts.push([session.id, event.type]),
+    },
   );
 
   assert.deepEqual(
     [...dom.window.document.querySelectorAll(".session-group-title")].map((node) => node.textContent),
     ["置顶", "项目", "会话"],
   );
-  assert.equal(dom.window.document.querySelector(".project-row").textContent.trim(), "品牌视觉");
+  const container = dom.window.document.querySelector("#sessions");
+  const toggle = container.querySelector('[data-project-toggle="7"]');
+  const children = container.querySelector('[data-project-sessions="7"]');
+  const projectRow = container.querySelector('[data-project-id="7"]');
+  const sessionRow = container.querySelector('[data-session-id="2"]');
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(children.hidden, true);
+  assert.equal(projectRow.classList.contains("project-drop-target"), true);
+  assert.equal(projectRow.querySelector(".project-name").textContent, "品牌视觉");
   assert.equal(dom.window.document.querySelector(".session-item[aria-current='page']").textContent.trim(), "产品海报");
   assert.equal(dom.window.document.querySelectorAll("button.session-item").length, 3);
+  assert.equal(
+    sessionRow.querySelector(".session-row-action").getAttribute("aria-label"),
+    "会话操作 产品海报",
+  );
+
+  toggle.click();
+  projectRow.querySelector(".project-row-action").click();
+  sessionRow.querySelector(".session-row-action").click();
+  sessionRow.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true }));
+  assert.deepEqual(toggles, [7]);
+  assert.deepEqual(projectActions, [7]);
+  assert.deepEqual(sessionActions, [2]);
+  assert.deepEqual(pointerStarts, [[2, "pointerdown"]]);
 });
 
 test("renderNewTask creates an unframed creation empty state", () => {

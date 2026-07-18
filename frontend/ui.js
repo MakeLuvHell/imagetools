@@ -163,6 +163,7 @@
   function renderSessionItem(document, session, selectedSessionId, callbacks, { nested = false } = {}) {
     const row = document.createElement("div");
     row.className = `session-row${nested ? " project-session-row" : ""}`;
+    row.dataset.sessionId = String(session.id);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "session-item";
@@ -173,12 +174,18 @@
     }
     button.addEventListener("click", () => callbacks.onSelect?.(session.id));
     row.appendChild(button);
+    if (callbacks.onSessionPointerDown) {
+      row.addEventListener("pointerdown", (event) => {
+        if (event.target.closest?.(".session-row-action")) return;
+        callbacks.onSessionPointerDown(session, event);
+      });
+    }
     if (callbacks.onSessionAction) {
       const action = document.createElement("button");
       action.type = "button";
       action.className = "session-row-action icon-button";
-      action.setAttribute("aria-label", "整理会话");
-      action.title = "整理会话";
+      action.setAttribute("aria-label", `会话操作 ${session.title}`);
+      action.title = "会话操作";
       action.innerHTML = '<i data-lucide="ellipsis"></i>';
       action.addEventListener("click", () => callbacks.onSessionAction(session, action));
       row.appendChild(action);
@@ -218,12 +225,32 @@
 
     const projects = document.createElement("div");
     for (const group of sessions.projects || []) {
+      const projectBlock = document.createElement("div");
+      projectBlock.className = "project-block";
       const projectRow = document.createElement("div");
-      projectRow.className = "project-row";
+      projectRow.className = "project-row project-drop-target";
+      projectRow.dataset.projectId = String(group.project.id);
+      const collapsed = callbacks.collapsedProjectIds?.has(group.project.id) || false;
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "project-toggle icon-button";
+      toggle.dataset.projectToggle = String(group.project.id);
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      toggle.setAttribute(
+        "aria-label",
+        `${collapsed ? "展开" : "收起"}项目 ${group.project.name}`,
+      );
+      toggle.innerHTML = `<i data-lucide="${collapsed ? "chevron-right" : "chevron-down"}"></i>`;
+      toggle.addEventListener("click", () =>
+        callbacks.onProjectToggle?.(group.project.id),
+      );
+      const projectIcon = document.createElement("i");
+      projectIcon.className = "project-icon";
+      projectIcon.setAttribute("data-lucide", "folder");
       const projectName = document.createElement("span");
+      projectName.className = "project-name";
       projectName.textContent = group.project.name;
-      projectRow.innerHTML = '<i data-lucide="folder"></i>';
-      projectRow.appendChild(projectName);
+      projectRow.append(toggle, projectIcon, projectName);
       if (callbacks.onProjectAction) {
         const action = document.createElement("button");
         action.type = "button";
@@ -234,12 +261,17 @@
         action.addEventListener("click", () => callbacks.onProjectAction(group.project, action));
         projectRow.appendChild(action);
       }
-      projects.appendChild(projectRow);
+      const children = document.createElement("div");
+      children.className = "project-children";
+      children.dataset.projectSessions = String(group.project.id);
+      children.hidden = collapsed;
       for (const session of group.sessions) {
-        projects.appendChild(
+        children.appendChild(
           renderSessionItem(document, session, selectedSessionId, callbacks, { nested: true }),
         );
       }
+      projectBlock.append(projectRow, children);
+      projects.appendChild(projectBlock);
     }
     appendGroup(document, container, "项目", projects);
 
