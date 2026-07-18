@@ -92,3 +92,13 @@ Workflow run `29605770705` passed the MSI/Portable single-process verifier, v0.2
 - Node workbench/UI/static suites passed during each RED/GREEN cycle.
 - Playwright covered row targeting, collapse persistence, ordinary and pinned drops, hover expansion, cancel/failure cleanup, modal geometry/focus, validation, prompt/reference handoff, Telegram motion, reduced motion, resize/session switch, and animation failure.
 - Twenty-four affected shell/settings light/dark baselines at `1280x860` and `960x640` were regenerated, visually inspected, and reproduced without update mode.
+
+### Consolidated Non-Windows Gate
+
+The final clean-worktree gate passed after UI012-UI019 were complete:
+
+- pytest: 54 passed.
+- Node: 97 passed.
+- Playwright: 65 passed.
+- Rust: 135 passed.
+- `cargo fmt --check`, `mise run desktop-check`, and `git diff --check`: exit 0.
