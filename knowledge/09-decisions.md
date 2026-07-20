@@ -269,3 +269,13 @@ Use this file to record decisions that future agents should not reopen without a
 **Reasoning:** Entering a session and sending a prompt explicitly express intent to see the newest work. Backend reconciliation is an implementation event and should not move the user's viewport again. Coordinating scroll distance with the bubble's final geometry keeps the transient clone and its real target visually connected.
 
 **Consequences:** Normal send motion and timeline follow share one 250ms cycle. Reduced motion, missing geometry, cleanup, and animation failure align directly to the latest record. Historical reading position is otherwise preserved, and result actions have one clear responsibility each.
+
+### 2026-07-20: Use Explicit Built-In Image Provider Protocols
+
+**Decision:** Implement the approved v0.4.0 multi-protocol design through explicit schema-v3 Provider protocol metadata and built-in Rust adapters for OpenAI Compatible, xAI Imagine, and Gemini Native Image. Persist discovered models and ordered generation references locally. Do not infer protocols from hostnames or load external Provider plugins.
+
+**Context:** xAI and Gemini differ from the current OpenAI Images contract in authentication, endpoints, model discovery, parameter capabilities, reference encoding, and response shape. The Composer also needs up to three ordered references without weakening the existing Rust IPC and media boundaries.
+
+**Reasoning:** A normalized adapter boundary preserves one generation lifecycle and the single-process trust model while keeping each vendor wire contract independently testable. Explicit persisted protocol metadata is more durable than domain heuristics, and schema v3 gives model discovery and multi-reference history clear ownership.
+
+**Consequences:** v0.4.0 requires a transactional schema-v2 to v3 migration and backup-based rollback to v0.3.0. OpenAI behavior remains the compatibility baseline; xAI and Gemini gain protocol-specific capabilities. Google Imagen and runtime plugins remain separate future decisions. See [ADR 0002](../docs/adr/0002-use-built-in-image-provider-adapters.md) and the [approved design](../docs/superpowers/specs/2026-07-20-multi-protocol-image-providers-design.md).

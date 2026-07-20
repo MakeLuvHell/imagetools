@@ -25,8 +25,12 @@ The bottom input area where the user enters a prompt, attaches a reference image
 _Avoid_: Command line, terminal prompt
 
 **Provider**:
-A saved image API configuration containing a display name, Base URL, API Key, and default model.
-_Avoid_: Model, global settings
+A saved image-service configuration containing an explicit Provider protocol, display name, Base URL, API Key, default model, and optional discovered-model cache. The protocol defines authentication, request mapping, capabilities, and response parsing; it is never inferred from the hostname.
+_Avoid_: Model, global settings, hostname-derived protocol
+
+**Provider 协议**:
+The explicit wire contract used by a Provider, such as OpenAI Compatible, xAI Imagine, or Gemini Native Image. It governs connectivity checks, model discovery, image generation, reference encoding, and response parsing.
+_Avoid_: Provider name, model family, Base URL domain
 
 **工作区数据目录**:
 The single user-selectable local root for durable Provider, session, generation, reference-image, and generated-image data. These items form one coherent workspace data set rather than independently configurable locations.
