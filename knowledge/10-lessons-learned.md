@@ -50,6 +50,7 @@
 - `scripts/verify_windows_single_process.ps1` is the release authority for MSI/Portable payload, installation, runtime process count, listener checks, window close, exit, uninstall, and cleanup.
 - RB014 recorded v0.2.3 to v0.3.0 upgrade and v0.3.0 to v0.2.3 rollback evidence in workflow run `29605770705`.
 - Responsive Settings, Composer, and session-tree changes passed the same non-publishing Windows payload, lifecycle, upgrade, and rollback gate in workflow run `29651658576`; artifact `8431714800` contains the validated MSI and single-executable Portable assets.
+- Latest-run session entry, coordinated prompt follow, and simplified result actions passed the non-publishing Windows payload, lifecycle, upgrade, and rollback gate in workflow run `29655474254`; artifact `8432801140` contains the validated MSI and single-executable Portable assets.
 
 ## Reusable Commands
 

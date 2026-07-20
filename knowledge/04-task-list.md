@@ -42,6 +42,8 @@
 | UI018 | Motion | Animate optimistic prompt handoff | Telegram-style 250ms motion with safe cleanup | UI017 | Done |
 | UI019 | Testing | Refresh interaction and visual coverage | Focused behavior matrix and 24 affected baselines | UI012-UI018 | Done |
 | UI020 | Release | Preserve knowledge and run centralized gates | Final source and Windows evidence | UI019 | Done |
+| UI021 | Timeline | Follow the latest run on session entry and prompt handoff; remove the duplicate continuation action | Coordinated 250ms scroll/handoff with focused regression coverage | UI020 | Done |
+| UI022 | Release | Verify latest-run interaction changes on Windows | MSI/Portable lifecycle, upgrade, rollback, and artifact evidence | UI021 | Done |
 
 ## Recommended Order
 
@@ -61,6 +63,7 @@
 14. UI012-UI015 make session grouping directly operable without changing schema or filesystem ownership.
 15. UI016-UI018 deliver the responsive Settings and Composer interaction contracts.
 16. UI019-UI020 refresh deterministic baselines, preserve decisions, and run the consolidated gates once.
+17. UI021-UI022 keep explicit session entry and prompt submission aligned to the latest run, simplify result actions, and preserve Windows release evidence.
 
 ## Single-Process Rust Migration
 
@@ -86,7 +89,7 @@ Source: `docs/spec/2026-07-15-single-process-rust-desktop-backend-design.md`, `d
 ## Blockers
 
 - RB001-RB014 have no implementation blockers.
-- Windows workflow run `29605770705` passed with `publish_release=false`; creating the public v0.3.0 Release remains a separate explicit release action.
+- Windows workflow runs `29605770705`, `29651658576`, and `29655474254` passed with `publish_release=false`; creating or updating the public v0.3.0 Release remains a separate explicit release action.
 
 ## Verification Checklist
 

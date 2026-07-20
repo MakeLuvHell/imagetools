@@ -113,3 +113,30 @@ Workflow run [`29651658576`](https://github.com/MakeLuvHell/imagetools/actions/r
 - Artifact upload: `8431714800`, `image-tools-v0.3.0-windows-x64`, 10,805,716 bytes.
 - GitHub Release creation and asset publication: skipped.
 - The immutable `v0.3.0` tag still resolves to `cc56df12b2ab85dffcb10a3e4887978bc21ec2b1`.
+
+## Latest-Run Follow Review
+
+### Product And Frontend
+
+- Entering an existing session aligns its timeline directly to the latest generation run after history loads.
+- Accepted prompt handoff includes the pending timeline scroll distance in the optimistic bubble's final viewport coordinates. The scroll and clone share one 250ms cycle and one cleanup path.
+- Reduced motion, missing geometry, animation rejection, resize, and session switching settle to the latest record without leaving hidden prompt or transient clone state.
+- Backend history reconciliation does not initiate a second follow movement.
+- Result actions retain preview, download, copy link, set reference, and the separate run-level parameter copy; the duplicate “基于结果继续” command and its dead styles were removed.
+
+### Focused Verification
+
+- Node UI suite: 19 passed.
+- Playwright interaction selection: 7 passed, covering long-session entry, prompt follow, optimistic handoff, result actions, reduced motion, resize/session cleanup, animation failure, and historical result references.
+- `git diff --check`: exit 0.
+
+### Latest-Run Windows Gate
+
+Workflow run [`29655474254`](https://github.com/MakeLuvHell/imagetools/actions/runs/29655474254) built commit `77ae4cee7b4ff2e46cdd7a3971c955769f901ece` with `publish_release=false` and completed successfully:
+
+- Windows x64 MSI build and single-executable Portable staging: success.
+- MSI/Portable payload, process, listener, window-close, and exit verification: success.
+- v0.2.3 baseline download and schema-v2 upgrade/rollback verification: success.
+- Artifact upload: `8432801140`, `image-tools-v0.3.0-windows-x64`, 10,807,323 bytes.
+- GitHub Release creation and asset publication: skipped.
+- The immutable `v0.3.0` tag still resolves to `cc56df12b2ab85dffcb10a3e4887978bc21ec2b1`.
