@@ -200,7 +200,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP006: Gemini Native Image Adapter
 
-**Status:** In progress
+**Status:** Done
 
 **Blocked by:** MP004
 
@@ -227,7 +227,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP007: v0.4.0 Integration, Upgrade Safety, Documentation, And Gates
 
-**Status:** Pending
+**Status:** In progress
 
 **Blocked by:** MP002, MP003, MP004, MP005, MP006
 
