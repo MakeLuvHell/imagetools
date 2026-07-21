@@ -11,6 +11,7 @@ use files::{
     cleanup_file, merge_cleanup_error, ConsumedReference, ReferenceStore, ResultFileStore,
 };
 
+pub mod adapters;
 pub mod client;
 pub mod files;
 
@@ -32,6 +33,7 @@ pub trait ProviderTransport: Send + Sync {
 pub trait ProviderFactory: Send + Sync {
     fn create(
         &self,
+        protocol: &str,
         base_url: &str,
         api_key: &str,
     ) -> Result<Arc<dyn ProviderTransport>, CommandError>;
@@ -42,10 +44,11 @@ struct DefaultProviderFactory;
 impl ProviderFactory for DefaultProviderFactory {
     fn create(
         &self,
+        protocol: &str,
         base_url: &str,
         api_key: &str,
     ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
-        Ok(Arc::new(ProviderClient::new(base_url, api_key)?))
+        adapters::create_transport(protocol, base_url, api_key)
     }
 }
 
@@ -256,7 +259,9 @@ impl GenerationService {
         background: &str,
         moderation: &str,
     ) -> Result<ProviderResponse, CommandError> {
-        let client = self.factory.create(&provider.base_url, &provider.api_key)?;
+        let client =
+            self.factory
+                .create(&provider.protocol, &provider.base_url, &provider.api_key)?;
         if let Some(reference) = reference {
             let bytes = std::fs::read(&reference.path)
                 .map_err(|_| CommandError::new("reference.read_failed", "无法读取参考图。"))?;
@@ -706,6 +711,7 @@ mod tests {
     impl ProviderFactory for FakeFactory {
         fn create(
             &self,
+            _protocol: &str,
             base_url: &str,
             api_key: &str,
         ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
@@ -755,6 +761,7 @@ mod tests {
     impl ProviderFactory for DelayedFactory {
         fn create(
             &self,
+            _protocol: &str,
             _base_url: &str,
             _api_key: &str,
         ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
@@ -769,6 +776,7 @@ mod tests {
     impl ProviderFactory for RejectingFactory {
         fn create(
             &self,
+            _protocol: &str,
             _base_url: &str,
             _api_key: &str,
         ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
@@ -782,6 +790,7 @@ mod tests {
     impl ProviderFactory for DeletingReferenceFactory {
         fn create(
             &self,
+            _protocol: &str,
             _base_url: &str,
             _api_key: &str,
         ) -> Result<Arc<dyn ProviderTransport>, CommandError> {
@@ -845,6 +854,7 @@ mod tests {
             let provider_service = ProviderService::new(providers, data_root.join("settings.json"));
             let provider_id = provider_service
                 .create(ProviderInput {
+                    protocol: "openai_compatible".into(),
                     name: "Primary".into(),
                     base_url: "https://provider.example/v1".into(),
                     api_key: "sk-private".into(),

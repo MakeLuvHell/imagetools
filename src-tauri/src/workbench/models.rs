@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProviderInput {
+    #[serde(default = "default_provider_protocol")]
+    pub protocol: String,
     pub name: String,
     pub base_url: String,
     #[serde(default)]
@@ -17,14 +19,21 @@ fn default_model() -> String {
     "gpt-image-2".to_string()
 }
 
+fn default_provider_protocol() -> String {
+    "openai_compatible".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ProviderDto {
     pub id: i64,
+    pub protocol: String,
     pub name: String,
     pub base_url: String,
     pub api_key: String,
     pub api_key_set: bool,
     pub default_model: String,
+    pub available_models: Vec<String>,
+    pub models_refreshed_at: Option<String>,
     pub is_default: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -224,6 +233,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(input.name, "Primary");
+        assert_eq!(input.protocol, "openai_compatible");
         assert_eq!(input.base_url, "https://api.example.com/v1");
         assert_eq!(input.api_key, "");
         assert_eq!(input.default_model, "gpt-image-2");
@@ -234,11 +244,14 @@ mod tests {
     fn provider_dto_serializes_a_redacted_snake_case_contract() {
         let provider = ProviderDto {
             id: 7,
+            protocol: "xai_images".into(),
             name: "Primary".into(),
             base_url: "https://api.example.com/v1".into(),
             api_key: String::new(),
             api_key_set: true,
             default_model: "gpt-image-2".into(),
+            available_models: vec!["grok-imagine-image".into()],
+            models_refreshed_at: Some("2026-07-20T00:00:00.000000+00:00".into()),
             is_default: true,
             created_at: "2026-07-16T00:00:00.000000+00:00".into(),
             updated_at: "2026-07-16T00:00:00.000000+00:00".into(),
@@ -248,11 +261,14 @@ mod tests {
             serde_json::to_value(provider).unwrap(),
             serde_json::json!({
                 "id": 7,
+                "protocol": "xai_images",
                 "name": "Primary",
                 "base_url": "https://api.example.com/v1",
                 "api_key": "",
                 "api_key_set": true,
                 "default_model": "gpt-image-2",
+                "available_models": ["grok-imagine-image"],
+                "models_refreshed_at": "2026-07-20T00:00:00.000000+00:00",
                 "is_default": true,
                 "created_at": "2026-07-16T00:00:00.000000+00:00",
                 "updated_at": "2026-07-16T00:00:00.000000+00:00"

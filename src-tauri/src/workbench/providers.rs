@@ -52,6 +52,7 @@ impl ProviderService {
         let clean = clean_provider(input, None)?;
         self.repository
             .create(
+                &clean.protocol,
                 &clean.name,
                 &clean.base_url,
                 &clean.api_key,
@@ -75,6 +76,7 @@ impl ProviderService {
         self.repository
             .update(
                 provider_id,
+                &clean.protocol,
                 &clean.name,
                 &clean.base_url,
                 &clean.api_key,
@@ -98,6 +100,7 @@ impl ProviderService {
         self.repository
             .update(
                 provider.id,
+                &provider.protocol,
                 &provider.name,
                 &provider.base_url,
                 &provider.api_key,
@@ -140,6 +143,7 @@ impl ProviderService {
         let provider = if let Some(provider) = existing {
             self.repository.update(
                 provider.id,
+                &provider.protocol,
                 &provider.name,
                 &base_url,
                 &effective_key,
@@ -147,8 +151,14 @@ impl ProviderService {
                 true,
             )?
         } else {
-            self.repository
-                .create("Default", &base_url, &effective_key, &model, true)?
+            self.repository.create(
+                "openai_compatible",
+                "Default",
+                &base_url,
+                &effective_key,
+                &model,
+                true,
+            )?
         };
         self.write_settings_file(&provider)?;
         Ok(public_settings(&provider))
@@ -203,10 +213,13 @@ impl ProviderService {
             .unwrap_or(&defaults.default_model);
         ProviderRecord {
             id: 0,
+            protocol: "openai_compatible".into(),
             name: "Default".into(),
             base_url: normalize_base_url(base_url),
             api_key: api_key.to_string(),
             default_model: defaulted_model(model),
+            available_models: Vec::new(),
+            models_refreshed_at: None,
             is_default: true,
             created_at: String::new(),
             updated_at: String::new(),
@@ -253,6 +266,16 @@ fn clean_provider(
     input: ProviderInput,
     existing_key: Option<&str>,
 ) -> Result<ProviderInput, CommandError> {
+    let protocol = input.protocol.trim().to_string();
+    if !matches!(
+        protocol.as_str(),
+        "openai_compatible" | "xai_images" | "gemini_native"
+    ) {
+        return Err(CommandError::new(
+            "provider.unsupported_protocol",
+            "不支持所选 Provider 协议。",
+        ));
+    }
     let name = input.name.trim().to_string();
     let base_url = normalize_base_url(&input.base_url);
     let api_key = input
@@ -279,6 +302,7 @@ fn clean_provider(
         ));
     }
     Ok(ProviderInput {
+        protocol,
         name,
         base_url,
         api_key,
@@ -290,11 +314,14 @@ fn clean_provider(
 fn public_provider(provider: ProviderRecord) -> ProviderDto {
     ProviderDto {
         id: provider.id,
+        protocol: provider.protocol,
         name: provider.name,
         base_url: provider.base_url,
         api_key: String::new(),
         api_key_set: !provider.api_key.is_empty(),
         default_model: provider.default_model,
+        available_models: provider.available_models,
+        models_refreshed_at: provider.models_refreshed_at,
         is_default: provider.is_default,
         created_at: provider.created_at,
         updated_at: provider.updated_at,
@@ -322,6 +349,7 @@ fn defaulted_model(value: &str) -> String {
 fn environment_settings() -> ProviderRecord {
     ProviderRecord {
         id: 0,
+        protocol: "openai_compatible".into(),
         name: "Default".into(),
         base_url: normalize_base_url(&env::var("IMAGE_TOOLS_BASE_URL").unwrap_or_default()),
         api_key: env::var("IMAGE_TOOLS_API_KEY")
@@ -331,6 +359,8 @@ fn environment_settings() -> ProviderRecord {
         default_model: defaulted_model(
             &env::var("IMAGE_TOOLS_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.into()),
         ),
+        available_models: Vec::new(),
+        models_refreshed_at: None,
         is_default: true,
         created_at: String::new(),
         updated_at: String::new(),
@@ -389,6 +419,7 @@ mod tests {
 
     fn provider(name: &str, api_key: &str, is_default: bool) -> ProviderInput {
         ProviderInput {
+            protocol: "openai_compatible".into(),
             name: name.into(),
             base_url: format!("https://{}.example/v1/", name.to_lowercase()),
             api_key: api_key.into(),
@@ -419,6 +450,41 @@ mod tests {
     }
 
     #[test]
+    fn persists_explicit_protocol_and_rejects_unknown_protocols() {
+        let fixture = ProviderFixture::new();
+        let created = fixture
+            .service
+            .create(ProviderInput {
+                protocol: "xai_images".into(),
+                name: "xAI".into(),
+                base_url: "https://api.x.ai/v1".into(),
+                api_key: "xai-secret".into(),
+                default_model: "grok-imagine-image".into(),
+                is_default: true,
+            })
+            .unwrap();
+
+        assert_eq!(created.protocol, "xai_images");
+        assert_eq!(
+            fixture.service.get(created.id).unwrap().protocol,
+            "xai_images"
+        );
+
+        let error = fixture
+            .service
+            .create(ProviderInput {
+                protocol: "inferred_from_hostname".into(),
+                name: "Invalid".into(),
+                base_url: "https://example.com".into(),
+                api_key: "secret".into(),
+                default_model: "model".into(),
+                is_default: false,
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "provider.unsupported_protocol");
+    }
+
+    #[test]
     fn blank_key_update_preserves_the_stored_secret() {
         let fixture = ProviderFixture::new();
         let created = fixture
@@ -431,6 +497,7 @@ mod tests {
             .update(
                 created.id,
                 ProviderInput {
+                    protocol: "openai_compatible".into(),
                     name: "Primary Updated".into(),
                     base_url: "https://api.updated.example/v1".into(),
                     api_key: String::new(),

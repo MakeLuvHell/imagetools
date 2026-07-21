@@ -1,0 +1,23 @@
+pub mod normalized;
+pub mod openai;
+
+use std::sync::Arc;
+
+use crate::workbench::error::CommandError;
+
+use self::{normalized::ProviderProtocol, openai::OpenAiAdapter};
+use super::ProviderTransport;
+
+pub fn create_transport(
+    protocol: &str,
+    base_url: &str,
+    api_key: &str,
+) -> Result<Arc<dyn ProviderTransport>, CommandError> {
+    match ProviderProtocol::parse(protocol)? {
+        ProviderProtocol::OpenAiCompatible => Ok(Arc::new(OpenAiAdapter::new(base_url, api_key)?)),
+        ProviderProtocol::XaiImages | ProviderProtocol::GeminiNative => Err(CommandError::new(
+            "provider.unsupported_protocol",
+            "此 Provider 协议尚未完成生成适配。",
+        )),
+    }
+}

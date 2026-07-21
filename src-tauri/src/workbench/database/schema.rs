@@ -2,7 +2,7 @@ use rusqlite::{Connection, Error, ErrorCode, OptionalExtension, Transaction};
 
 use crate::workbench::{error::CommandError, models::utc_now};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const V1_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -70,6 +70,26 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 "#;
 
+const PROVIDER_MODELS_SCHEMA: &str = r#"
+CREATE TABLE provider_models (
+    provider_id INTEGER NOT NULL,
+    model_id TEXT NOT NULL,
+    discovered_at TEXT NOT NULL,
+    PRIMARY KEY (provider_id, model_id),
+    FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE generation_run_references (
+    generation_run_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    local_path TEXT NOT NULL,
+    filename TEXT,
+    mime_type TEXT,
+    PRIMARY KEY (generation_run_id, position),
+    FOREIGN KEY (generation_run_id) REFERENCES generation_runs(id) ON DELETE CASCADE
+);
+"#;
+
 pub fn initialize_schema(connection: &mut Connection) -> Result<(), CommandError> {
     connection
         .execute_batch("PRAGMA foreign_keys = ON;")
@@ -94,8 +114,11 @@ pub fn initialize_schema(connection: &mut Connection) -> Result<(), CommandError
         )
         .map_err(database_error)?;
 
-    if current_version < SCHEMA_VERSION {
+    if current_version < 2 {
         migrate_to_v2(&transaction)?;
+    }
+    if current_version < 3 {
+        migrate_to_v3(&transaction)?;
     }
 
     transaction.commit().map_err(database_error)
@@ -164,6 +187,42 @@ fn migrate_to_v2(transaction: &Transaction<'_>) -> Result<(), CommandError> {
     Ok(())
 }
 
+fn migrate_to_v3(transaction: &Transaction<'_>) -> Result<(), CommandError> {
+    transaction
+        .execute(
+            "ALTER TABLE providers ADD COLUMN protocol TEXT NOT NULL DEFAULT 'openai_compatible'",
+            [],
+        )
+        .map_err(database_error)?;
+    transaction
+        .execute(
+            "ALTER TABLE providers ADD COLUMN models_refreshed_at TEXT",
+            [],
+        )
+        .map_err(database_error)?;
+    transaction
+        .execute_batch(PROVIDER_MODELS_SCHEMA)
+        .map_err(database_error)?;
+    transaction
+        .execute(
+            "INSERT INTO generation_run_references (
+                 generation_run_id, position, local_path, filename, mime_type
+             )
+             SELECT id, 0, reference_image_path, NULL, NULL
+             FROM generation_runs
+             WHERE reference_image_path IS NOT NULL",
+            [],
+        )
+        .map_err(database_error)?;
+    transaction
+        .execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (3, ?1)",
+            [&utc_now()],
+        )
+        .map_err(database_error)?;
+    Ok(())
+}
+
 pub(crate) fn database_error(error: Error) -> CommandError {
     let code = match &error {
         Error::SqliteFailure(details, _)
@@ -221,7 +280,7 @@ mod tests {
 
         initialize_schema(&mut connection).unwrap();
 
-        assert_eq!(schema_version(&connection).unwrap(), 2);
+        assert_eq!(schema_version(&connection).unwrap(), 3);
         let row: (String, Option<i64>, i64) = connection
             .query_row(
                 "SELECT title, project_id, is_pinned FROM sessions WHERE id = 1",
@@ -236,10 +295,16 @@ mod tests {
     fn preserves_existing_v2_workspace_rows() {
         let mut connection = Connection::open_in_memory().unwrap();
         connection.execute_batch(&fixture("schema-v2.sql")).unwrap();
+        connection
+            .execute(
+                "UPDATE generation_runs SET reference_image_path = 'references/legacy.png' WHERE id = 1",
+                [],
+            )
+            .unwrap();
 
         initialize_schema(&mut connection).unwrap();
 
-        assert_eq!(schema_version(&connection).unwrap(), 2);
+        assert_eq!(schema_version(&connection).unwrap(), 3);
         let migrations = connection
             .prepare("SELECT version, applied_at FROM schema_migrations ORDER BY version")
             .unwrap()
@@ -249,13 +314,15 @@ mod tests {
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
+        assert_eq!(migrations.len(), 3);
         assert_eq!(
-            migrations,
-            vec![
+            &migrations[..2],
+            &[
                 (1, "2026-07-12T00:00:00.000000+00:00".to_string()),
                 (2, "2026-07-15T00:00:00.000000+00:00".to_string()),
             ]
         );
+        assert_eq!(migrations[2].0, 3);
 
         let provider: (i64, String, String, String, String, i64, String, String) = connection
             .query_row(
@@ -288,6 +355,23 @@ mod tests {
                 "2026-07-15T00:00:00.000000+00:00".to_string(),
             )
         );
+        let provider_protocol: (String, Option<String>) = connection
+            .query_row(
+                "SELECT protocol, models_refreshed_at FROM providers WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(provider_protocol, ("openai_compatible".to_string(), None));
+
+        let model_cache_exists: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'provider_models')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(model_cache_exists);
 
         let project: (i64, String, String, String, Option<String>) = connection
             .query_row(
@@ -387,11 +471,31 @@ mod tests {
                 Some(1),
                 "Primary".to_string(),
                 "gpt-image-2".to_string(),
-                None,
+                Some("references/legacy.png".to_string()),
                 None,
                 "2026-07-15T00:00:00.000000+00:00".to_string(),
                 Some("2026-07-15T00:00:01.000000+00:00".to_string()),
             )
+        );
+        let references = connection
+            .prepare(
+                "SELECT position, local_path, filename, mime_type FROM generation_run_references WHERE generation_run_id = 1 ORDER BY position",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            references,
+            vec![(0, "references/legacy.png".to_string(), None, None,)]
         );
 
         let image: (i64, i64, String, String, String, Option<i64>, Option<i64>, String) = connection
@@ -422,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn creates_a_fresh_v2_database_with_foreign_keys_enabled() {
+    fn creates_a_fresh_v3_database_with_foreign_keys_enabled() {
         let temporary = tempfile::tempdir().unwrap();
         let database_path = temporary.path().join("workbench.sqlite3");
 
@@ -430,7 +534,7 @@ mod tests {
 
         database
             .with_connection(|connection| {
-                assert_eq!(schema_version(connection)?, 2);
+                assert_eq!(schema_version(connection)?, 3);
                 let foreign_keys: i64 = connection
                     .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
                     .map_err(super::database_error)?;
@@ -443,19 +547,19 @@ mod tests {
         let reopened = Database::open(&database_path).unwrap();
         reopened
             .with_connection(|connection| {
-                assert_eq!(schema_version(connection)?, 2);
+                assert_eq!(schema_version(connection)?, 3);
                 Ok(())
             })
             .unwrap();
     }
 
     #[test]
-    fn rejects_a_schema_newer_than_version_two() {
+    fn rejects_a_schema_newer_than_version_three() {
         let mut connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
                 "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);\
-                 INSERT INTO schema_migrations VALUES (3, '2026-07-15T00:00:00.000000+00:00');",
+                 INSERT INTO schema_migrations VALUES (4, '2026-07-15T00:00:00.000000+00:00');",
             )
             .unwrap();
 
@@ -499,6 +603,47 @@ mod tests {
             .unwrap();
         assert!(!columns.iter().any(|column| column == "project_id"));
         assert!(!columns.iter().any(|column| column == "is_pinned"));
+    }
+
+    #[test]
+    fn rolls_back_every_v3_change_when_migration_fails() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch(&fixture("schema-v2.sql")).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TRIGGER reject_v3 BEFORE INSERT ON schema_migrations
+                 WHEN NEW.version = 3
+                 BEGIN
+                     SELECT RAISE(ABORT, 'reject v3 for rollback test');
+                 END;",
+            )
+            .unwrap();
+
+        let error = initialize_schema(&mut connection).unwrap_err();
+
+        assert_eq!(error.code, "database.query_failed");
+        assert_eq!(schema_version(&connection).unwrap(), 2);
+        let provider_columns = connection
+            .prepare("PRAGMA table_info(providers)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(!provider_columns.iter().any(|column| column == "protocol"));
+        assert!(!provider_columns
+            .iter()
+            .any(|column| column == "models_refreshed_at"));
+        for table in ["provider_models", "generation_run_references"] {
+            let exists: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(!exists, "{table} should have rolled back");
+        }
     }
 
     #[test]

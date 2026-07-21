@@ -26,7 +26,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP001: Schema v3, Protocol Contracts, And OpenAI Adapter Parity
 
-**Status:** Pending
+**Status:** Done
 
 **Files:**
 - Modify `src-tauri/src/workbench/database/schema.rs`
@@ -62,7 +62,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP002: Provider Connectivity And Model Discovery Backend
 
-**Status:** Pending
+**Status:** In progress
 
 **Blocked by:** MP001
 
@@ -291,4 +291,3 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 - Every ticket begins with the narrowest failing contract test and ends with focused evidence.
 - Broad Linux/source and Windows gates are deferred until MP007, per release policy.
 - Upgrade and rollback are tested as data lifecycle behavior, not only as schema-number checks.
-

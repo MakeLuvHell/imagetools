@@ -11,10 +11,13 @@ use crate::workbench::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProviderRecord {
     pub id: i64,
+    pub protocol: String,
     pub name: String,
     pub base_url: String,
     pub api_key: String,
     pub default_model: String,
+    pub available_models: Vec<String>,
+    pub models_refreshed_at: Option<String>,
     pub is_default: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -32,6 +35,7 @@ impl ProviderRepository {
 
     pub(crate) fn create(
         &self,
+        protocol: &str,
         name: &str,
         base_url: &str,
         api_key: &str,
@@ -52,9 +56,9 @@ impl ProviderRepository {
             transaction
                 .execute(
                     "INSERT INTO providers (
-                        name, base_url, api_key, default_model, is_default, created_at, updated_at
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
-                    params![name, base_url, api_key, default_model, is_default, now],
+                        protocol, name, base_url, api_key, default_model, is_default, created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+                    params![protocol, name, base_url, api_key, default_model, is_default, now],
                 )
                 .map_err(database_error)?;
             let provider_id = transaction.last_insert_rowid();
@@ -95,8 +99,8 @@ impl ProviderRepository {
             transaction
                 .execute(
                     "INSERT INTO providers (
-                        name, base_url, api_key, default_model, is_default, created_at, updated_at
-                     ) VALUES (?1, ?2, ?3, ?4, 1, ?5, ?5)",
+                        protocol, name, base_url, api_key, default_model, is_default, created_at, updated_at
+                     ) VALUES ('openai_compatible', ?1, ?2, ?3, ?4, 1, ?5, ?5)",
                     params![name, base_url, api_key, default_model, now],
                 )
                 .map_err(database_error)?;
@@ -112,7 +116,7 @@ impl ProviderRepository {
         self.database.with_connection(|connection| {
             let mut statement = connection
                 .prepare(
-                    "SELECT id, name, base_url, api_key, default_model, is_default, created_at, updated_at
+                    "SELECT id, protocol, name, base_url, api_key, default_model, models_refreshed_at, is_default, created_at, updated_at
                      FROM providers ORDER BY id ASC",
                 )
                 .map_err(database_error)?;
@@ -126,6 +130,7 @@ impl ProviderRepository {
     pub(crate) fn update(
         &self,
         provider_id: i64,
+        protocol: &str,
         name: &str,
         base_url: &str,
         api_key: &str,
@@ -151,14 +156,16 @@ impl ProviderRepository {
                          api_key = ?3,
                          default_model = ?4,
                          is_default = ?5,
-                         updated_at = ?6
-                     WHERE id = ?7",
+                         protocol = ?6,
+                         updated_at = ?7
+                     WHERE id = ?8",
                     params![
                         name,
                         base_url,
                         api_key,
                         default_model,
                         is_default,
+                        protocol,
                         now,
                         provider_id
                     ],
@@ -200,7 +207,7 @@ fn query_provider(
 ) -> Result<Option<ProviderRecord>, CommandError> {
     connection
         .query_row(
-            "SELECT id, name, base_url, api_key, default_model, is_default, created_at, updated_at
+            "SELECT id, protocol, name, base_url, api_key, default_model, models_refreshed_at, is_default, created_at, updated_at
              FROM providers WHERE id = ?1",
             [provider_id],
             provider_from_row,
@@ -212,12 +219,15 @@ fn query_provider(
 fn provider_from_row(row: &Row<'_>) -> rusqlite::Result<ProviderRecord> {
     Ok(ProviderRecord {
         id: row.get(0)?,
-        name: row.get(1)?,
-        base_url: row.get(2)?,
-        api_key: row.get(3)?,
-        default_model: row.get(4)?,
-        is_default: row.get(5)?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        protocol: row.get(1)?,
+        name: row.get(2)?,
+        base_url: row.get(3)?,
+        api_key: row.get(4)?,
+        default_model: row.get(5)?,
+        available_models: Vec::new(),
+        models_refreshed_at: row.get(6)?,
+        is_default: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
