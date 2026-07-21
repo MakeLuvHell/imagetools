@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and verify a redacted schema-v2 Windows upgrade workspace."""
+"""Create and verify a redacted schema-v2/v3 Windows upgrade workspace."""
 
 from __future__ import annotations
 
@@ -137,6 +137,19 @@ EXPECTED_COLUMNS = {
     ),
 }
 
+EXPECTED_V3_COLUMNS = {
+    **EXPECTED_COLUMNS,
+    "providers": EXPECTED_COLUMNS["providers"] + ("protocol", "models_refreshed_at"),
+    "provider_models": ("provider_id", "model_id", "discovered_at"),
+    "generation_run_references": (
+        "generation_run_id",
+        "position",
+        "local_path",
+        "filename",
+        "mime_type",
+    ),
+}
+
 
 class FixtureError(Exception):
     """A validation error safe to print in CI."""
@@ -226,7 +239,7 @@ def create_fixture(workspace: Path) -> None:
                     created_at, completed_at)
                    VALUES (1, 1, 'succeeded', 'Upgrade fixture prompt',
                            '{"count":1,"quality":"high","ratio":"1:1"}', 1,
-                           'Upgrade Fixture', 'gpt-image-2', NULL, NULL, ?, ?)""",
+                           'Upgrade Fixture', 'gpt-image-2', 'images/result.png', NULL, ?, ?)""",
                 (timestamp, timestamp),
             )
             connection.execute(
@@ -288,18 +301,28 @@ def verify_fixture(workspace: Path) -> None:
 
         linked = connection.execute(
             """SELECT s.project_id, s.is_pinned, s.recent_thumbnail_path,
-                      r.provider_id, r.status, i.local_path, i.mime_type
+                      r.provider_id, r.status, r.reference_image_path,
+                      i.local_path, i.mime_type
                FROM sessions AS s
                JOIN projects AS p ON p.id = s.project_id
                JOIN generation_runs AS r ON r.session_id = s.id
                JOIN images AS i ON i.generation_run_id = r.id
                WHERE s.id = 1 AND p.id = 1 AND r.id = 1 AND i.id = 1"""
         ).fetchone()
-        expected_link = (1, 1, "images/result.png", 1, "succeeded", "images/result.png", "image/png")
+        expected_link = (
+            1,
+            1,
+            "images/result.png",
+            1,
+            "succeeded",
+            "images/result.png",
+            "images/result.png",
+            "image/png",
+        )
         if linked != expected_link:
             raise FixtureError("linked project/session/run/image sample is missing or changed")
 
-    relative_image = Path(linked[5])
+    relative_image = Path(linked[6])
     if relative_image.parts != ("images", "result.png"):
         raise FixtureError("image sample path is not the expected flat workspace path")
     image_path = workspace / relative_image
@@ -309,10 +332,65 @@ def verify_fixture(workspace: Path) -> None:
     assert_no_credentials(workspace)
 
 
+def verify_migrated_fixture(workspace: Path) -> None:
+    workspace = workspace.resolve()
+    database_path = workspace / "workbench.sqlite3"
+    if not database_path.is_file():
+        raise FixtureError("workbench.sqlite3 is missing")
+
+    with sqlite3.connect(f"file:{database_path.as_posix()}?mode=ro", uri=True) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        if connection.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+            raise FixtureError("SQLite integrity check failed after schema-v3 migration")
+        if connection.execute("PRAGMA foreign_key_check").fetchall():
+            raise FixtureError("SQLite foreign key check failed after schema-v3 migration")
+
+        for table, expected in EXPECTED_V3_COLUMNS.items():
+            actual = tuple(row[1] for row in connection.execute(f"PRAGMA table_info({table})"))
+            if actual != expected:
+                raise FixtureError(f"schema-v3 columns do not match for table {table}")
+
+        version = connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0]
+        if version != 3:
+            raise FixtureError("schema version is not 3")
+
+        provider = connection.execute(
+            """SELECT api_key, is_default, protocol, models_refreshed_at
+               FROM providers WHERE id = 1"""
+        ).fetchone()
+        if provider != ("redacted", 1, "openai_compatible", None):
+            raise FixtureError("Provider secret, default, or protocol migration changed")
+        if connection.execute("SELECT COUNT(*) FROM provider_models").fetchone() != (0,):
+            raise FixtureError("migration invented discovered Provider models")
+
+        reference = connection.execute(
+            """SELECT generation_run_id, position, local_path, filename, mime_type
+               FROM generation_run_references"""
+        ).fetchone()
+        if reference != (1, 0, "images/result.png", None, None):
+            raise FixtureError("legacy reference was not backfilled in order")
+
+        linked = connection.execute(
+            """SELECT s.project_id, s.is_pinned, r.status, i.local_path, i.mime_type
+               FROM sessions AS s
+               JOIN generation_runs AS r ON r.session_id = s.id
+               JOIN images AS i ON i.generation_run_id = r.id
+               WHERE s.id = 1 AND r.id = 1 AND i.id = 1"""
+        ).fetchone()
+        if linked != (1, 1, "succeeded", "images/result.png", "image/png"):
+            raise FixtureError("linked history changed after schema-v3 migration")
+
+    image_path = workspace / "images" / "result.png"
+    if not image_path.is_file():
+        raise FixtureError("result image file is missing after migration")
+    validate_png(image_path.read_bytes())
+    assert_no_credentials(workspace)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("create", "verify"):
+    for name in ("create", "verify", "verify-v3"):
         command = commands.add_parser(name, help=f"{name} the upgrade fixture")
         command.add_argument("workspace", type=Path)
     return parser
@@ -323,8 +401,10 @@ def main() -> int:
     try:
         if args.command == "create":
             create_fixture(args.workspace)
-        else:
+        elif args.command == "verify":
             verify_fixture(args.workspace)
+        else:
+            verify_migrated_fixture(args.workspace)
     except (FixtureError, OSError, sqlite3.Error) as error:
         print(f"upgrade fixture error: {error}", file=sys.stderr)
         return 1

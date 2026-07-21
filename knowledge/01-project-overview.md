@@ -6,12 +6,12 @@ Image Tools
 
 ## One-Sentence Summary
 
-Windows-first, single-process desktop image creation workbench for OpenAI-compatible image Providers, persistent creative sessions, reference-driven iteration, and local result history.
+Windows-first, single-process desktop image creation workbench for OpenAI Compatible, xAI Imagine, and Gemini Native Image Providers, persistent creative sessions, ordered reference-driven iteration, and local result history.
 
 ## Target Users
 
 - Individual Windows creators who repeatedly generate and refine images.
-- Users of OpenAI-compatible image APIs who need configurable Providers and models.
+- Users of OpenAI-compatible, xAI, or Gemini image APIs who need configurable Providers and models.
 - Users who want a local, restrained desktop workflow instead of a hosted account product.
 
 ## Primary User Goals
@@ -36,7 +36,7 @@ In scope:
 Out of scope:
 
 - Cloud sync, accounts, multi-user access, automatic updates, signing, or system credential storage.
-- A standalone asset library, full image editor, masks, or multi-reference composition.
+- A standalone asset library, full image editor, masks, Google Imagen, or runtime Provider plugins.
 - A browser-first production product or an externally callable local API.
 
 ## Success Criteria
@@ -47,8 +47,9 @@ Out of scope:
 - Stored media is accessible only by database image ID and accepted image signatures.
 - MSI and Portable assets contain only the intended `Image Tools.exe` application executable.
 - Closing installed and Portable builds leaves no Image Tools process and no listener.
-- Existing schema-v2 workspaces remain readable across the v0.2.3 to v0.3.0 transition.
+- Existing v0.3.0 schema-v2 workspaces migrate transactionally to schema v3 while preserving Provider secrets/defaults and history.
+- Rollback to v0.3.0 uses the pre-upgrade schema-v2 backup rather than the migrated workspace.
 
 ## Current Status
 
-RB001-RB014 of the single-process Rust migration are complete. Windows workflow run `29605770705` built the real MSI and single-file Portable assets and passed payload, runtime, shutdown, schema-v2 upgrade, rollback, and artifact gates without publishing a GitHub Release.
+RB001-RB014 of the single-process Rust migration are complete. MP001-MP006 of the v0.4.0 multi-protocol work are implemented; MP007 release integration and final source/Windows gates are in progress.

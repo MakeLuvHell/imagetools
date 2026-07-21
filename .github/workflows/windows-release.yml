@@ -6,11 +6,11 @@ on:
       release_tag:
         description: Release tag to upload Windows x64 assets to
         required: true
-        default: v0.3.0
+        default: v0.4.0
       build_ref:
         description: Git ref to build from
         required: true
-        default: v0.3.0
+        default: v0.4.0
       publish_release:
         description: Publish validated assets to the GitHub Release
         required: true
@@ -101,7 +101,7 @@ jobs:
             throw "Windows single-process verification failed with exit code $LASTEXITCODE."
           }
 
-      - name: Download v0.2.3 upgrade baseline
+      - name: Download v0.3.0 upgrade baseline
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -110,17 +110,17 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           New-Item -ItemType Directory -Path upgrade-assets -Force | Out-Null
-          & gh release download v0.2.3 `
-            --pattern "Image.Tools_0.2.3_x64_zh-CN.msi" `
+          & gh release download v0.3.0 `
+            --pattern "Image-Tools-v0.3.0-Windows-x64.msi" `
             --dir upgrade-assets `
             --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) {
-            throw "Unable to download the published v0.2.3 MSI baseline."
+            throw "Unable to download the published v0.3.0 MSI baseline."
           }
 
           $oldMsiFiles = @(Get-ChildItem -LiteralPath upgrade-assets -File -Filter "*.msi")
           if ($oldMsiFiles.Count -ne 1) {
-            throw "Expected exactly one v0.2.3 MSI; found $($oldMsiFiles.Count)."
+            throw "Expected exactly one v0.3.0 MSI; found $($oldMsiFiles.Count)."
           }
 
       - name: Verify Windows upgrade and rollback
@@ -133,7 +133,7 @@ jobs:
 
           $oldMsiFiles = @(Get-ChildItem -LiteralPath upgrade-assets -File -Filter "*.msi")
           if ($oldMsiFiles.Count -ne 1) {
-            throw "Expected exactly one v0.2.3 MSI; found $($oldMsiFiles.Count)."
+            throw "Expected exactly one v0.3.0 MSI; found $($oldMsiFiles.Count)."
           }
           $oldMsi = $oldMsiFiles[0].FullName
           $newMsi = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi"

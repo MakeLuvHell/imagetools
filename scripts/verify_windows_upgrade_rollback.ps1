@@ -378,8 +378,8 @@ $backendBaseline = @()
 $backendBaselineCaptured = $false
 
 try {
-    $resolvedOldMsi = Resolve-RequiredFile -Path $OldMsi -Description "v0.2.3 MSI"
-    $resolvedNewMsi = Resolve-RequiredFile -Path $NewMsi -Description "v0.3.0 MSI"
+    $resolvedOldMsi = Resolve-RequiredFile -Path $OldMsi -Description "v0.3.0 MSI"
+    $resolvedNewMsi = Resolve-RequiredFile -Path $NewMsi -Description "v0.4.0 MSI"
     if ([System.IO.Path]::GetExtension($resolvedOldMsi) -cne ".msi" -or
         [System.IO.Path]::GetExtension($resolvedNewMsi) -cne ".msi") {
         throw "OldMsi and NewMsi must both have the .msi extension."
@@ -421,66 +421,63 @@ try {
 
     Invoke-FixtureTool -Operation "create" -Workspace $fixtureWorkspace -ScriptPath $fixtureScript
     Copy-Item -LiteralPath $fixtureWorkspace -Destination $upgradeWorkspace -Recurse
+    Copy-Item -LiteralPath $fixtureWorkspace -Destination $rollbackWorkspace -Recurse
     Invoke-FixtureTool -Operation "verify" -Workspace $upgradeWorkspace -ScriptPath $fixtureScript
+    Invoke-FixtureTool -Operation "verify" -Workspace $rollbackWorkspace -ScriptPath $fixtureScript
 
     $installationStarted = $true
-    Invoke-MsiExec -Operation "v0.2.3 silent installation" -Arguments @(
+    Invoke-MsiExec -Operation "v0.3.0 silent installation" -Arguments @(
         "/i", $resolvedOldMsi, "/qn", "/norestart"
     )
-    $oldEntry = Wait-ForInstalledVersion -ExpectedVersion "0.2.3"
-    $oldExecutable = Resolve-InstalledExecutable `
-        -Entry $oldEntry `
-        -ExpectedNames @("Image Tools.exe", "imagetools.exe")
+    $oldEntry = Wait-ForInstalledVersion -ExpectedVersion "0.3.0"
+    $oldExecutable = Resolve-InstalledExecutable -Entry $oldEntry
     Set-LegacyWorkspaceBootstrap -BootstrapPath $legacyBootstrapPath -Workspace $upgradeWorkspace
     Test-AppRuntime `
-        -Label "Image Tools 0.2.3 before upgrade" `
+        -Label "Image Tools 0.3.0 before upgrade" `
         -ExecutablePath $oldExecutable `
         -DataDirectory $upgradeWorkspace `
         -ConfigDirectory (Join-Path $temporaryRoot "old-config-before-upgrade") `
         -BackendBaseline $backendBaseline `
-        -AllowLegacyBackend $true `
+        -AllowLegacyBackend $false `
         -StartedProcesses $startedProcesses
     Invoke-FixtureTool -Operation "verify" -Workspace $upgradeWorkspace -ScriptPath $fixtureScript
 
-    Invoke-MsiExec -Operation "v0.3.0 in-place upgrade" -Arguments @(
+    Invoke-MsiExec -Operation "v0.4.0 in-place upgrade" -Arguments @(
         "/i", $resolvedNewMsi, "/qn", "/norestart"
     )
-    $newEntry = Wait-ForInstalledVersion -ExpectedVersion "0.3.0"
+    $newEntry = Wait-ForInstalledVersion -ExpectedVersion "0.4.0"
     $newExecutable = Resolve-InstalledExecutable -Entry $newEntry
     Test-AppRuntime `
-        -Label "Image Tools 0.3.0 after upgrade" `
+        -Label "Image Tools 0.4.0 after upgrade" `
         -ExecutablePath $newExecutable `
         -DataDirectory $upgradeWorkspace `
         -ConfigDirectory (Join-Path $temporaryRoot "new-config-after-upgrade") `
         -BackendBaseline $backendBaseline `
         -AllowLegacyBackend $false `
         -StartedProcesses $startedProcesses
-    Invoke-FixtureTool -Operation "verify" -Workspace $upgradeWorkspace -ScriptPath $fixtureScript
-    Copy-Item -LiteralPath $upgradeWorkspace -Destination $rollbackWorkspace -Recurse
+    Invoke-FixtureTool -Operation "verify-v3" -Workspace $upgradeWorkspace -ScriptPath $fixtureScript
 
-    Invoke-MsiExec -Operation "v0.3.0 silent uninstallation" -Arguments @(
+    Invoke-MsiExec -Operation "v0.4.0 silent uninstallation" -Arguments @(
         "/x", $resolvedNewMsi, "/qn", "/norestart"
     )
     Wait-ForNoInstallation
-    Invoke-MsiExec -Operation "v0.2.3 rollback installation" -Arguments @(
+    Invoke-MsiExec -Operation "v0.3.0 rollback installation" -Arguments @(
         "/i", $resolvedOldMsi, "/qn", "/norestart"
     )
-    $rollbackEntry = Wait-ForInstalledVersion -ExpectedVersion "0.2.3"
-    $rollbackExecutable = Resolve-InstalledExecutable `
-        -Entry $rollbackEntry `
-        -ExpectedNames @("Image Tools.exe", "imagetools.exe")
+    $rollbackEntry = Wait-ForInstalledVersion -ExpectedVersion "0.3.0"
+    $rollbackExecutable = Resolve-InstalledExecutable -Entry $rollbackEntry
     Set-LegacyWorkspaceBootstrap -BootstrapPath $legacyBootstrapPath -Workspace $rollbackWorkspace
     Test-AppRuntime `
-        -Label "Image Tools 0.2.3 after rollback" `
+        -Label "Image Tools 0.3.0 after rollback with restored backup" `
         -ExecutablePath $rollbackExecutable `
         -DataDirectory $rollbackWorkspace `
         -ConfigDirectory (Join-Path $temporaryRoot "old-config-after-rollback") `
         -BackendBaseline $backendBaseline `
-        -AllowLegacyBackend $true `
+        -AllowLegacyBackend $false `
         -StartedProcesses $startedProcesses
     Invoke-FixtureTool -Operation "verify" -Workspace $rollbackWorkspace -ScriptPath $fixtureScript
 
-    Write-Host "Windows v0.2.3 to v0.3.0 upgrade and rollback verification passed."
+    Write-Host "Windows v0.3.0 to v0.4.0 upgrade and backup-restore rollback verification passed."
 }
 finally {
     try {
@@ -491,12 +488,12 @@ finally {
             Stop-TestBackendProcesses -BaselineProcessIds $backendBaseline
         }
         if ($installationStarted -and $null -ne $resolvedNewMsi) {
-            Invoke-MsiExec -Operation "v0.3.0 cleanup uninstall" -AllowAbsentProduct -Arguments @(
+            Invoke-MsiExec -Operation "v0.4.0 cleanup uninstall" -AllowAbsentProduct -Arguments @(
                 "/x", $resolvedNewMsi, "/qn", "/norestart"
             )
         }
         if ($installationStarted -and $null -ne $resolvedOldMsi) {
-            Invoke-MsiExec -Operation "v0.2.3 cleanup uninstall" -AllowAbsentProduct -Arguments @(
+            Invoke-MsiExec -Operation "v0.3.0 cleanup uninstall" -AllowAbsentProduct -Arguments @(
                 "/x", $resolvedOldMsi, "/qn", "/norestart"
             )
         }

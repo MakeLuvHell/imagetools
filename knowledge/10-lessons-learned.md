@@ -27,6 +27,10 @@
 - When a transient bubble targets content inside a scrolling container, include the container's pending scroll distance in the bubble's final viewport coordinates and settle both motions through the same cleanup path.
 - Tie latest-record following to explicit navigation and submission; backend reconciliation should preserve position instead of producing a second jump.
 - Reload authoritative sessions after a drag mutation fails instead of preserving speculative grouping.
+- Keep Provider protocol explicit and persisted; hostname inference cannot reliably determine authentication, endpoints, capabilities, or response shapes.
+- Prevalidate every staged reference before moving any file so a bad later token cannot partially consume an ordered batch.
+- Preserve the last successful model cache when probe or discovery fails; connectivity and model availability are separate facts.
+- A schema-changing rollback must restore a pre-upgrade workspace backup. Installing an older binary does not downgrade SQLite safely.
 
 ## Mistakes Or Pitfalls
 

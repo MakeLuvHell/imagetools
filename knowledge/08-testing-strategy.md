@@ -19,7 +19,7 @@ Run `node --test tests/*.test.js`. Coverage includes:
 - Collapsed-project parsing/normalization, 6px drag activation, pinned drop payloads, optimistic failure messages, and prompt handoff cleanup.
 - DOM renderers, dialogs, menus, focus restoration, native save, and injected desktop API orchestration.
 - Theme normalization, pre-paint bootstrap, localStorage, the retained Tauri cookie compatibility mirror, native retry, and stale completion ownership.
-- Static HTML/CSS/Tauri/release contracts and v0.3.0 version consistency.
+- Static HTML/CSS/Tauri/release contracts and v0.4.0 version consistency.
 
 ### Rust Backend And Desktop Boundary
 
@@ -32,10 +32,10 @@ mise run desktop-check
 
 Coverage includes:
 
-- Schema v1-to-v2 migration, v2 preservation, newer-schema rejection, rollback, and foreign keys.
+- Schema v1-to-v2 and v2-to-v3 migration, v2 preservation, legacy-reference backfill, newer-schema rejection, rollback, and foreign keys.
 - Workspace bootstrap, pending migration, SQLite backup, relative paths, and startup failures.
-- Provider redaction/key preservation, projects, sessions, runs, recovery, and deletion races.
-- Provider request validation, streaming limits, staged-reference lifecycle, durable file publication, and failure convergence.
+- Provider redaction/key preservation, explicit protocols, model-cache replacement, projects, sessions, runs, recovery, and deletion races.
+- OpenAI/xAI/Gemini request mapping, discovery/probe limits, safe errors, ordered staged-reference lifecycle, durable file publication, and failure convergence.
 - ID-only media routing, path containment, same-handle reading, signatures, MIME, limits, CORS, and `nosniff`.
 - Real mock-runtime IPC dispatch for workbench commands and combined-handler registration.
 - Native theme mapping, directory picking, save-result behavior, and application startup wiring.
@@ -78,10 +78,10 @@ Build on a Windows x64 runner:
 npm run desktop:build:windows
 pwsh -NoProfile -File scripts/package_windows_portable.ps1 `
   -Executable "src-tauri\target\x86_64-pc-windows-msvc\release\Image Tools.exe" `
-  -Output "release-assets\Image-Tools-v0.3.0-Windows-x64-Portable.zip"
+  -Output "release-assets\Image-Tools-v0.4.0-Windows-x64-Portable.zip"
 pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
-  -Msi "release-assets\Image-Tools-v0.3.0-Windows-x64.msi" `
-  -PortableZip "release-assets\Image-Tools-v0.3.0-Windows-x64-Portable.zip"
+  -Msi "release-assets\Image-Tools-v0.4.0-Windows-x64.msi" `
+  -PortableZip "release-assets\Image-Tools-v0.4.0-Windows-x64-Portable.zip"
 ```
 
 The verifier must prove:
@@ -93,7 +93,7 @@ The verifier must prove:
 - Closing the main window terminates the process within the gate timeout.
 - Cleanup does not leave processes, installations, or test data behind.
 
-RB014 also requires a manual or scripted Windows WebView2 smoke test for generation, ID-only result display, native save, all three theme modes, and both target sizes. A copied v0.2.3 schema-v2 workspace must be opened by v0.3.0 and then reopened by v0.2.3 for rollback evidence.
+The v0.4.0 gate also requires a manual or scripted Windows WebView2 smoke test for protocol-aware Provider settings, generation, ordered references, ID-only result display, native save, all three theme modes, and both target sizes. A copied v0.3.0 schema-v2 workspace must migrate under v0.4.0; rollback v0.3.0 must open a restored pre-upgrade backup, never the migrated schema-v3 workspace.
 
 ## Acceptance Boundary
 

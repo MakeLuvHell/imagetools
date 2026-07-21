@@ -13,7 +13,7 @@
 - Tauri 2 and Rust 2021 in the same `Image Tools.exe` process as the WebView host.
 - Tauri IPC commands for settings, storage, Providers, projects, sessions, generation, theme, picking, and saving.
 - `rusqlite` 0.32 with bundled SQLite and backup support.
-- `reqwest` 0.12 with Rustls, JSON, multipart, and streaming for Provider calls.
+- `reqwest` 0.12 with Rustls, JSON, multipart, and streaming for OpenAI Compatible, xAI Imagine, and Gemini Native Image adapters plus model discovery.
 - Tokio for bounded asynchronous file and network work.
 - `cap-std` directory capabilities for persisted media resolution.
 - `tauri-plugin-dialog` for native directory and save-file dialogs.

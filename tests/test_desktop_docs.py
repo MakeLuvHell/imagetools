@@ -38,6 +38,6 @@ def test_release_docs_mention_windows_x64_assets_and_gate():
     assert "Windows x64" in text
     assert "desktop:build:windows" in text
     assert "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi" in text
-    assert "Image-Tools-v0.3.0-Windows-x64.msi" in text
-    assert "Image-Tools-v0.3.0-Windows-x64-Portable.zip" in text
+    assert "Image-Tools-v0.4.0-Windows-x64.msi" in text
+    assert "Image-Tools-v0.4.0-Windows-x64-Portable.zip" in text
     assert "verify_windows_single_process.ps1" in text

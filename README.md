@@ -1,6 +1,6 @@
 # Image Tools
 
-Windows 桌面图片创作工作台，用于通过兼容 OpenAI 图片接口进行文生图、参考图生成、会话化历史管理和本地结果追溯。
+Windows 桌面图片创作工作台，内置 OpenAI Compatible、xAI Imagine 和 Gemini Native Image 协议，用于文生图、多参考图生成、会话化历史管理和本地结果追溯。
 
 ## 当前能力
 
@@ -8,7 +8,8 @@ Windows 桌面图片创作工作台，用于通过兼容 OpenAI 图片接口进�
 - 前端资源随应用打包，通过 Tauri IPC 调用 Rust 后端，不启动本地 Web/API 服务，也不监听 UI 端口。
 - Rust 使用 `rusqlite` 管理本地历史，使用 `reqwest` 调用图片 Provider。
 - Codex Desktop Windows 风格的克制侧栏、无框任务流和底部双层 Composer，支持系统、浅色和深色主题。
-- 多 Provider 配置，以及会话、项目、固定会话、生成轮次、参考图和结果图管理。
+- 多 Provider 配置，可检测联通性、获取可用模型，并按协议约束模型和生成参数。
+- 会话、项目、固定会话、生成轮次、最多三张有序参考图和结果图管理。
 - 图片元数据保存在 SQLite，文件保存在工作区数据目录；设置可安排重启后切换目录。
 - 结果图通过只接受数据库图片 ID 的只读媒体协议展示，并可用系统原生保存对话框导出。
 
@@ -86,11 +87,11 @@ src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/
 GitHub Actions 的 Windows runner 会同时发布：
 
 ```text
-Image-Tools-v0.3.0-Windows-x64.msi
-Image-Tools-v0.3.0-Windows-x64-Portable.zip
+Image-Tools-v0.4.0-Windows-x64.msi
+Image-Tools-v0.4.0-Windows-x64-Portable.zip
 ```
 
-Portable ZIP 中只有 `Image Tools.exe`。工作流会检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭退出和无监听端口，并用公开的 v0.2.3 MSI 验证 schema-v2 工作区升级与回滚。手动运行默认只验证并保留 workflow artifact；只有显式设置 `publish_release=true` 才会公开 Release 资产。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
+Portable ZIP 中只有 `Image Tools.exe`。工作流会检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭退出和无监听端口，并用公开的 v0.3.0 MSI 验证 schema-v2 到 schema-v3 的升级。回滚到 v0.3.0 时必须恢复升级前的 schema-v2 工作区备份，不能直接打开已迁移的 schema-v3 数据库。手动运行默认只验证并保留 workflow artifact；只有显式设置 `publish_release=true` 才会公开 Release 资产。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
 
 ## 运行时数据
 
@@ -122,17 +123,18 @@ Windows 发布门禁必须在 Windows x64 runner 上针对真实 MSI 和 Portabl
 
 ```powershell
 pwsh -NoProfile -File scripts/verify_windows_single_process.ps1 `
-  -Msi release-assets/Image-Tools-v0.3.0-Windows-x64.msi `
-  -PortableZip release-assets/Image-Tools-v0.3.0-Windows-x64-Portable.zip
+  -Msi release-assets/Image-Tools-v0.4.0-Windows-x64.msi `
+  -PortableZip release-assets/Image-Tools-v0.4.0-Windows-x64-Portable.zip
 ```
 
 Linux Chromium 和 WebKitGTK 可验证前端布局、行为与桌面编译，但不能替代 Windows WebView2、安装器和进程生命周期门禁。
 
 ## 图片接口说明
 
-Rust 后端调用兼容 OpenAI 图片接口：
+Provider 必须显式选择协议，不根据名称、模型或域名猜测：
 
-- `/v1/images/generations`
-- `/v1/images/edits`
+- OpenAI Compatible：`/v1/images/generations` 与 `/v1/images/edits`。
+- xAI Imagine：Bearer JSON 请求到 `/v1/images/generations` 或 `/v1/images/edits`，支持最多三张有序参考图。
+- Gemini Native Image：`x-goog-api-key` 请求到 `/v1beta/models/{model}:generateContent`，支持最多三张有序 `inlineData` 参考图，每次返回一张图片。
 
-Base URL 可以包含 `/v1`，客户端会避免拼成重复的 `/v1/v1/...`。完整字段适配见 [`docs/api/gpt-image-api-frontend-adapter.md`](docs/api/gpt-image-api-frontend-adapter.md)。
+设置中的“检测联通性”和“获取可用模型”相互独立；模型发现结果缓存在本地 Provider 记录中，失败不会清除上一次成功缓存。完整 OpenAI 字段适配见 [`docs/api/gpt-image-api-frontend-adapter.md`](docs/api/gpt-image-api-frontend-adapter.md)。

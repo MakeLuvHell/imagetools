@@ -7,14 +7,16 @@
 - Do not expose a local REST or UI listener in development or release runtime.
 - Route frontend operations through `window.ImageToolsDesktopApi` and Tauri commands.
 - Use ID-only, read-only media URLs for persisted images and the native save dialog for downloads.
-- Preserve the schema-v2 workbench layout and existing v0.2.3 data.
+- Transactionally migrate existing v0.3.0 schema-v2 workspaces to schema v3 and require backup restoration for rollback.
 - Keep Provider API keys backend-only; desktop responses return an empty `api_key` plus `api_key_set`.
 - Use the native Windows titlebar and provide `system`, `light`, and `dark` appearance modes.
 - Persist theme primarily under `image-tools-theme` in the bundled app origin's localStorage. The existing Tauri-only host cookie mirror remains a compatibility layer for the non-sensitive enum; neither layer belongs to workspace data.
 - Start on an unpersisted new-task draft; derive the session title from the first valid prompt.
 - Isolate drafts and optimistic runs by session and submission ID.
 - Persist every run created by the Rust backend as succeeded or failed, including unexpected errors after creation.
-- Keep references bounded and one-use; generation accepts either a staged `reference_token` or a persisted `reference_image_id`, never both.
+- Keep references bounded and one-use; generation accepts up to three ordered sources, each containing exactly one staged token or persisted image ID.
+- Persist an explicit Provider protocol: OpenAI Compatible, xAI Imagine, or Gemini Native Image. Never infer it from the hostname.
+- Let Provider settings test connectivity and discover available models independently; preserve the last successful model cache when either operation fails.
 - Open Settings as a centered native modal sized approximately `75vw` by `78vh`, capped at `1040x760`, with internal content scrolling and nested-dialog focus restoration.
 - Clear an accepted Composer prompt immediately while retaining common parameters, place pre-submit validation directly above the Composer, and coordinate the prompt's 250ms optimistic-bubble handoff with following the latest timeline record unless reduced motion is requested.
 - Enter an existing session at its latest generation run. Later backend reconciliation must preserve the current timeline position instead of causing a second follow jump.
@@ -42,7 +44,8 @@
 
 1. Open Provider settings.
 2. Create, edit, delete, or select the default Provider.
-3. Leave API Key empty during edit to preserve the stored secret.
+3. Test connectivity or fetch available models independently when needed.
+4. Leave API Key empty during edit to preserve the stored secret.
 
 ### Organize Sessions
 
@@ -59,7 +62,7 @@
 
 ## Data Requirements
 
-- `workbench.sqlite3` stores Providers, projects, sessions, generation runs, and image metadata.
+- `workbench.sqlite3` schema v3 stores protocol-aware Providers, model caches, projects, sessions, generation runs, ordered references, and image metadata.
 - `images/` stores generated image bytes and `uploads/` stores short-lived staged references.
 - Provider/model and generation parameter snapshots remain historical.
 - `storage-location.json` stays in the fixed app-local configuration directory.
@@ -92,7 +95,7 @@
 
 ## Release Requirements
 
-- Version metadata is `0.3.0` and the immutable release tag is `v0.3.0`.
+- Version metadata is `0.4.0` and the intended immutable release tag is `v0.4.0`.
 - Windows x64 release assets are one MSI and one Portable ZIP.
 - Assets are unsigned and have no automatic update mechanism.
 - The Windows verifier must pass before release; Linux checks cannot substitute for this gate.

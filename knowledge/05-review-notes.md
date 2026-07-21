@@ -114,6 +114,27 @@ Workflow run [`29651658576`](https://github.com/MakeLuvHell/imagetools/actions/r
 - GitHub Release creation and asset publication: skipped.
 - The immutable `v0.3.0` tag still resolves to `cc56df12b2ab85dffcb10a3e4887978bc21ec2b1`.
 
+## v0.4.0 Multi-Protocol Review
+
+### Product And Frontend
+
+- Provider protocol selection is explicit; probe and model discovery are independent actions with inline state.
+- Composer and history preserve up to three ordered references, with protocol-specific limits and no raw image bytes in drafts or generation metadata.
+- OpenAI-only advanced controls are hidden or normalized for xAI and Gemini; Gemini result count remains one and sizing is model-aware.
+
+### Backend, Data, And Security
+
+- Built-in Rust adapters implement OpenAI Compatible, xAI Imagine, and Gemini Native Image inside `Image Tools.exe`; no sidecar, listener, hostname inference, or runtime plugin loading was added.
+- Schema v3 transactionally adds Provider protocol/model cache and ordered run references, backfilling legacy single references at position 0.
+- Discovery and generation responses are bounded. Secrets, raw bodies, base64 reference Data URLs, and local media URLs do not enter errors or history.
+- Rollback to v0.3.0 requires restoring the pre-upgrade schema-v2 backup; the migrated schema-v3 workspace is intentionally rejected by the older app.
+
+### Verification Status
+
+- MP001-MP006 focused Rust, Node, and Playwright checks passed during implementation.
+- Version/documentation and Windows upgrade-gate integration are complete locally.
+- Consolidated source gates and the one final Windows MSI/Portable gate remain pending until MP007 finishes.
+
 ## Latest-Run Follow Review
 
 ### Product And Frontend

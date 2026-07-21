@@ -30,6 +30,8 @@ Workbench commands registered by `generate_workbench_handler!`:
 | `update_provider` | `providerId`, `input` | `ProviderDto` |
 | `delete_provider` | `providerId` | empty |
 | `set_default_provider` | `providerId` | `ProviderDto` |
+| `test_provider_connection` | `input` | `ProviderProbeDto` |
+| `discover_provider_models` | `input` | `ProviderModelDiscoveryDto` |
 | `list_projects` | none | `ProjectDto[]` |
 | `create_project` | `input` | `ProjectDto` |
 | `update_project` | `projectId`, `input` | `ProjectDto` |
@@ -42,6 +44,7 @@ Workbench commands registered by `generate_workbench_handler!`:
 | `set_session_pinned` | `sessionId`, `isPinned` | `SessionDto` |
 | `list_session_runs` | `sessionId` | `GenerationRunDto[]` |
 | `stage_reference_image` | raw body plus headers | `StagedReferenceDto` |
+| `discard_staged_references` | `tokens` | empty |
 | `generate_image` | `input` | `GenerateResultDto` |
 
 Shell commands registered in the same combined handler:
@@ -74,10 +77,10 @@ invoke("stage_reference_image", bytes, {
 ```text
 session_id, provider_id, prompt, model, width, height, ratio, resolution,
 count, quality, output_format, output_compression, background, moderation,
-reference_token, reference_image_id
+references[]
 ```
 
-`reference_token` and `reference_image_id` are mutually exclusive. A persisted image ID is restaged internally; the Provider client never receives a local media URL. The frontend adapter allowlists these fields so raw bytes, base64 data, and arbitrary reference URLs cannot enter generation metadata.
+Each ordered `references[]` item contains exactly one `reference_token` or `reference_image_id`; duplicate tokens and IDs are rejected. The compatibility fields `reference_token` and `reference_image_id` still deserialize as one reference for older callers. A persisted image ID is restaged internally; Provider adapters never receive a local media URL. The frontend adapter allowlists metadata fields so raw bytes, base64 data, Data URLs, and arbitrary reference URLs cannot enter generation history.
 
 ## Error Contract
 
@@ -110,4 +113,4 @@ Successful responses use byte-derived `image/png`, `image/jpeg`, or `image/webp`
 
 ## Provider Network Boundary
 
-Rust `reqwest` calls only the configured OpenAI-compatible Provider generation/edit endpoints. One Provider JSON response is limited to 192 MiB and each decoded or downloaded result is limited to 64 MiB. Result type and extension derive from the PNG/JPEG/WebP signature rather than response headers or URL suffixes.
+Rust `reqwest` calls only the endpoints defined by the Provider's explicit protocol. OpenAI Compatible uses Images generation/edit, xAI Imagine uses Bearer-authenticated JSON generation/edit, and Gemini Native Image uses `x-goog-api-key` with `generateContent`. Discovery responses are limited to 2 MiB, 256 model IDs, and 200 characters per ID. Generation responses are limited to 192 MiB and each decoded or downloaded result is limited to 64 MiB. Result type and extension derive from the PNG/JPEG/WebP signature rather than response headers or URL suffixes. Adapter errors expose stable safe codes and never include secrets, raw response bodies, or reference Data URLs.

@@ -49,7 +49,7 @@ def test_windows_release_workflow_is_manual_and_tag_driven():
     assert "workflow_dispatch:" in workflow
     assert "release_tag:" in workflow
     assert "build_ref:" in workflow
-    assert workflow.count("default: v0.3.0") == 2
+    assert workflow.count("default: v0.4.0") == 2
     assert "ref: ${{ inputs.build_ref }}" in workflow
 
 
@@ -115,13 +115,13 @@ def test_windows_release_workflow_runs_upgrade_and_rollback_before_artifact_uplo
     workflow = windows_release_workflow()
 
     assert "GH_TOKEN: ${{ github.token }}" in workflow
-    assert "gh release download v0.2.3" in workflow
-    assert "Image.Tools_0.2.3_x64_zh-CN.msi" in workflow
+    assert "gh release download v0.3.0" in workflow
+    assert "Image-Tools-v0.3.0-Windows-x64.msi" in workflow
     assert "$oldMsiFiles.Count -ne 1" in workflow
     assert "scripts/verify_windows_upgrade_rollback.ps1" in workflow
     assert "-OldMsi $oldMsi" in workflow
     assert "-NewMsi $newMsi" in workflow
-    assert workflow.index("gh release download v0.2.3") < workflow.index(
+    assert workflow.index("gh release download v0.3.0") < workflow.index(
         "scripts/verify_windows_upgrade_rollback.ps1"
     )
     assert workflow.index("scripts/verify_windows_upgrade_rollback.ps1") < workflow.index(
@@ -203,7 +203,7 @@ def test_upgrade_fixture_is_schema_v2_linked_and_secret_free():
     script = upgrade_fixture_script()
 
     assert "argparse" in script
-    assert 'for name in ("create", "verify")' in script
+    assert 'for name in ("create", "verify", "verify-v3")' in script
     assert "commands.add_parser(name" in script
     assert "PRAGMA foreign_keys = ON" in script
     assert "schema_migrations" in script
@@ -215,6 +215,10 @@ def test_upgrade_fixture_is_schema_v2_linked_and_secret_free():
     assert "PNG_SIGNATURE" in script
     assert '"redacted"' in script
     assert "SENSITIVE_PATTERNS" in script
+    assert '"verify-v3"' in script
+    assert "generation_run_references" in script
+    assert "provider_models" in script
+    assert "openai_compatible" in script
 
 
 def test_upgrade_rollback_verifier_is_isolated_versioned_and_self_cleaning():
@@ -229,15 +233,20 @@ def test_upgrade_rollback_verifier_is_isolated_versioned_and_self_cleaning():
     assert "InstallLocation" in script
     assert "DisplayIcon" in script
     assert "DisplayVersion" in script
-    assert '"0.2.3"' in script
     assert '"0.3.0"' in script
-    assert '"imagetools.exe"' in script
+    assert '"0.4.0"' in script
     assert "IMAGE_TOOLS_DATA_DIR" in script
     assert "IMAGE_TOOLS_CONFIG_DIR" in script
     assert "prepare_windows_upgrade_fixture.py" in script
     assert '"create"' in script
     assert '"verify"' in script
+    assert '"verify-v3"' in script
     assert "Copy-Item" in script
+    assert script.index(
+        "Copy-Item -LiteralPath $fixtureWorkspace -Destination $rollbackWorkspace -Recurse"
+    ) < script.index(
+        'Invoke-MsiExec -Operation "v0.4.0 in-place upgrade"'
+    )
     assert "MainWindowHandle" in script
     assert "CloseMainWindow" in script
     assert "TimeoutSeconds 10" in script
@@ -274,7 +283,7 @@ def test_release_docs_include_windows_workflow_command():
 
     assert "Windows x64" in docs
     assert "windows-release.yml" in docs
-    assert "gh workflow run windows-release.yml -f release_tag=v0.3.0 -f build_ref=v0.3.0" in docs
+    assert "gh workflow run windows-release.yml -f release_tag=v0.4.0 -f build_ref=v0.4.0" in docs
 
 
 def test_readme_mentions_windows_release_assets_are_built_by_github_actions():
@@ -297,10 +306,10 @@ def test_user_svg_is_the_source_for_committed_tauri_icons():
         assert Path("src-tauri/icons", icon).is_file()
 
 
-def test_release_versions_are_consistently_0_3_0():
+def test_release_versions_are_consistently_0_4_0():
     package = json.loads(Path("package.json").read_text())
     cargo = tomllib.loads(Path("src-tauri/Cargo.toml").read_text())
 
-    assert package["version"] == "0.3.0"
-    assert tauri_config()["version"] == "0.3.0"
-    assert cargo["package"]["version"] == "0.3.0"
+    assert package["version"] == "0.4.0"
+    assert tauri_config()["version"] == "0.4.0"
+    assert cargo["package"]["version"] == "0.4.0"

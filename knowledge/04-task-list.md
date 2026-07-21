@@ -44,6 +44,13 @@
 | UI020 | Release | Preserve knowledge and run centralized gates | Final source and Windows evidence | UI019 | Done |
 | UI021 | Timeline | Follow the latest run on session entry and prompt handoff; remove the duplicate continuation action | Coordinated 250ms scroll/handoff with focused regression coverage | UI020 | Done |
 | UI022 | Release | Verify latest-run interaction changes on Windows | MSI/Portable lifecycle, upgrade, rollback, and artifact evidence | UI021 | Done |
+| MP001 | Data | Add schema-v3 protocol and adapter foundation | Explicit protocols, capabilities, model/reference tables, OpenAI parity | UI022 | Done |
+| MP002 | Provider | Add connectivity and model discovery | Bounded probes, model listing, and persistent cache | MP001 | Done |
+| MP003 | Settings | Add protocol-aware Provider controls | Protocol, model, probe/discovery, and capability UI | MP002 | Done |
+| MP004 | References | Add ordered multi-reference generation | Up to three ordered sources with durable history snapshots | MP003 | Done |
+| MP005 | Provider | Add xAI Imagine adapter | JSON generation/edit requests and safe result/error normalization | MP004 | Done |
+| MP006 | Provider | Add Gemini Native Image adapter | generateContent mapping, sizing, inline images, and safety parsing | MP004 | Done |
+| MP007 | Release | Integrate and verify v0.4.0 | Version/docs, schema-v3 upgrade, backup rollback, source and Windows gates | MP001-MP006 | In progress |
 
 ## Recommended Order
 
@@ -64,6 +71,7 @@
 15. UI016-UI018 deliver the responsive Settings and Composer interaction contracts.
 16. UI019-UI020 refresh deterministic baselines, preserve decisions, and run the consolidated gates once.
 17. UI021-UI022 keep explicit session entry and prompt submission aligned to the latest run, simplify result actions, and preserve Windows release evidence.
+18. MP001-MP006 add explicit multi-protocol generation and ordered references; MP007 performs the one consolidated source gate and final Windows gate.
 
 ## Single-Process Rust Migration
 

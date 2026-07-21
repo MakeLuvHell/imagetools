@@ -37,7 +37,7 @@ The single user-selectable local root for durable Provider, session, generation,
 _Avoid_: Output folder, per-category storage root
 
 **参考图**:
-An image used as input for image editing or continued generation. It can come from upload or from a previous generated result.
+An ordered image input used for image editing or continued generation. A generation can use up to three, depending on the selected Provider protocol; each can come from upload or from a previous generated result.
 _Avoid_: Generated result unless it is actively selected as input
 
 **Codex Windows 视觉基准**:
