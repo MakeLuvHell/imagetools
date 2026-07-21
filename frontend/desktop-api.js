@@ -106,6 +106,8 @@
       updateProvider: (providerId, input) => call("update_provider", { providerId, input }),
       deleteProvider: (providerId) => call("delete_provider", { providerId }),
       setDefaultProvider: (providerId) => call("set_default_provider", { providerId }),
+      testProviderConnection: (input) => call("test_provider_connection", { input }),
+      discoverProviderModels: (input) => call("discover_provider_models", { input }),
       listProjects: () => call("list_projects"),
       createProject: (input) => call("create_project", { input }),
       updateProject: (projectId, input) => call("update_project", { projectId, input }),

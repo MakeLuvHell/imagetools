@@ -62,7 +62,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP002: Provider Connectivity And Model Discovery Backend
 
-**Status:** In progress
+**Status:** Done
 
 **Blocked by:** MP001
 
@@ -97,7 +97,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP003: Provider Settings UI And Capability-Driven Composer
 
-**Status:** Pending
+**Status:** In progress
 
 **Blocked by:** MP002
 

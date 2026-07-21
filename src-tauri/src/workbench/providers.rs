@@ -5,8 +5,14 @@ use serde_json::Value;
 use crate::workbench::{
     database::providers::{ProviderRecord, ProviderRepository},
     error::CommandError,
-    models::{ProviderDto, ProviderInput, SettingsDto, SettingsInput},
+    generation::adapters::normalized::ProviderProtocol,
+    models::{
+        utc_now, ProviderConnectionResult, ProviderDto, ProviderInput,
+        ProviderModelDiscoveryResult, ProviderProbeInput, SettingsDto, SettingsInput,
+    },
 };
+
+mod discovery;
 
 const DEFAULT_MODEL: &str = "gpt-image-2";
 const CHSHAPI_BASE_URL: &str = "https://img-api.chshapi.org/v1";
@@ -57,6 +63,8 @@ impl ProviderService {
                 &clean.base_url,
                 &clean.api_key,
                 &clean.default_model,
+                &clean.available_models,
+                clean.models_refreshed_at.as_deref(),
                 clean.is_default,
             )
             .map(public_provider)
@@ -81,6 +89,8 @@ impl ProviderService {
                 &clean.base_url,
                 &clean.api_key,
                 &clean.default_model,
+                &clean.available_models,
+                clean.models_refreshed_at.as_deref(),
                 clean.is_default,
             )
             .map(public_provider)
@@ -105,9 +115,69 @@ impl ProviderService {
                 &provider.base_url,
                 &provider.api_key,
                 &provider.default_model,
+                &provider.available_models,
+                provider.models_refreshed_at.as_deref(),
                 true,
             )
             .map(public_provider)
+    }
+
+    pub async fn test_connection(
+        &self,
+        input: ProviderProbeInput,
+    ) -> Result<ProviderConnectionResult, CommandError> {
+        let (protocol, base_url, api_key) = self.clean_probe(input)?;
+        let started = std::time::Instant::now();
+        discovery::fetch_models(protocol, &base_url, &api_key).await?;
+        Ok(ProviderConnectionResult {
+            ok: true,
+            elapsed_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+            checked_at: utc_now(),
+            message: "连接成功。".into(),
+        })
+    }
+
+    pub async fn discover_models(
+        &self,
+        input: ProviderProbeInput,
+    ) -> Result<ProviderModelDiscoveryResult, CommandError> {
+        let (protocol, base_url, api_key) = self.clean_probe(input)?;
+        let models = discovery::fetch_models(protocol, &base_url, &api_key).await?;
+        Ok(ProviderModelDiscoveryResult {
+            models,
+            models_refreshed_at: utc_now(),
+        })
+    }
+
+    fn clean_probe(
+        &self,
+        input: ProviderProbeInput,
+    ) -> Result<(ProviderProtocol, String, String), CommandError> {
+        let protocol = ProviderProtocol::parse(input.protocol.trim())?;
+        let base_url = normalize_base_url(&input.base_url);
+        if base_url.is_empty() {
+            return Err(CommandError::new(
+                "provider.base_url_required",
+                "请填写 API 地址。",
+            ));
+        }
+        let mut api_key = input.api_key.trim().to_string();
+        if api_key.is_empty() {
+            if let Some(provider_id) = input.provider_id {
+                api_key = self
+                    .repository
+                    .get(provider_id)?
+                    .ok_or_else(provider_not_found)?
+                    .api_key;
+            }
+        }
+        if api_key.is_empty() {
+            return Err(CommandError::new(
+                "provider.api_key_required",
+                "请填写 API Key。",
+            ));
+        }
+        Ok((protocol, base_url, api_key))
     }
 
     pub fn settings(&self) -> Result<SettingsDto, CommandError> {
@@ -148,6 +218,8 @@ impl ProviderService {
                 &base_url,
                 &effective_key,
                 &model,
+                &provider.available_models,
+                provider.models_refreshed_at.as_deref(),
                 true,
             )?
         } else {
@@ -157,6 +229,8 @@ impl ProviderService {
                 &base_url,
                 &effective_key,
                 &model,
+                &[],
+                None,
                 true,
             )?
         };
@@ -308,6 +382,8 @@ fn clean_provider(
         api_key,
         default_model: defaulted_model(&input.default_model),
         is_default: input.is_default,
+        available_models: input.available_models,
+        models_refreshed_at: input.models_refreshed_at,
     })
 }
 
@@ -387,12 +463,16 @@ impl NonEmptyFallback for String {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        sync::{Arc, Mutex},
+    };
 
     use super::{normalize_base_url, ProviderService};
     use crate::workbench::{
         database::{providers::ProviderRepository, Database},
-        models::{ProviderInput, SettingsInput},
+        models::{ProviderInput, ProviderProbeInput, SettingsInput},
     };
 
     struct ProviderFixture {
@@ -425,6 +505,8 @@ mod tests {
             api_key: api_key.into(),
             default_model: "gpt-image-2".into(),
             is_default,
+            available_models: Vec::new(),
+            models_refreshed_at: None,
         }
     }
 
@@ -435,6 +517,37 @@ mod tests {
                 .join(name),
         )
         .unwrap()
+    }
+
+    fn spawn_model_server(
+        body: &'static str,
+    ) -> (String, Arc<Mutex<String>>, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let request_text = Arc::new(Mutex::new(String::new()));
+        let captured = request_text.clone();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                if bytes.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            *captured.lock().unwrap() = String::from_utf8_lossy(&bytes).into_owned();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(), body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+        (base_url, request_text, server)
     }
 
     #[test]
@@ -461,10 +574,38 @@ mod tests {
                 api_key: "xai-secret".into(),
                 default_model: "grok-imagine-image".into(),
                 is_default: true,
+                available_models: vec!["grok-imagine-image".into()],
+                models_refreshed_at: Some("2026-07-20T00:00:00.000000+00:00".into()),
             })
             .unwrap();
 
         assert_eq!(created.protocol, "xai_images");
+        assert_eq!(created.available_models, vec!["grok-imagine-image"]);
+        assert_eq!(
+            created.models_refreshed_at.as_deref(),
+            Some("2026-07-20T00:00:00.000000+00:00")
+        );
+        let refreshed = fixture
+            .service
+            .update(
+                created.id,
+                ProviderInput {
+                    protocol: "xai_images".into(),
+                    name: "xAI".into(),
+                    base_url: "https://api.x.ai/v1".into(),
+                    api_key: String::new(),
+                    default_model: "grok-imagine-image-pro".into(),
+                    is_default: true,
+                    available_models: vec!["grok-imagine-image-pro".into()],
+                    models_refreshed_at: Some("2026-07-21T00:00:00.000000+00:00".into()),
+                },
+            )
+            .unwrap();
+        assert_eq!(refreshed.available_models, vec!["grok-imagine-image-pro"]);
+        assert_eq!(
+            refreshed.models_refreshed_at.as_deref(),
+            Some("2026-07-21T00:00:00.000000+00:00")
+        );
         assert_eq!(
             fixture.service.get(created.id).unwrap().protocol,
             "xai_images"
@@ -479,9 +620,52 @@ mod tests {
                 api_key: "secret".into(),
                 default_model: "model".into(),
                 is_default: false,
+                available_models: Vec::new(),
+                models_refreshed_at: None,
             })
             .unwrap_err();
         assert_eq!(error.code, "provider.unsupported_protocol");
+    }
+
+    #[tokio::test]
+    async fn probes_and_discovers_with_a_stored_secret_without_exposing_it() {
+        let fixture = ProviderFixture::new();
+        let (base_url, request, server) =
+            spawn_model_server(r#"{"data":[{"id":"gpt-image-2"},{"id":"custom"}]}"#);
+        let provider = fixture
+            .service
+            .create(ProviderInput {
+                protocol: "openai_compatible".into(),
+                name: "Probe".into(),
+                base_url: base_url.clone(),
+                api_key: "stored-secret".into(),
+                default_model: "gpt-image-2".into(),
+                is_default: true,
+                available_models: Vec::new(),
+                models_refreshed_at: None,
+            })
+            .unwrap();
+
+        let result = fixture
+            .service
+            .discover_models(ProviderProbeInput {
+                provider_id: Some(provider.id),
+                protocol: "openai_compatible".into(),
+                base_url,
+                api_key: String::new(),
+            })
+            .await
+            .unwrap();
+        server.join().unwrap();
+
+        assert_eq!(result.models, vec!["gpt-image-2", "custom"]);
+        assert!(result.models_refreshed_at.ends_with("+00:00"));
+        let request = request.lock().unwrap();
+        assert!(request.starts_with("GET /v1/models HTTP/1.1"));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer stored-secret"));
+        assert!(!format!("{result:?}").contains("stored-secret"));
     }
 
     #[test]
@@ -503,6 +687,8 @@ mod tests {
                     api_key: String::new(),
                     default_model: "gpt-image-2-preview".into(),
                     is_default: true,
+                    available_models: Vec::new(),
+                    models_refreshed_at: None,
                 },
             )
             .unwrap();

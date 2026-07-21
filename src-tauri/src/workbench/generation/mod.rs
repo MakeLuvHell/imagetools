@@ -860,6 +860,8 @@ mod tests {
                     api_key: "sk-private".into(),
                     default_model: "gpt-image-2".into(),
                     is_default: true,
+                    available_models: Vec::new(),
+                    models_refreshed_at: None,
                 })
                 .unwrap()
                 .id;

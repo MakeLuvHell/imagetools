@@ -13,6 +13,10 @@ pub struct ProviderInput {
     pub default_model: String,
     #[serde(default)]
     pub is_default: bool,
+    #[serde(default)]
+    pub available_models: Vec<String>,
+    #[serde(default)]
+    pub models_refreshed_at: Option<String>,
 }
 
 fn default_model() -> String {
@@ -37,6 +41,29 @@ pub struct ProviderDto {
     pub is_default: bool,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderProbeInput {
+    pub provider_id: Option<i64>,
+    pub protocol: String,
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProviderConnectionResult {
+    pub ok: bool,
+    pub elapsed_ms: u64,
+    pub checked_at: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ProviderModelDiscoveryResult {
+    pub models: Vec<String>,
+    pub models_refreshed_at: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -238,6 +265,8 @@ mod tests {
         assert_eq!(input.api_key, "");
         assert_eq!(input.default_model, "gpt-image-2");
         assert!(!input.is_default);
+        assert!(input.available_models.is_empty());
+        assert_eq!(input.models_refreshed_at, None);
     }
 
     #[test]

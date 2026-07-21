@@ -40,6 +40,8 @@ impl ProviderRepository {
         base_url: &str,
         api_key: &str,
         default_model: &str,
+        available_models: &[String],
+        models_refreshed_at: Option<&str>,
         is_default: bool,
     ) -> Result<ProviderRecord, CommandError> {
         self.database.with_connection(|connection| {
@@ -56,12 +58,28 @@ impl ProviderRepository {
             transaction
                 .execute(
                     "INSERT INTO providers (
-                        protocol, name, base_url, api_key, default_model, is_default, created_at, updated_at
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-                    params![protocol, name, base_url, api_key, default_model, is_default, now],
+                        protocol, name, base_url, api_key, default_model, models_refreshed_at,
+                        is_default, created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                    params![
+                        protocol,
+                        name,
+                        base_url,
+                        api_key,
+                        default_model,
+                        models_refreshed_at,
+                        is_default,
+                        now
+                    ],
                 )
                 .map_err(database_error)?;
             let provider_id = transaction.last_insert_rowid();
+            replace_models(
+                &transaction,
+                provider_id,
+                available_models,
+                models_refreshed_at,
+            )?;
             let provider = query_provider(&transaction, provider_id)?
                 .ok_or_else(|| CommandError::new("provider.not_found", "Provider 不存在。"))?;
             transaction.commit().map_err(database_error)?;
@@ -123,7 +141,14 @@ impl ProviderRepository {
             let rows = statement
                 .query_map([], provider_from_row)
                 .map_err(database_error)?;
-            rows.collect::<Result<Vec<_>, _>>().map_err(database_error)
+            let mut providers = rows
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(database_error)?;
+            drop(statement);
+            for provider in &mut providers {
+                provider.available_models = query_models(connection, provider.id)?;
+            }
+            Ok(providers)
         })
     }
 
@@ -135,6 +160,8 @@ impl ProviderRepository {
         base_url: &str,
         api_key: &str,
         default_model: &str,
+        available_models: &[String],
+        models_refreshed_at: Option<&str>,
         is_default: bool,
     ) -> Result<ProviderRecord, CommandError> {
         self.database.with_connection(|connection| {
@@ -157,8 +184,12 @@ impl ProviderRepository {
                          default_model = ?4,
                          is_default = ?5,
                          protocol = ?6,
-                         updated_at = ?7
-                     WHERE id = ?8",
+                         models_refreshed_at = CASE
+                             WHEN ?7 IS NULL THEN models_refreshed_at
+                             ELSE ?7
+                         END,
+                         updated_at = ?8
+                     WHERE id = ?9",
                     params![
                         name,
                         base_url,
@@ -166,6 +197,7 @@ impl ProviderRepository {
                         default_model,
                         is_default,
                         protocol,
+                        models_refreshed_at,
                         now,
                         provider_id
                     ],
@@ -173,6 +205,14 @@ impl ProviderRepository {
                 .map_err(database_error)?;
             if changed == 0 {
                 return Err(CommandError::new("provider.not_found", "Provider 不存在。"));
+            }
+            if models_refreshed_at.is_some() {
+                replace_models(
+                    &transaction,
+                    provider_id,
+                    available_models,
+                    models_refreshed_at,
+                )?;
             }
             let provider = query_provider(&transaction, provider_id)?
                 .ok_or_else(|| CommandError::new("provider.not_found", "Provider 不存在。"))?;
@@ -205,7 +245,7 @@ fn query_provider(
     connection: &rusqlite::Connection,
     provider_id: i64,
 ) -> Result<Option<ProviderRecord>, CommandError> {
-    connection
+    let mut provider = connection
         .query_row(
             "SELECT id, protocol, name, base_url, api_key, default_model, models_refreshed_at, is_default, created_at, updated_at
              FROM providers WHERE id = ?1",
@@ -213,7 +253,52 @@ fn query_provider(
             provider_from_row,
         )
         .optional()
-        .map_err(database_error)
+        .map_err(database_error)?;
+    if let Some(provider) = &mut provider {
+        provider.available_models = query_models(connection, provider.id)?;
+    }
+    Ok(provider)
+}
+
+fn query_models(
+    connection: &rusqlite::Connection,
+    provider_id: i64,
+) -> Result<Vec<String>, CommandError> {
+    let mut statement = connection
+        .prepare("SELECT model_id FROM provider_models WHERE provider_id = ?1 ORDER BY rowid ASC")
+        .map_err(database_error)?;
+    let models = statement
+        .query_map([provider_id], |row| row.get(0))
+        .map_err(database_error)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(database_error)?;
+    Ok(models)
+}
+
+fn replace_models(
+    transaction: &rusqlite::Transaction<'_>,
+    provider_id: i64,
+    models: &[String],
+    refreshed_at: Option<&str>,
+) -> Result<(), CommandError> {
+    transaction
+        .execute(
+            "DELETE FROM provider_models WHERE provider_id = ?1",
+            [provider_id],
+        )
+        .map_err(database_error)?;
+    let Some(discovered_at) = refreshed_at else {
+        return Ok(());
+    };
+    for model in models {
+        transaction
+            .execute(
+                "INSERT INTO provider_models (provider_id, model_id, discovered_at) VALUES (?1, ?2, ?3)",
+                params![provider_id, model, discovered_at],
+            )
+            .map_err(database_error)?;
+    }
+    Ok(())
 }
 
 fn provider_from_row(row: &Row<'_>) -> rusqlite::Result<ProviderRecord> {

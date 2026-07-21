@@ -31,6 +31,8 @@ test("maps every current UI operation to its stable Tauri command and arguments"
   await api.updateProvider(7, provider);
   await api.deleteProvider(7);
   await api.setDefaultProvider(7);
+  await api.testProviderConnection(provider);
+  await api.discoverProviderModels(provider);
   await api.listProjects();
   await api.createProject(project);
   await api.updateProject(9, project);
@@ -55,6 +57,8 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     ["update_provider", { providerId: 7, input: provider }],
     ["delete_provider", { providerId: 7 }],
     ["set_default_provider", { providerId: 7 }],
+    ["test_provider_connection", { input: provider }],
+    ["discover_provider_models", { input: provider }],
     ["list_projects"],
     ["create_project", { input: project }],
     ["update_project", { projectId: 9, input: project }],
@@ -75,6 +79,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     "deleteProject",
     "deleteProvider",
     "deleteSession",
+    "discoverProviderModels",
     "generate",
     "getProvider",
     "getSession",
@@ -88,6 +93,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     "setDefaultProvider",
     "setSessionPinned",
     "stageReference",
+    "testProviderConnection",
     "updateProject",
     "updateProvider",
     "updateSession",

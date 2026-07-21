@@ -12,8 +12,9 @@ use crate::workbench::{
     },
     media::MediaResolver,
     models::{
-        GenerateInput, GenerateResultDto, GenerationRunDto, ProjectDto, ProjectInput, ProviderDto,
-        ProviderInput, SessionCreateInput, SessionDto, SessionUpdateInput, SettingsDto,
+        GenerateInput, GenerateResultDto, GenerationRunDto, ProjectDto, ProjectInput,
+        ProviderConnectionResult, ProviderDto, ProviderInput, ProviderModelDiscoveryResult,
+        ProviderProbeInput, SessionCreateInput, SessionDto, SessionUpdateInput, SettingsDto,
         SettingsInput, StagedReferenceDto, StorageLocationDto, StorageLocationInput,
     },
     providers::ProviderService,
@@ -167,6 +168,22 @@ pub fn set_default_provider(
     state: tauri::State<'_, WorkbenchState>,
 ) -> Result<ProviderDto, CommandError> {
     state.providers.set_default(provider_id)
+}
+
+#[tauri::command]
+pub async fn test_provider_connection(
+    input: ProviderProbeInput,
+    state: tauri::State<'_, WorkbenchState>,
+) -> Result<ProviderConnectionResult, CommandError> {
+    state.providers.test_connection(input).await
+}
+
+#[tauri::command]
+pub async fn discover_provider_models(
+    input: ProviderProbeInput,
+    state: tauri::State<'_, WorkbenchState>,
+) -> Result<ProviderModelDiscoveryResult, CommandError> {
+    state.providers.discover_models(input).await
 }
 
 #[tauri::command]
@@ -365,6 +382,8 @@ macro_rules! generate_workbench_handler {
             $crate::workbench::commands::update_provider,
             $crate::workbench::commands::delete_provider,
             $crate::workbench::commands::set_default_provider,
+            $crate::workbench::commands::test_provider_connection,
+            $crate::workbench::commands::discover_provider_models,
             $crate::workbench::commands::list_projects,
             $crate::workbench::commands::create_project,
             $crate::workbench::commands::update_project,
