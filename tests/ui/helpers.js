@@ -27,6 +27,7 @@ async function installApiMocks(page, overrides = {}) {
     generateBodies: [],
     generationStarted: 0,
     stagedReferences: [],
+    discardedReferenceTokens: [],
     nextRunId: 20,
     sessions: overrides.sessions || [{
       id: 1,
@@ -250,6 +251,10 @@ async function installApiMocks(page, overrides = {}) {
       state.stagedReferences.push(reference);
       return { token: `reference-token-${state.stagedReferences.length}` };
     }
+    if (method === "discardStagedReferences") {
+      state.discardedReferenceTokens.push(...args[0]);
+      return null;
+    }
     if (method === "generate") {
       const [body] = args;
       state.generationStarted += 1;
@@ -278,7 +283,7 @@ async function installApiMocks(page, overrides = {}) {
         },
       ];
       return {
-        kind: body.reference_token ? "image_edit" : "text_to_image",
+        kind: body.references?.length ? "image_to_image" : "text_to_image",
         model: body.model,
         size: `${body.width}x${body.height}`,
         images: ["/assets/app-icon.png"],
@@ -295,7 +300,8 @@ async function installApiMocks(page, overrides = {}) {
       "setDefaultProvider", "listProjects", "createProject", "updateProject", "deleteProject",
       "testProviderConnection", "discoverProviderModels",
       "listSessions", "createSession", "getSession", "updateSession", "deleteSession",
-      "setSessionPinned", "listSessionRuns", "saveImage", "stageReference", "generate",
+      "setSessionPinned", "listSessionRuns", "saveImage", "stageReference",
+      "discardStagedReferences", "generate",
     ];
     window.__IMAGE_TOOLS_DESKTOP_API_MOCK__ = Object.fromEntries(
       methods.map((method) => [method, (...args) => window.__imageToolsDesktopApiCall(method, args)]),

@@ -24,6 +24,7 @@
     "output_compression",
     "background",
     "moderation",
+    "references",
     "reference_token",
     "reference_image_id",
   ];
@@ -128,6 +129,7 @@
             "content-type": type,
           },
         }),
+      discardStagedReferences: (tokens) => call("discard_staged_references", { tokens }),
       generate: (metadata) => {
         const input = {};
         for (const field of GENERATE_FIELDS) {

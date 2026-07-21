@@ -274,8 +274,8 @@ test("reference staging failure preserves the selected Composer reference", asyn
   await prompt.press("Enter");
 
   await expect(prompt).toHaveValue("");
-  await expect(page.locator("#referencePreview")).toBeVisible();
-  await expect(page.locator("#referenceName")).toHaveText("reference.png");
+  await expect(page.locator("#referenceStrip")).toBeVisible();
+  await expect(page.locator(".reference-item")).toContainText("reference.png");
   await expect(page.locator(".run-error")).toContainText("参考图暂存失败。");
 });
 
@@ -294,7 +294,7 @@ test("accepted reference handoff clears Composer before generation completes", a
 
   await expect.poll(() => requests.generationStarted).toBe(1);
   expect(requests.generateBodies).toHaveLength(0);
-  await expect(page.locator("#referencePreview")).toBeHidden();
+  await expect(page.locator("#referenceStrip")).toBeHidden();
   await expect(page.locator("#referenceInput")).toHaveValue("");
 });
 
@@ -526,8 +526,7 @@ test("historical result references submit an image id without refetching bytes",
   await prompt.press("Enter");
 
   await expect.poll(() => requests.generateBodies.length).toBe(1);
-  expect(requests.generateBodies[0].reference_image_id).toBe(42);
-  expect(requests.generateBodies[0].reference_token).toBeNull();
+  expect(requests.generateBodies[0].references).toEqual([{ reference_image_id: 42 }]);
   expect(requests.stagedReferences).toEqual([]);
 });
 
@@ -548,8 +547,49 @@ test("uploaded references stage raw bytes before generation", async ({ page }) =
   await expect.poll(() => requests.generateBodies.length).toBe(1);
   expect(requests.stagedReferences).toHaveLength(1);
   expect(requests.stagedReferences[0].name).toBe("reference.png");
-  expect(requests.generateBodies[0].reference_token).toBe("reference-token-1");
-  expect(requests.generateBodies[0].reference_image_id).toBeNull();
+  expect(requests.generateBodies[0].references).toEqual([
+    { reference_token: "reference-token-1" },
+  ]);
+});
+
+test("xAI Composer preserves reordered multi-reference submission order", async ({ page }) => {
+  const requests = await installApiMocks(page, {
+    providers: [{
+      id: 1,
+      protocol: "xai_images",
+      name: "xAI",
+      base_url: "https://api.x.ai/v1",
+      default_model: "grok-imagine-image",
+      is_default: true,
+      api_key_set: true,
+    }],
+  });
+  await page.goto("/");
+  await page.locator("#referenceInput").setInputFiles([
+    { name: "first.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") },
+    { name: "second.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") },
+    { name: "third.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") },
+  ]);
+  await page.getByRole("button", { name: "右移参考图 first.png" }).click();
+  await expect(page.locator(".reference-item > span")).toHaveText([
+    "second.png",
+    "first.png",
+    "third.png",
+  ]);
+  await page.getByPlaceholder("描述你想创作的图片").fill("融合三个构图");
+  await page.getByPlaceholder("描述你想创作的图片").press("Enter");
+
+  await expect.poll(() => requests.generateBodies.length).toBe(1);
+  expect(requests.stagedReferences.map((reference) => reference.name)).toEqual([
+    "second.png",
+    "first.png",
+    "third.png",
+  ]);
+  expect(requests.generateBodies[0].references).toEqual([
+    { reference_token: "reference-token-1" },
+    { reference_token: "reference-token-2" },
+    { reference_token: "reference-token-3" },
+  ]);
 });
 
 test("legacy URL-only drafts restore without a reference constraint", async ({ page }) => {
@@ -564,7 +604,7 @@ test("legacy URL-only drafts restore without a reference constraint", async ({ p
   await page.goto("/");
 
   await expect(page.getByPlaceholder("描述你想创作的图片")).toHaveValue("保留其他草稿字段");
-  await expect(page.locator("#referencePreview")).toBeHidden();
+  await expect(page.locator("#referenceStrip")).toBeHidden();
   await expect(page.locator("#countSelect")).toBeEnabled();
   await expect(page.locator("#countSelect")).toHaveValue("3");
 });

@@ -4,8 +4,8 @@ use crate::workbench::{
     database::history::{HistoryRepository, ImageRecord, ProjectRecord, RunRecord, SessionRecord},
     error::CommandError,
     models::{
-        GenerationRunDto, ImageDto, Patch, ProjectDto, ProjectInput, SessionCreateInput,
-        SessionDto, SessionUpdateInput,
+        GenerationReferenceDto, GenerationRunDto, ImageDto, Patch, ProjectDto, ProjectInput,
+        SessionCreateInput, SessionDto, SessionUpdateInput,
     },
 };
 
@@ -19,7 +19,15 @@ pub struct NewRunInput {
     pub provider_name: String,
     pub model: String,
     pub reference_image_path: Option<String>,
+    pub references: Vec<NewRunReferenceInput>,
     pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewRunReferenceInput {
+    pub local_path: String,
+    pub filename: Option<String>,
+    pub mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +186,17 @@ impl HistoryService {
             .into_iter()
             .map(image_dto)
             .collect();
+        let references = self
+            .repository
+            .list_run_references(run.id)?
+            .into_iter()
+            .map(|reference| GenerationReferenceDto {
+                position: reference.position,
+                local_path: reference.local_path,
+                filename: reference.filename,
+                mime_type: reference.mime_type,
+            })
+            .collect();
         Ok(GenerationRunDto {
             id: run.id,
             session_id: run.session_id,
@@ -188,6 +207,7 @@ impl HistoryService {
             provider_name: run.provider_name,
             model: run.model,
             reference_image_path: run.reference_image_path,
+            references,
             error_message: run.error_message,
             created_at: run.created_at,
             completed_at: run.completed_at,
@@ -240,7 +260,7 @@ fn image_dto(r: ImageRecord) -> ImageDto {
 mod tests {
     use std::sync::Arc;
 
-    use super::{HistoryService, NewImageInput, NewRunInput};
+    use super::{HistoryService, NewImageInput, NewRunInput, NewRunReferenceInput};
     use crate::workbench::{
         database::{history::HistoryRepository, Database},
         models::{Patch, ProjectInput, SessionCreateInput, SessionUpdateInput},
@@ -288,6 +308,7 @@ mod tests {
                     provider_name: "Primary".into(),
                     model: "gpt-image-2".into(),
                     reference_image_path: None,
+                    references: Vec::new(),
                     error_message: None,
                 })
                 .unwrap()
@@ -356,6 +377,7 @@ mod tests {
                     provider_name: "Primary".into(),
                     model: "gpt-image-2".into(),
                     reference_image_path: None,
+                    references: Vec::new(),
                     error_message: None,
                 })
                 .unwrap_err()
@@ -637,6 +659,50 @@ mod tests {
             )
             .unwrap();
         assert!(patched.recent_thumbnail_path.is_none());
+    }
+
+    #[test]
+    fn run_history_round_trips_ordered_reference_snapshots() {
+        let fixture = HistoryFixture::new();
+        let session_id = fixture.create_session("参考图顺序");
+        let run = fixture
+            .service
+            .create_run(NewRunInput {
+                session_id,
+                status: "running".into(),
+                prompt: "融合".into(),
+                parameters: serde_json::json!({}),
+                provider_id: None,
+                provider_name: "xAI".into(),
+                model: "grok-imagine-image".into(),
+                reference_image_path: None,
+                references: vec![
+                    NewRunReferenceInput {
+                        local_path: "uploads/first.png".into(),
+                        filename: Some("first.png".into()),
+                        mime_type: Some("image/png".into()),
+                    },
+                    NewRunReferenceInput {
+                        local_path: "uploads/second.webp".into(),
+                        filename: Some("second.webp".into()),
+                        mime_type: Some("image/webp".into()),
+                    },
+                ],
+                error_message: None,
+            })
+            .unwrap();
+
+        assert_eq!(
+            run.references
+                .iter()
+                .map(|reference| (reference.position, reference.filename.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![(0, Some("first.png")), (1, Some("second.webp"))]
+        );
+        assert_eq!(
+            fixture.service.get_run(run.id).unwrap().references,
+            run.references
+        );
     }
 
     #[test]

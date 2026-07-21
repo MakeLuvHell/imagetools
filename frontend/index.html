@@ -80,19 +80,7 @@
           <p id="composerNotice" class="composer-notice" role="alert" hidden></p>
           <form id="composerForm" class="composer" aria-label="图片生成输入">
           <div class="composer-context">
-            <div id="referencePreview" class="reference-preview" hidden>
-              <i data-lucide="image" aria-hidden="true"></i>
-              <span id="referenceName"></span>
-              <button
-                id="clearReferenceBtn"
-                type="button"
-                class="icon-button"
-                aria-label="移除参考图"
-                title="移除参考图"
-              >
-                <i data-lucide="x"></i>
-              </button>
-            </div>
+            <div id="referenceStrip" class="reference-strip" aria-label="参考图" hidden></div>
             <label class="context-field provider-field">
               <span class="sr-only">Provider</span>
               <select id="providerSelect" aria-label="Provider"></select>
@@ -114,7 +102,7 @@
             placeholder="描述你想创作的图片"
           ></textarea>
 
-          <input id="referenceInput" type="file" accept="image/*" hidden />
+          <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
           <div class="composer-toolbar">
             <div class="composer-tools">
               <button

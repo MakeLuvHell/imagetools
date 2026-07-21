@@ -44,6 +44,14 @@ pub(crate) struct RunRecord {
     pub completed_at: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RunReferenceRecord {
+    pub position: i64,
+    pub local_path: String,
+    pub filename: Option<String>,
+    pub mime_type: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ImageRecord {
     pub id: i64,
@@ -263,6 +271,21 @@ impl HistoryRepository {
             )
             .map_err(database_error)?;
             let id = tx.last_insert_rowid();
+            for (position, reference) in input.references.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO generation_run_references (
+                         generation_run_id, position, local_path, filename, mime_type
+                     ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![
+                        id,
+                        position as i64,
+                        reference.local_path,
+                        reference.filename,
+                        reference.mime_type,
+                    ],
+                )
+                .map_err(database_error)?;
+            }
             tx.execute(
                 "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
                 params![now, input.session_id],
@@ -295,6 +318,29 @@ impl HistoryRepository {
             "SELECT id, generation_run_id, local_path, filename, mime_type, width, height, created_at
              FROM images WHERE generation_run_id = ?1 ORDER BY id ASC",
             [run_id], image_from_row))
+    }
+
+    pub(crate) fn list_run_references(
+        &self,
+        run_id: i64,
+    ) -> Result<Vec<RunReferenceRecord>, CommandError> {
+        self.database.with_connection(|connection| {
+            collect_rows(
+                connection,
+                "SELECT position, local_path, filename, mime_type
+                 FROM generation_run_references
+                 WHERE generation_run_id = ?1 ORDER BY position ASC",
+                [run_id],
+                |row| {
+                    Ok(RunReferenceRecord {
+                        position: row.get(0)?,
+                        local_path: row.get(1)?,
+                        filename: row.get(2)?,
+                        mime_type: row.get(3)?,
+                    })
+                },
+            )
+        })
     }
 
     pub(crate) fn complete_success(

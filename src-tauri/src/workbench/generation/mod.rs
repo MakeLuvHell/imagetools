@@ -6,6 +6,9 @@ use super::{
     models::{GenerateInput, GenerateResultDto},
     sessions::{HistoryService, NewRunInput},
 };
+use adapters::normalized::{
+    capabilities_for, NormalizedImageRequest, NormalizedReference, OpenAiOptions, ProviderProtocol,
+};
 use client::{ProviderClient, ProviderResponse};
 use files::{
     cleanup_file, merge_cleanup_error, ConsumedReference, ReferenceStore, ResultFileStore,
@@ -16,6 +19,50 @@ pub mod client;
 pub mod files;
 
 pub trait ProviderTransport: Send + Sync {
+    fn generate_image<'a>(
+        &'a self,
+        request: &'a NormalizedImageRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<ProviderResponse, CommandError>> + Send + 'a>> {
+        Box::pin(async move {
+            if request.references.len() > 1 {
+                return Err(CommandError::new(
+                    "provider.unsupported_capability",
+                    "当前 Provider 适配器不支持多张参考图。",
+                ));
+            }
+            if let Some(reference) = request.references.first() {
+                self.edit(
+                    &EditRequest {
+                        prompt: request.prompt.clone(),
+                        model: request.model.clone(),
+                        size: request.size.clone(),
+                        quality: request.openai_options.quality.clone(),
+                        output_format: request.openai_options.output_format.clone(),
+                        output_compression: request.openai_options.output_compression,
+                        background: request.openai_options.background.clone(),
+                    },
+                    reference.filename.clone(),
+                    &reference.mime_type,
+                    reference.bytes.clone(),
+                )
+                .await
+            } else {
+                self.generate(&GenerationRequest {
+                    prompt: request.prompt.clone(),
+                    model: request.model.clone(),
+                    size: request.size.clone(),
+                    count: request.count,
+                    quality: request.openai_options.quality.clone(),
+                    output_format: request.openai_options.output_format.clone(),
+                    output_compression: request.openai_options.output_compression,
+                    background: request.openai_options.background.clone(),
+                    moderation: request.openai_options.moderation.clone(),
+                })
+                .await
+            }
+        })
+    }
+
     fn generate<'a>(
         &'a self,
         request: &'a GenerationRequest,
@@ -138,28 +185,60 @@ impl GenerationService {
         let background =
             validate_background_for_model(&normalize_background(&input.background), &model)?;
         let moderation = normalize_moderation(&input.moderation);
-        let reference = input
-            .reference_token
-            .as_deref()
-            .map(|token| self.references.consume(token))
-            .transpose()?;
-        let reference_image_path = reference
-            .as_ref()
-            .map(|reference| relative_data_path(&self.data_root, &reference.path))
-            .transpose();
-        let reference_image_path = match reference_image_path {
-            Ok(path) => path,
+        let protocol = ProviderProtocol::parse(&provider.protocol)?;
+        let capabilities = capabilities_for(protocol, &model);
+        let reference_inputs = input.effective_references();
+        if reference_inputs.len() > capabilities.max_references {
+            return Err(CommandError::new(
+                "reference.too_many",
+                format!(
+                    "当前 Provider 最多支持 {} 张参考图。",
+                    capabilities.max_references
+                ),
+            ));
+        }
+        if count > capabilities.max_results {
+            return Err(CommandError::new(
+                "provider.unsupported_capability",
+                "当前 Provider 不支持所选生成张数。",
+            ));
+        }
+        let tokens = reference_inputs
+            .iter()
+            .map(
+                |reference| match (&reference.reference_token, reference.reference_image_id) {
+                    (Some(token), None) if !token.trim().is_empty() => Ok(token.clone()),
+                    _ => Err(CommandError::new(
+                        "reference.invalid_source",
+                        "参考图来源无效。",
+                    )),
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
+        let references = self.references.consume_many(&tokens)?;
+        let run_references = references
+            .iter()
+            .map(|reference| {
+                relative_data_path(&self.data_root, &reference.path).map(|local_path| {
+                    crate::workbench::sessions::NewRunReferenceInput {
+                        local_path,
+                        filename: Some(reference.original_name.clone()),
+                        mime_type: Some(reference.mime_type.clone()),
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>();
+        let run_references = match run_references {
+            Ok(references) => references,
             Err(error) => {
-                let cleanup = reference
-                    .as_ref()
-                    .map_or(Ok(()), |reference| cleanup_file(&reference.path));
+                let cleanup = cleanup_references(&references);
                 return Err(merge_cleanup_error(error, cleanup));
             }
         };
-        let kind = if reference.is_some() {
-            "image_to_image"
-        } else {
+        let kind = if references.is_empty() {
             "text_to_image"
+        } else {
+            "image_to_image"
         };
         let parameters = serde_json::json!({
             "width": input.width,
@@ -183,14 +262,13 @@ impl GenerationService {
             provider_id: Some(provider.id),
             provider_name: provider.name.clone(),
             model: model.clone(),
-            reference_image_path,
+            reference_image_path: None,
+            references: run_references,
             error_message: None,
         }) {
             Ok(run) => run,
             Err(error) => {
-                let cleanup = reference
-                    .as_ref()
-                    .map_or(Ok(()), |reference| cleanup_file(&reference.path));
+                let cleanup = cleanup_references(&references);
                 return Err(merge_cleanup_error(error, cleanup));
             }
         };
@@ -198,10 +276,12 @@ impl GenerationService {
         let response = self
             .request_provider(
                 &provider,
-                reference.as_ref(),
+                &references,
                 &prompt,
                 &model,
                 &size,
+                input.ratio.trim(),
+                input.resolution.trim(),
                 count,
                 &quality,
                 &output_format,
@@ -248,10 +328,12 @@ impl GenerationService {
     async fn request_provider(
         &self,
         provider: &ProviderRecord,
-        reference: Option<&ConsumedReference>,
+        references: &[ConsumedReference],
         prompt: &str,
         model: &str,
         size: &str,
+        aspect_ratio: &str,
+        resolution: &str,
         count: i64,
         quality: &str,
         output_format: &str,
@@ -262,40 +344,36 @@ impl GenerationService {
         let client =
             self.factory
                 .create(&provider.protocol, &provider.base_url, &provider.api_key)?;
-        if let Some(reference) = reference {
-            let bytes = std::fs::read(&reference.path)
-                .map_err(|_| CommandError::new("reference.read_failed", "无法读取参考图。"))?;
-            client
-                .edit(
-                    &EditRequest {
-                        prompt: prompt.to_string(),
-                        model: model.to_string(),
-                        size: size.to_string(),
-                        quality: quality.to_string(),
-                        output_format: output_format.to_string(),
-                        output_compression,
-                        background: background.to_string(),
-                    },
-                    reference.original_name.clone(),
-                    &reference.mime_type,
-                    bytes,
-                )
-                .await
-        } else {
-            client
-                .generate(&GenerationRequest {
-                    prompt: prompt.to_string(),
-                    model: model.to_string(),
-                    size: size.to_string(),
-                    count,
+        let references = references
+            .iter()
+            .map(|reference| {
+                std::fs::read(&reference.path)
+                    .map(|bytes| NormalizedReference {
+                        filename: reference.original_name.clone(),
+                        mime_type: reference.mime_type.clone(),
+                        bytes,
+                    })
+                    .map_err(|_| CommandError::new("reference.read_failed", "无法读取参考图。"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        client
+            .generate_image(&NormalizedImageRequest {
+                prompt: prompt.to_string(),
+                model: model.to_string(),
+                count,
+                aspect_ratio: aspect_ratio.to_string(),
+                resolution: resolution.to_string(),
+                size: size.to_string(),
+                references,
+                openai_options: OpenAiOptions {
                     quality: quality.to_string(),
                     output_format: output_format.to_string(),
                     output_compression,
                     background: background.to_string(),
                     moderation: moderation.to_string(),
-                })
-                .await
-        }
+                },
+            })
+            .await
     }
 
     fn resolve_provider(&self, provider_id: Option<i64>) -> Result<ProviderRecord, CommandError> {
@@ -322,6 +400,16 @@ fn relative_data_path(data_root: &Path, path: &Path) -> Result<String, CommandEr
     path.strip_prefix(data_root)
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
         .map_err(|_| CommandError::new("reference.invalid_path", "参考图路径无效。"))
+}
+
+fn cleanup_references(references: &[ConsumedReference]) -> Result<(), CommandError> {
+    let mut first_error = None;
+    for reference in references {
+        if let Err(error) = cleanup_file(&reference.path) {
+            first_error.get_or_insert(error);
+        }
+    }
+    first_error.map_or(Ok(()), Err)
 }
 
 const MIN_IMAGE_PIXELS: u64 = 655_360;
@@ -925,6 +1013,7 @@ mod tests {
                 output_compression: 85,
                 background: "opaque".into(),
                 moderation: "low".into(),
+                references: Vec::new(),
                 reference_token: None,
                 reference_image_id: None,
             }
@@ -1024,11 +1113,11 @@ mod tests {
 
         assert_eq!(result.kind, "image_to_image");
         let run = &fixture.history.list_runs(fixture.session_id).unwrap()[0];
-        assert!(run
-            .reference_image_path
-            .as_deref()
-            .unwrap()
-            .starts_with("uploads/ref_"));
+        assert_eq!(run.reference_image_path, None);
+        assert_eq!(run.references.len(), 1);
+        assert!(run.references[0].local_path.starts_with("uploads/ref_"));
+        assert_eq!(run.references[0].filename.as_deref(), Some("参考图.png"));
+        assert_eq!(run.references[0].mime_type.as_deref(), Some("image/png"));
         assert_eq!(
             fixture.references.consume(&staged.token).unwrap_err().code,
             "reference.not_found"

@@ -45,6 +45,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
   await api.setSessionPinned(11, true);
   await api.listSessionRuns(11);
   await api.saveImage(42);
+  await api.discardStagedReferences(["first", "second"]);
 
   assert.deepEqual(calls, [
     ["get_settings"],
@@ -71,6 +72,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     ["set_session_pinned", { sessionId: 11, isPinned: true }],
     ["list_session_runs", { sessionId: 11 }],
     ["save_result_image", { imageId: 42 }],
+    ["discard_staged_references", { tokens: ["first", "second"] }],
   ]);
   assert.deepEqual(Object.keys(api).sort(), [
     "createProject",
@@ -79,6 +81,7 @@ test("maps every current UI operation to its stable Tauri command and arguments"
     "deleteProject",
     "deleteProvider",
     "deleteSession",
+    "discardStagedReferences",
     "discoverProviderModels",
     "generate",
     "getProvider",
@@ -129,7 +132,7 @@ test("stageReference sends raw bytes and encoded metadata headers", async () => 
   ]]);
 });
 
-test("generate sends the Rust JSON DTO with a reference token and no image data", async () => {
+test("generate sends the Rust JSON DTO with ordered references and no image data", async () => {
   const calls = [];
   const api = desktopApi.createDesktopApi(async (...args) => {
     calls.push(args);
@@ -150,8 +153,10 @@ test("generate sends the Rust JSON DTO with a reference token and no image data"
     output_compression: 90,
     background: "opaque",
     moderation: "auto",
-    reference_token: "ref-token",
-    reference_image_id: 42,
+    references: [
+      { reference_token: "ref-token" },
+      { reference_image_id: 42 },
+    ],
     bytes: new Uint8Array([1, 2, 3]),
     reference: { bytes: [1, 2, 3] },
     reference_base64: "c2Vuc2l0aXZl",
@@ -175,8 +180,10 @@ test("generate sends the Rust JSON DTO with a reference token and no image data"
     output_compression: 90,
     background: "opaque",
     moderation: "auto",
-    reference_token: "ref-token",
-    reference_image_id: 42,
+    references: [
+      { reference_token: "ref-token" },
+      { reference_image_id: 42 },
+    ],
   } }]]);
   assert.doesNotMatch(
     JSON.stringify(calls),

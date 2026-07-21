@@ -324,6 +324,61 @@ impl ReferenceStore {
         self.consume_with_move(token, |from, to| fs::rename(from, to))
     }
 
+    pub fn consume_many(&self, tokens: &[String]) -> Result<Vec<ConsumedReference>, CommandError> {
+        let mut entries = self.entries.lock().map_err(reference_unavailable)?;
+        let mut seen = std::collections::HashSet::new();
+        let mut prepared = Vec::new();
+        for token in tokens {
+            if !seen.insert(token) {
+                return Err(CommandError::new(
+                    "reference.duplicate",
+                    "不能重复使用同一张参考图。",
+                ));
+            }
+            let staged = entries
+                .get(token)
+                .cloned()
+                .ok_or_else(reference_not_found)?;
+            let extension = extension_for_mime(&staged.mime_type).ok_or_else(|| {
+                CommandError::new(
+                    "reference.unsupported_type",
+                    "仅支持 PNG、JPEG 和 WebP 参考图。",
+                )
+            })?;
+            let filename = format!(
+                "ref_{}_{}.{}",
+                Local::now().format("%Y%m%d_%H%M%S"),
+                Uuid::new_v4(),
+                extension
+            );
+            prepared.push((token.clone(), staged, self.upload_dir.join(filename)));
+        }
+
+        let mut consumed: Vec<ConsumedReference> = Vec::new();
+        for (_, staged, path) in &prepared {
+            if fs::rename(&staged.path, path).is_err() {
+                let cleanup_paths = consumed
+                    .iter()
+                    .map(|reference| reference.path.clone())
+                    .collect::<Vec<_>>();
+                for (moved_token, _, _) in prepared.iter().take(consumed.len()) {
+                    entries.remove(moved_token);
+                }
+                let cleanup = remove_files_with_retry(&cleanup_paths, |path| fs::remove_file(path));
+                return Err(merge_cleanup_error(reference_write_failed(()), cleanup));
+            }
+            consumed.push(ConsumedReference {
+                path: path.clone(),
+                original_name: staged.original_name.clone(),
+                mime_type: staged.mime_type.clone(),
+            });
+        }
+        for (token, _, _) in prepared {
+            entries.remove(&token);
+        }
+        Ok(consumed)
+    }
+
     pub fn discard(&self, token: &str) -> Result<(), CommandError> {
         self.discard_with_remove(token, |path| fs::remove_file(path))
     }
@@ -699,6 +754,23 @@ mod tests {
             store.consume(&staged.token).unwrap_err().code,
             "reference.not_found"
         );
+    }
+
+    #[test]
+    fn consume_many_validates_every_token_before_moving_any_file() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = ReferenceStore::new(temporary.path().join("uploads")).unwrap();
+        let staged = store.stage("first.png", "image/png", PNG_1X1).unwrap();
+
+        let error = store
+            .consume_many(&[staged.token.clone(), "missing-token".into()])
+            .unwrap_err();
+
+        assert_eq!(error.code, "reference.not_found");
+        assert!(store.lookup(&staged.token).is_ok());
+        let consumed = store.consume_many(&[staged.token]).unwrap();
+        assert_eq!(consumed.len(), 1);
+        assert_eq!(fs::read(&consumed[0].path).unwrap(), PNG_1X1);
     }
 
     #[test]

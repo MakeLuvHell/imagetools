@@ -35,6 +35,7 @@
     "outputCompression",
     "background",
     "moderation",
+    "referenceSources",
     "referenceSource",
   ];
 
@@ -309,11 +310,23 @@
           value[key],
         ]),
       );
-      const referenceSource = normalizeResultReference(draft.referenceSource);
-      if (referenceSource) {
-        draft.referenceSource = referenceSource;
+      const rawReferences = Array.isArray(draft.referenceSources)
+        ? draft.referenceSources
+        : [draft.referenceSource];
+      const referenceSources = [];
+      const seen = new Set();
+      for (const rawReference of rawReferences) {
+        const reference = normalizeResultReference(rawReference);
+        if (!reference || seen.has(reference.imageId)) continue;
+        seen.add(reference.imageId);
+        referenceSources.push(reference);
+        if (referenceSources.length === 3) break;
+      }
+      delete draft.referenceSource;
+      if (referenceSources.length) {
+        draft.referenceSources = referenceSources;
       } else {
-        delete draft.referenceSource;
+        delete draft.referenceSources;
       }
       return draft;
     } catch {
@@ -356,6 +369,16 @@
     } catch {
       return null;
     }
+  }
+
+  function moveReference(references, index, direction) {
+    const target = index + direction;
+    if (index < 0 || index >= references.length || target < 0 || target >= references.length) {
+      return [...references];
+    }
+    const moved = [...references];
+    [moved[index], moved[target]] = [moved[target], moved[index]];
+    return moved;
   }
 
   function parameterSummary(composer) {
@@ -567,6 +590,7 @@
     draftStorageKey,
     parseDraft,
     normalizeResultReference,
+    moveReference,
     parameterSummary,
     shouldSubmitComposer,
     normalizeComposerForReference,

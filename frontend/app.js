@@ -26,9 +26,7 @@ const referenceBtn = document.querySelector("#referenceBtn");
 const referenceMenu = document.querySelector("#referenceMenu");
 const uploadReferenceBtn = document.querySelector("#uploadReferenceBtn");
 const referenceInput = document.querySelector("#referenceInput");
-const referencePreview = document.querySelector("#referencePreview");
-const referenceName = document.querySelector("#referenceName");
-const clearReferenceBtn = document.querySelector("#clearReferenceBtn");
+const referenceStrip = document.querySelector("#referenceStrip");
 const providerSelect = document.querySelector("#providerSelect");
 const modelInput = document.querySelector("#modelInput");
 const ratioSelect = document.querySelector("#ratioSelect");
@@ -122,7 +120,7 @@ let toastTimer = null;
 let state = window.ImageToolsWorkbench.defaultWorkbenchState();
 let providers = [];
 let projects = [];
-let referenceSource = null;
+let referenceSources = [];
 let sessionDialogMode = null;
 let sessionDialogTarget = null;
 let sidebarMenuTarget = null;
@@ -185,18 +183,73 @@ function setComposerNotice(message = "") {
   composerNotice.hidden = !message;
 }
 
-function clearSubmittedReference(uploadedFile, submittedReference) {
-  const uploadIsCurrent =
-    uploadedFile && referenceInput.files[0] === uploadedFile;
-  const resultIsCurrent =
-    submittedReference && referenceSource === submittedReference;
-  if (!uploadIsCurrent && !resultIsCurrent) return;
-  referenceInput.value = "";
-  referenceSource = null;
-  referencePreview.hidden = true;
-  referenceName.textContent = "";
+function clearSubmittedReferences(submittedReferences) {
+  if (
+    submittedReferences.length !== referenceSources.length ||
+    submittedReferences.some((reference, index) => reference !== referenceSources[index])
+  ) return;
+  referenceSources = [];
+  renderReferenceStrip();
   syncReferenceState();
   saveActiveDraft();
+}
+
+function referenceIdentity(reference) {
+  return reference.kind === "result"
+    ? `result:${reference.imageId}`
+    : `file:${reference.file.name}:${reference.file.size}:${reference.file.lastModified}`;
+}
+
+function renderReferenceStrip() {
+  referenceStrip.replaceChildren();
+  referenceStrip.hidden = referenceSources.length === 0;
+  referenceSources.forEach((reference, index) => {
+    const item = document.createElement("div");
+    item.className = "reference-item";
+    const icon = document.createElement("i");
+    icon.dataset.lucide = reference.kind === "result" ? "image" : "file-image";
+    icon.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.textContent = reference.filename || reference.file?.name || "参考图";
+    item.append(icon, name);
+    for (const [direction, iconName, label] of [
+      [-1, "chevron-left", "左移"],
+      [1, "chevron-right", "右移"],
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "icon-button";
+      button.disabled = index + direction < 0 || index + direction >= referenceSources.length;
+      button.setAttribute("aria-label", `${label}参考图 ${name.textContent}`);
+      button.title = label;
+      button.innerHTML = `<i data-lucide="${iconName}"></i>`;
+      button.addEventListener("click", () => {
+        referenceSources = window.ImageToolsWorkbench.moveReference(
+          referenceSources,
+          index,
+          direction,
+        );
+        renderReferenceStrip();
+        saveActiveDraft();
+      });
+      item.appendChild(button);
+    }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "icon-button";
+    remove.setAttribute("aria-label", `移除参考图 ${name.textContent}`);
+    remove.title = "移除";
+    remove.innerHTML = '<i data-lucide="x"></i>';
+    remove.addEventListener("click", () => {
+      referenceSources.splice(index, 1);
+      renderReferenceStrip();
+      syncReferenceState();
+      saveActiveDraft();
+    });
+    item.appendChild(remove);
+    referenceStrip.appendChild(item);
+  });
+  window.ImageToolsIcons.refresh();
 }
 
 function persistCollapsedProjects() {
@@ -256,7 +309,7 @@ function currentDraft() {
     outputCompression: Number(outputCompressionInput.value || 100),
     background: backgroundSelect.value,
     moderation: moderationSelect.value,
-    ...(referenceSource ? { referenceSource } : {}),
+    referenceSources: referenceSources.filter((reference) => reference.kind === "result"),
   };
 }
 
@@ -286,10 +339,9 @@ function restoreActiveDraft() {
   outputCompressionInput.value = String(draft.outputCompression ?? 100);
   backgroundSelect.value = draft.background || "auto";
   moderationSelect.value = draft.moderation || "auto";
-  referenceSource = draft.referenceSource || null;
+  referenceSources = draft.referenceSources || [];
   referenceInput.value = "";
-  referencePreview.hidden = !referenceSource;
-  referenceName.textContent = referenceSource ? "历史结果图" : "";
+  renderReferenceStrip();
   syncReferenceState();
   syncProviderCapabilities();
   resizePrompt();
@@ -302,13 +354,19 @@ function resizePrompt() {
 }
 
 function syncReferenceState() {
-  const hasReference = Boolean(referenceSource || referenceInput.files[0]);
-  const next = window.ImageToolsWorkbench.normalizeComposerForReference(
-    { count: Number(countSelect.value || 1) },
-    hasReference,
+  const hasReference = referenceSources.length > 0;
+  const provider = window.ImageToolsWorkbench.selectedProvider(providers, providerSelect.value);
+  const capabilities = window.ImageToolsWorkbench.providerCapabilities(
+    provider?.protocol || "openai_compatible",
+    modelInput.value,
   );
-  countSelect.value = String(next.count);
-  countSelect.disabled = hasReference;
+  if (hasReference && provider?.protocol === "openai_compatible") {
+    countSelect.value = "1";
+  } else if (Number(countSelect.value) > capabilities.maxResults) {
+    countSelect.value = String(capabilities.maxResults);
+  }
+  countSelect.disabled = capabilities.maxResults === 1 ||
+    (hasReference && provider?.protocol === "openai_compatible");
   parameterSummaryText.textContent = window.ImageToolsWorkbench.parameterSummary(
     currentDraft(),
   );
@@ -364,9 +422,7 @@ function syncProviderCapabilities() {
     moderationSelect.value = "auto";
   }
   syncTransparentBackground();
-  parameterSummaryText.textContent = window.ImageToolsWorkbench.parameterSummary(
-    currentDraft(),
-  );
+  syncReferenceState();
 }
 
 function renderSessions() {
@@ -512,10 +568,21 @@ async function setReferenceFromImage(image) {
     showToast("无法使用这个历史结果作为参考图");
     return;
   }
-  referenceInput.value = "";
-  referenceSource = nextReference;
-  referencePreview.hidden = false;
-  referenceName.textContent = image.filename || "历史结果图";
+  const provider = window.ImageToolsWorkbench.selectedProvider(providers, providerSelect.value);
+  const limit = window.ImageToolsWorkbench.providerCapabilities(
+    provider?.protocol || "openai_compatible",
+    modelInput.value,
+  ).maxReferences;
+  if (referenceSources.length >= limit) {
+    setComposerNotice(`当前 Provider 最多支持 ${limit} 张参考图`);
+    return;
+  }
+  if (referenceSources.some((reference) => referenceIdentity(reference) === referenceIdentity(nextReference))) {
+    setComposerNotice("不能重复添加同一张参考图");
+    return;
+  }
+  referenceSources.push(nextReference);
+  renderReferenceStrip();
   syncReferenceState();
   saveActiveDraft();
   showToast("已设为参考图");
@@ -1270,8 +1337,16 @@ async function handleComposerSubmit(event) {
   let pendingRun = null;
   let previousServerCount = 0;
   let requestError = null;
-  const uploadedFile = referenceInput.files[0] || null;
-  const submittedReference = referenceSource;
+  let stagedTokens = [];
+  const submittedReferences = [...referenceSources];
+  const referenceLimit = window.ImageToolsWorkbench.providerCapabilities(
+    provider.protocol,
+    modelInput.value || provider.defaultModel,
+  ).maxReferences;
+  if (submittedReferences.length > referenceLimit) {
+    setComposerNotice(`当前 Provider 最多支持 ${referenceLimit} 张参考图`);
+    return;
+  }
   try {
     sessionId = await ensureSessionForSubmit(prompt);
     previousServerCount = (runsBySession[sessionId] || []).length;
@@ -1327,18 +1402,21 @@ async function handleComposerSubmit(event) {
     ]);
     startPromptHandoff(submissionId, promptSourceRect, prompt);
     generateBtn.setAttribute("aria-label", "生成中");
-    let referenceToken = null;
-    let referenceImageId = submittedReference?.imageId || null;
-    if (uploadedFile) {
+    const generationReferences = [];
+    for (const reference of submittedReferences) {
+      if (reference.kind === "result") {
+        generationReferences.push({ reference_image_id: reference.imageId });
+        continue;
+      }
       const staged = await desktopApi.stageReference({
-        name: uploadedFile.name,
-        type: uploadedFile.type,
-        bytes: new Uint8Array(await uploadedFile.arrayBuffer()),
+        name: reference.file.name,
+        type: reference.file.type,
+        bytes: new Uint8Array(await reference.file.arrayBuffer()),
       });
-      referenceToken = staged.token;
-      referenceImageId = null;
+      stagedTokens.push(staged.token);
+      generationReferences.push({ reference_token: staged.token });
     }
-    clearSubmittedReference(uploadedFile, submittedReference);
+    clearSubmittedReferences(submittedReferences);
     await desktopApi.generate({
       ...fields,
       session_id: Number(fields.session_id),
@@ -1347,11 +1425,14 @@ async function handleComposerSubmit(event) {
       height: Number(fields.height),
       count: Number(fields.count),
       output_compression: Number(fields.output_compression),
-      reference_token: referenceToken,
-      reference_image_id: referenceImageId,
+      references: generationReferences,
     });
     showToast("生成完成");
   } catch (error) {
+    if (stagedTokens.length) {
+      await desktopApi.discardStagedReferences(stagedTokens).catch(() => {});
+      stagedTokens = [];
+    }
     requestError = error.message;
   } finally {
     if (sessionId && pendingRun) {
@@ -2224,18 +2305,27 @@ uploadReferenceBtn.addEventListener("click", () => {
   referenceInput.click();
 });
 referenceInput.addEventListener("change", () => {
-  const file = referenceInput.files[0];
-  referenceSource = null;
-  referencePreview.hidden = !file;
-  referenceName.textContent = file ? file.name : "";
-  syncReferenceState();
-  saveActiveDraft();
-});
-clearReferenceBtn.addEventListener("click", () => {
+  const provider = window.ImageToolsWorkbench.selectedProvider(providers, providerSelect.value);
+  const limit = window.ImageToolsWorkbench.providerCapabilities(
+    provider?.protocol || "openai_compatible",
+    modelInput.value,
+  ).maxReferences;
+  let rejected = false;
+  for (const file of referenceInput.files) {
+    const reference = { kind: "file", file };
+    if (referenceSources.length >= limit) {
+      rejected = true;
+      break;
+    }
+    if (referenceSources.some((item) => referenceIdentity(item) === referenceIdentity(reference))) {
+      rejected = true;
+      continue;
+    }
+    referenceSources.push(reference);
+  }
   referenceInput.value = "";
-  referenceSource = null;
-  referencePreview.hidden = true;
-  referenceName.textContent = "";
+  renderReferenceStrip();
+  if (rejected) setComposerNotice(`最多添加 ${limit} 张且不能重复`);
   syncReferenceState();
   saveActiveDraft();
 });

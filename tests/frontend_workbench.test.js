@@ -199,7 +199,7 @@ test("parseDraft keeps only result references with a positive integer image id",
   };
   assert.deepEqual(
     workbench.parseDraft(JSON.stringify({ prompt: "继续", referenceSource: valid })),
-    { prompt: "继续", referenceSource: valid },
+    { prompt: "继续", referenceSources: [valid] },
   );
   for (const imageId of [0, -1, 1.5, "42", null]) {
     assert.deepEqual(
@@ -211,6 +211,30 @@ test("parseDraft keeps only result references with a positive integer image id",
       { prompt: "继续" },
     );
   }
+});
+
+test("parseDraft migrates one legacy reference and keeps ordered unique references", () => {
+  const first = {
+    kind: "result",
+    imageId: 1,
+    url: "imagetools-media://localhost/image/1",
+  };
+  const second = {
+    kind: "result",
+    imageId: 2,
+    url: "imagetools-media://localhost/image/2",
+  };
+  assert.deepEqual(
+    workbench.parseDraft(JSON.stringify({ referenceSource: first })).referenceSources
+      .map((reference) => reference.imageId),
+    [1],
+  );
+  assert.deepEqual(
+    workbench.parseDraft(JSON.stringify({ referenceSources: [first, second, first] }))
+      .referenceSources.map((reference) => reference.imageId),
+    [1, 2],
+  );
+  assert.deepEqual(workbench.moveReference([first, second], 1, -1), [second, first]);
 });
 
 test("parameterSummary uses localized resolution and count labels", () => {

@@ -178,10 +178,27 @@ pub struct GenerationRunDto {
     pub provider_name: String,
     pub model: String,
     pub reference_image_path: Option<String>,
+    pub references: Vec<GenerationReferenceDto>,
     pub error_message: Option<String>,
     pub created_at: String,
     pub completed_at: Option<String>,
     pub images: Vec<ImageDto>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GenerationReferenceDto {
+    pub position: i64,
+    pub local_path: String,
+    pub filename: Option<String>,
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct GenerateReferenceInput {
+    #[serde(default)]
+    pub reference_token: Option<String>,
+    #[serde(default)]
+    pub reference_image_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -200,9 +217,26 @@ pub struct GenerateInput {
     pub output_compression: i64,
     pub background: String,
     pub moderation: String,
+    #[serde(default)]
+    pub references: Vec<GenerateReferenceInput>,
     pub reference_token: Option<String>,
     #[serde(default)]
     pub reference_image_id: Option<i64>,
+}
+
+impl GenerateInput {
+    pub fn effective_references(&self) -> Vec<GenerateReferenceInput> {
+        if !self.references.is_empty() {
+            return self.references.clone();
+        }
+        if self.reference_token.is_some() || self.reference_image_id.is_some() {
+            return vec![GenerateReferenceInput {
+                reference_token: self.reference_token.clone(),
+                reference_image_id: self.reference_image_id,
+            }];
+        }
+        Vec::new()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -224,7 +258,10 @@ pub fn utc_now() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{utc_now, GenerateInput, Patch, ProviderDto, ProviderInput, SessionUpdateInput};
+    use super::{
+        utc_now, GenerateInput, GenerateReferenceInput, Patch, ProviderDto, ProviderInput,
+        SessionUpdateInput,
+    };
 
     #[test]
     fn generation_input_accepts_an_existing_image_id_without_a_token() {
@@ -249,6 +286,47 @@ mod tests {
 
         assert_eq!(input.reference_image_id, Some(42));
         assert_eq!(input.reference_token, None);
+        assert_eq!(input.effective_references().len(), 1);
+        assert_eq!(input.effective_references()[0].reference_image_id, Some(42));
+    }
+
+    #[test]
+    fn generation_input_prefers_the_new_ordered_reference_list() {
+        let input: GenerateInput = serde_json::from_value(serde_json::json!({
+            "session_id": 1,
+            "prompt": "combine",
+            "model": "grok-imagine-image",
+            "width": 1024,
+            "height": 1024,
+            "ratio": "1:1",
+            "resolution": "standard",
+            "count": 1,
+            "quality": "auto",
+            "output_format": "png",
+            "output_compression": 100,
+            "background": "auto",
+            "moderation": "auto",
+            "references": [
+                {"reference_token": "first"},
+                {"reference_image_id": 42}
+            ],
+            "reference_token": "legacy-ignored"
+        }))
+        .unwrap();
+
+        assert_eq!(
+            input.effective_references(),
+            vec![
+                GenerateReferenceInput {
+                    reference_token: Some("first".into()),
+                    reference_image_id: None,
+                },
+                GenerateReferenceInput {
+                    reference_token: None,
+                    reference_image_id: Some(42),
+                },
+            ]
+        );
     }
 
     #[test]

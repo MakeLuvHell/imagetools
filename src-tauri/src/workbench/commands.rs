@@ -12,10 +12,11 @@ use crate::workbench::{
     },
     media::MediaResolver,
     models::{
-        GenerateInput, GenerateResultDto, GenerationRunDto, ProjectDto, ProjectInput,
-        ProviderConnectionResult, ProviderDto, ProviderInput, ProviderModelDiscoveryResult,
-        ProviderProbeInput, SessionCreateInput, SessionDto, SessionUpdateInput, SettingsDto,
-        SettingsInput, StagedReferenceDto, StorageLocationDto, StorageLocationInput,
+        GenerateInput, GenerateReferenceInput, GenerateResultDto, GenerationRunDto, ProjectDto,
+        ProjectInput, ProviderConnectionResult, ProviderDto, ProviderInput,
+        ProviderModelDiscoveryResult, ProviderProbeInput, SessionCreateInput, SessionDto,
+        SessionUpdateInput, SettingsDto, SettingsInput, StagedReferenceDto, StorageLocationDto,
+        StorageLocationInput,
     },
     providers::ProviderService,
     sessions::HistoryService,
@@ -302,61 +303,116 @@ pub fn stage_reference_image(
     state.references.stage(&name, mime_type, bytes)
 }
 
-fn prepare_generation_reference(
+fn prepare_generation_references(
     state: &WorkbenchState,
-    reference_token: Option<String>,
-    reference_image_id: Option<i64>,
-) -> Result<PreparedGenerationReference, CommandError> {
-    match (reference_token, reference_image_id) {
-        (Some(_), Some(_)) => Err(CommandError::new(
-            "reference.conflicting_sources",
-            "只能选择一种参考图来源。",
-        )),
-        (token @ Some(_), None) => Ok(PreparedGenerationReference { token }),
-        (None, Some(image_id)) => {
-            let token = state.stage_existing_reference(image_id)?.token;
-            Ok(PreparedGenerationReference {
-                token: Some(token.clone()),
-            })
-        }
-        (None, None) => Ok(PreparedGenerationReference { token: None }),
+    references: Vec<GenerateReferenceInput>,
+) -> Result<PreparedGenerationReferences, CommandError> {
+    if references.len() > 3 {
+        return Err(CommandError::new(
+            "reference.too_many",
+            "最多添加 3 张参考图。",
+        ));
     }
+    let mut source_keys = std::collections::HashSet::new();
+    for reference in &references {
+        let key = match (&reference.reference_token, reference.reference_image_id) {
+            (Some(token), None) if !token.trim().is_empty() => format!("token:{token}"),
+            (None, Some(image_id)) if image_id > 0 => format!("image:{image_id}"),
+            (Some(_), Some(_)) => {
+                return Err(CommandError::new(
+                    "reference.conflicting_sources",
+                    "每张参考图只能选择一种来源。",
+                ))
+            }
+            _ => {
+                return Err(CommandError::new(
+                    "reference.invalid_source",
+                    "参考图来源无效。",
+                ))
+            }
+        };
+        if !source_keys.insert(key) {
+            return Err(CommandError::new(
+                "reference.duplicate",
+                "不能重复使用同一张参考图。",
+            ));
+        }
+    }
+
+    let mut tokens = Vec::new();
+    for reference in references {
+        if let Some(token) = reference.reference_token {
+            tokens.push(token);
+        } else if let Some(image_id) = reference.reference_image_id {
+            match state.stage_existing_reference(image_id) {
+                Ok(staged) => tokens.push(staged.token),
+                Err(error) => {
+                    let cleanup = discard_tokens(&state.references, &tokens);
+                    return Err(merge_cleanup_error(error, cleanup));
+                }
+            }
+        }
+    }
+    Ok(PreparedGenerationReferences { tokens })
 }
 
 #[derive(Debug)]
-struct PreparedGenerationReference {
-    token: Option<String>,
+struct PreparedGenerationReferences {
+    tokens: Vec<String>,
+}
+
+fn discard_tokens(references: &ReferenceStore, tokens: &[String]) -> Result<(), CommandError> {
+    let mut first_error = None;
+    for token in tokens {
+        if let Err(error) = references.discard(token) {
+            first_error.get_or_insert(error);
+        }
+    }
+    first_error.map_or(Ok(()), Err)
 }
 
 async fn generate_image_with_state(
     mut input: GenerateInput,
     state: &WorkbenchState,
 ) -> Result<GenerateResultDto, CommandError> {
-    let submitted_token = input.reference_token.take();
-    let prepared = match prepare_generation_reference(
-        state,
-        submitted_token.clone(),
-        input.reference_image_id.take(),
-    ) {
+    let submitted_references = input.effective_references();
+    let submitted_tokens = submitted_references
+        .iter()
+        .filter_map(|reference| reference.reference_token.clone())
+        .collect::<Vec<_>>();
+    let prepared = match prepare_generation_references(state, submitted_references) {
         Ok(prepared) => prepared,
         Err(error) => {
-            let cleanup = submitted_token
-                .as_deref()
-                .map_or(Ok(()), |token| state.references.discard(token));
+            let cleanup = discard_tokens(&state.references, &submitted_tokens);
             return Err(merge_cleanup_error(error, cleanup));
         }
     };
-    let cleanup_token = prepared.token.clone();
-    input.reference_token = prepared.token;
+    let cleanup_tokens = prepared.tokens.clone();
+    input.references = prepared
+        .tokens
+        .into_iter()
+        .map(|token| GenerateReferenceInput {
+            reference_token: Some(token),
+            reference_image_id: None,
+        })
+        .collect();
+    input.reference_token = None;
+    input.reference_image_id = None;
     match state.generation.generate(input).await {
         Ok(result) => Ok(result),
         Err(error) => {
-            let cleanup = cleanup_token
-                .as_deref()
-                .map_or(Ok(()), |token| state.references.discard(token));
+            let cleanup = discard_tokens(&state.references, &cleanup_tokens);
             Err(merge_cleanup_error(error, cleanup))
         }
     }
+}
+
+#[tauri::command]
+pub fn discard_staged_references(
+    tokens: Vec<String>,
+    state: tauri::State<'_, WorkbenchState>,
+) -> Result<(), CommandError> {
+    discard_tokens(&state.references, &tokens)
 }
 
 #[tauri::command]
@@ -396,6 +452,7 @@ macro_rules! generate_workbench_handler {
             $crate::workbench::commands::set_session_pinned,
             $crate::workbench::commands::list_session_runs,
             $crate::workbench::commands::stage_reference_image,
+            $crate::workbench::commands::discard_staged_references,
             $crate::workbench::commands::generate_image,
         ]
     };
@@ -445,7 +502,7 @@ mod tests {
         Manager, WebviewUrl, WebviewWindow,
     };
 
-    use super::{generate_image_with_state, prepare_generation_reference, WorkbenchState};
+    use super::{generate_image_with_state, prepare_generation_references, WorkbenchState};
     use crate::workbench::{
         database::{history::HistoryRepository, Database},
         models::{GenerateInput, SessionCreateInput},
@@ -552,9 +609,14 @@ mod tests {
         let fixture = CommandFixture::new();
         let image_id = fixture.insert_image("invalid.png", b"not an image", "image/png");
         let state = fixture.app.state::<WorkbenchState>();
-        let conflict =
-            prepare_generation_reference(&state, Some("uploaded-token".into()), Some(image_id))
-                .unwrap_err();
+        let conflict = prepare_generation_references(
+            &state,
+            vec![crate::workbench::models::GenerateReferenceInput {
+                reference_token: Some("uploaded-token".into()),
+                reference_image_id: Some(image_id),
+            }],
+        )
+        .unwrap_err();
         let invalid = state.stage_existing_reference(image_id).unwrap_err();
         let missing = state.stage_existing_reference(999_999).unwrap_err();
         let mut oversized_bytes = PNG.to_vec();
@@ -600,6 +662,7 @@ mod tests {
             output_compression: 100,
             background: "auto".into(),
             moderation: "auto".into(),
+            references: Vec::new(),
             reference_token,
             reference_image_id,
         }
@@ -769,6 +832,7 @@ mod tests {
                 output_compression: 100,
                 background: "auto".into(),
                 moderation: "auto".into(),
+                references: Vec::new(),
                 reference_token: None,
                 reference_image_id: None,
             })
@@ -800,6 +864,7 @@ mod tests {
                 provider_name: "Primary".into(),
                 model: "gpt-image-2".into(),
                 reference_image_path: None,
+                references: Vec::new(),
                 error_message: None,
             })
             .unwrap()

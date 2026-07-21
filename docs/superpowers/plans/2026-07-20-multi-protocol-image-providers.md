@@ -134,7 +134,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP004: Ordered Multi-Reference State, IPC, And History
 
-**Status:** In progress
+**Status:** Done
 
 **Blocked by:** MP003
 
@@ -174,7 +174,7 @@ MP005 and MP006 both depend on MP004 but do not depend on each other.
 
 ## MP005: xAI Imagine Adapter
 
-**Status:** Pending
+**Status:** In progress
 
 **Blocked by:** MP004
 
