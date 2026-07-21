@@ -387,7 +387,13 @@
       }
       const detail = document.createElement("span");
       detail.className = "provider-detail";
-      detail.textContent = `${provider.defaultModel} · ${
+      const protocolLabels = {
+        openai_compatible: "OpenAI Compatible",
+        xai_images: "xAI Imagine",
+        gemini_native: "Gemini Native",
+      };
+      const protocolLabel = protocolLabels[provider.protocol];
+      detail.textContent = `${protocolLabel ? `${protocolLabel} · ` : ""}${provider.defaultModel} · ${
         provider.apiKeySet ? "API Key 已配置" : "API Key 未配置"
       }`;
       copy.append(nameLine, detail);

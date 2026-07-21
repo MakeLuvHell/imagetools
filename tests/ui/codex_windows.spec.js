@@ -696,6 +696,33 @@ test("Provider settings adds and edits through a focused dialog", async ({ page 
   expect(requests.providerRequests.at(-1).body.api_key).toBe("");
 });
 
+test("Provider dialog tests connectivity and discovers models from the active draft", async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Providers" }).click();
+  await page.getByRole("button", { name: "添加 Provider" }).click();
+  const dialog = page.getByRole("dialog", { name: "添加 Provider" });
+
+  await dialog.getByLabel("协议").selectOption("xai_images");
+  await expect(dialog.getByLabel("Base URL")).toHaveValue("https://api.x.ai/v1");
+  await dialog.getByLabel("名称").fill("xAI");
+  await dialog.getByLabel("API Key").fill("draft-secret");
+  await dialog.getByRole("button", { name: "检测联通性" }).click();
+  await expect(dialog.locator("#providerProbeStatus")).toContainText("连接成功");
+  await dialog.getByRole("button", { name: "获取可用模型" }).click();
+  await expect(dialog.locator("#providerProbeStatus")).toHaveText("已获取 2 个模型。");
+
+  expect(requests.providerProbeRequests.map((request) => request.method)).toEqual([
+    "test",
+    "discover",
+  ]);
+  expect(requests.providerProbeRequests[0].body).toMatchObject({
+    protocol: "xai_images",
+    base_url: "https://api.x.ai/v1",
+    api_key: "draft-secret",
+  });
+});
+
 test("newest Provider reload wins when an older response finishes last", async ({ page }) => {
   const requests = await installApiMocks(page, {
     providerListDelaysMs: [0, 1200, 0],

@@ -69,10 +69,15 @@ const providerDialogClose = document.querySelector("#providerDialogClose");
 const providerForm = document.querySelector("#providerForm");
 const providerEditorTitle = document.querySelector("#providerEditorTitle");
 const providerDialogStatus = document.querySelector("#providerDialogStatus");
+const providerProtocol = document.querySelector("#providerProtocol");
 const providerName = document.querySelector("#providerName");
 const providerBaseUrl = document.querySelector("#providerBaseUrl");
 const providerApiKey = document.querySelector("#providerApiKey");
 const providerDefaultModel = document.querySelector("#providerDefaultModel");
+const providerModelOptions = document.querySelector("#providerModelOptions");
+const providerTestBtn = document.querySelector("#providerTestBtn");
+const providerDiscoverBtn = document.querySelector("#providerDiscoverBtn");
+const providerProbeStatus = document.querySelector("#providerProbeStatus");
 const providerIsDefault = document.querySelector("#providerIsDefault");
 const providerCancelBtn = document.querySelector("#providerCancelBtn");
 const providerSaveBtn = document.querySelector("#providerSaveBtn");
@@ -140,6 +145,10 @@ let providerMenuTrigger = null;
 let providerDeleteTarget = null;
 let providerSaveToken = 0;
 let providerLoadToken = 0;
+let providerProbeToken = 0;
+let providerDiscoveryToken = 0;
+let providerDraftModels = [];
+let providerDraftModelsRefreshedAt = null;
 let themeSyncGeneration = 0;
 let storageLocation = null;
 let storageViewGeneration = 0;
@@ -282,7 +291,7 @@ function restoreActiveDraft() {
   referencePreview.hidden = !referenceSource;
   referenceName.textContent = referenceSource ? "历史结果图" : "";
   syncReferenceState();
-  syncTransparentBackground();
+  syncProviderCapabilities();
   resizePrompt();
 }
 
@@ -316,6 +325,48 @@ function syncTransparentBackground() {
   if (!supported && backgroundSelect.value === "transparent") {
     backgroundSelect.value = "auto";
   }
+}
+
+function syncProviderCapabilities() {
+  const provider = window.ImageToolsWorkbench.selectedProvider(
+    providers,
+    providerSelect.value,
+  );
+  const capabilities = window.ImageToolsWorkbench.providerCapabilities(
+    provider?.protocol || "openai_compatible",
+    modelInput.value,
+  );
+  for (const option of ratioSelect.options) {
+    option.disabled = !capabilities.ratios.includes(option.value);
+  }
+  if (!capabilities.ratios.includes(ratioSelect.value)) {
+    ratioSelect.value = capabilities.ratios[0];
+  }
+  for (const option of resolutionSelect.options) {
+    option.disabled = !capabilities.resolutions.includes(option.value);
+  }
+  if (!capabilities.resolutions.includes(resolutionSelect.value)) {
+    resolutionSelect.value = capabilities.resolutions[0];
+  }
+  for (const option of countSelect.options) {
+    option.disabled = Number(option.value) > capabilities.maxResults;
+  }
+  if (Number(countSelect.value) > capabilities.maxResults) {
+    countSelect.value = String(capabilities.maxResults);
+  }
+  qualitySelect.closest("label").hidden = !capabilities.supportsOpenAiOptions;
+  advancedParamsPanel.hidden = !capabilities.supportsOpenAiOptions;
+  if (!capabilities.supportsOpenAiOptions) {
+    qualitySelect.value = "auto";
+    outputFormatSelect.value = "png";
+    outputCompressionInput.value = "100";
+    backgroundSelect.value = "auto";
+    moderationSelect.value = "auto";
+  }
+  syncTransparentBackground();
+  parameterSummaryText.textContent = window.ImageToolsWorkbench.parameterSummary(
+    currentDraft(),
+  );
 }
 
 function renderSessions() {
@@ -580,6 +631,7 @@ function renderProviders() {
   );
   providerSelect.value = String(selected.id);
   modelInput.value = selected.defaultModel;
+  syncProviderCapabilities();
   renderProviderManager();
   restoreActiveDraft();
   renderCurrentSession();
@@ -637,14 +689,90 @@ function providerRowMain(providerId) {
 
 function resetProviderForm() {
   providerForm.reset();
+  providerProtocol.value = "openai_compatible";
+  providerProtocol.dataset.previousProtocol = providerProtocol.value;
+  providerBaseUrl.value = window.ImageToolsWorkbench.proposeProviderBaseUrl(
+    "",
+    providerProtocol.value,
+    "",
+  );
   providerDefaultModel.value = "gpt-image-2";
+  providerDraftModels = [];
+  providerDraftModelsRefreshedAt = null;
+  renderProviderModelOptions();
   providerApiKey.value = "";
   providerApiKey.placeholder = "输入 API Key";
   providerSaveBtn.disabled = false;
   providerCancelBtn.disabled = false;
   providerDialogClose.disabled = false;
   providerSaveBtn.textContent = "保存";
+  providerTestBtn.disabled = false;
+  providerDiscoverBtn.disabled = false;
   setInlineStatus(providerDialogStatus, "");
+  setInlineStatus(providerProbeStatus, "");
+}
+
+function renderProviderModelOptions() {
+  providerModelOptions.replaceChildren();
+  const options = window.ImageToolsWorkbench.providerModelOptions(
+    providerProtocol.value,
+    providerDraftModels,
+  );
+  for (const model of options) {
+    const option = document.createElement("option");
+    option.value = model.id;
+    option.label = model.recommended ? "推荐" : "可用性未确认";
+    providerModelOptions.appendChild(option);
+  }
+}
+
+function currentProviderProbeInput() {
+  return {
+    provider_id: editingProviderId,
+    protocol: providerProtocol.value,
+    base_url: providerBaseUrl.value.trim(),
+    api_key: providerApiKey.value,
+  };
+}
+
+async function handleProviderTest() {
+  const token = ++providerProbeToken;
+  providerTestBtn.disabled = true;
+  setInlineStatus(providerProbeStatus, "正在检测连接...");
+  try {
+    const result = await desktopApi.testProviderConnection(currentProviderProbeInput());
+    if (token !== providerProbeToken || !providerDialog.open) return;
+    setInlineStatus(
+      providerProbeStatus,
+      `${result.message} ${result.elapsed_ms} ms`,
+    );
+  } catch (error) {
+    if (token === providerProbeToken && providerDialog.open) {
+      setInlineStatus(providerProbeStatus, error.message, "error");
+    }
+  } finally {
+    if (token === providerProbeToken) providerTestBtn.disabled = false;
+  }
+}
+
+async function handleProviderDiscovery() {
+  const token = ++providerDiscoveryToken;
+  providerDiscoverBtn.disabled = true;
+  setInlineStatus(providerProbeStatus, "正在获取模型...");
+  try {
+    const result = await desktopApi.discoverProviderModels(currentProviderProbeInput());
+    if (token !== providerDiscoveryToken || !providerDialog.open) return;
+    providerDraftModels = result.models;
+    providerDraftModelsRefreshedAt = result.models_refreshed_at;
+    renderProviderModelOptions();
+    setInlineStatus(providerProbeStatus, `已获取 ${result.models.length} 个模型。`);
+  } catch (error) {
+    if (token === providerDiscoveryToken && providerDialog.open) {
+      setInlineStatus(providerProbeStatus, error.message, "error");
+    }
+  } finally {
+    if (token === providerDiscoveryToken) providerDiscoverBtn.disabled = false;
+  }
 }
 
 function openNewProviderDialog(opener) {
@@ -663,12 +791,17 @@ function openEditProviderDialog(providerId, opener) {
   providerSaveToken += 1;
   resetProviderForm();
   providerEditorTitle.textContent = "编辑 Provider";
+  providerProtocol.value = provider.protocol;
+  providerProtocol.dataset.previousProtocol = provider.protocol;
   providerName.value = provider.name;
   providerBaseUrl.value = provider.baseUrl;
   providerApiKey.placeholder = provider.apiKeySet
     ? "已保存，留空则保持不变"
     : "输入 API Key";
   providerDefaultModel.value = provider.defaultModel;
+  providerDraftModels = [...provider.availableModels];
+  providerDraftModelsRefreshedAt = provider.modelsRefreshedAt;
+  renderProviderModelOptions();
   providerIsDefault.checked = provider.isDefault;
   window.ImageToolsUi.openDialog(providerDialog, opener);
   providerName.focus();
@@ -789,11 +922,14 @@ async function handleProviderSubmit(event) {
   const token = ++providerSaveToken;
   const providerId = editingProviderId;
   const payload = window.ImageToolsWorkbench.buildProviderPayload({
+    protocol: providerProtocol.value,
     name: providerName.value,
     baseUrl: providerBaseUrl.value,
     apiKey: providerApiKey.value,
     defaultModel: providerDefaultModel.value,
     isDefault: providerIsDefault.checked,
+    availableModels: providerDraftModels,
+    modelsRefreshedAt: providerDraftModelsRefreshedAt,
   });
   setInlineStatus(providerDialogStatus, "");
   providerSaveBtn.disabled = true;
@@ -1972,6 +2108,26 @@ providerDialogClose.addEventListener("click", () => void closeProviderDialog());
 providerCancelBtn.addEventListener("click", () => void closeProviderDialog());
 providerDialog.addEventListener("cancel", handleProviderDialogCancel);
 providerForm.addEventListener("submit", handleProviderSubmit);
+providerProtocol.addEventListener("change", () => {
+  const previous = providerProtocol.dataset.previousProtocol || "openai_compatible";
+  providerBaseUrl.value = window.ImageToolsWorkbench.proposeProviderBaseUrl(
+    previous,
+    providerProtocol.value,
+    providerBaseUrl.value,
+  );
+  providerProtocol.dataset.previousProtocol = providerProtocol.value;
+  providerDraftModels = [];
+  providerDraftModelsRefreshedAt = null;
+  const first = window.ImageToolsWorkbench.providerModelOptions(
+    providerProtocol.value,
+    [],
+  )[0];
+  if (first) providerDefaultModel.value = first.id;
+  renderProviderModelOptions();
+  setInlineStatus(providerProbeStatus, "");
+});
+providerTestBtn.addEventListener("click", () => void handleProviderTest());
+providerDiscoverBtn.addEventListener("click", () => void handleProviderDiscovery());
 providerMenuEditBtn.addEventListener("click", () => void editProviderFromMenu());
 providerMenuDefaultBtn.addEventListener("click", () => void setDefaultProviderFromMenu());
 providerMenuDeleteBtn.addEventListener("click", () => void deleteProviderFromMenu());
@@ -2058,7 +2214,7 @@ providerSelect.addEventListener("change", () => {
       setComposerNotice();
     }
     modelInput.value = provider.defaultModel;
-    syncTransparentBackground();
+    syncProviderCapabilities();
     saveActiveDraft();
   }
 });
@@ -2083,7 +2239,7 @@ clearReferenceBtn.addEventListener("click", () => {
   syncReferenceState();
   saveActiveDraft();
 });
-modelInput.addEventListener("input", syncTransparentBackground);
+modelInput.addEventListener("input", syncProviderCapabilities);
 outputFormatSelect.addEventListener("change", syncTransparentBackground);
 window.addEventListener("resize", () => {
   repositionComposerMenus();

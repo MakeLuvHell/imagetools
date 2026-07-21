@@ -10,6 +10,7 @@ async function installApiMocks(page, overrides = {}) {
   const initialProviders = overrides.providers === undefined
     ? [{
         id: 1,
+        protocol: "openai_compatible",
         name: "Default",
         base_url: "https://api.example/v1",
         default_model: "gpt-image-2",
@@ -36,6 +37,7 @@ async function installApiMocks(page, overrides = {}) {
     projects: overrides.projects || [],
     providers: initialProviders,
     providerRequests: [],
+    providerProbeRequests: [],
     providerListRequests: 0,
     providerListResponses: 0,
     providerListResponseOrder: [],
@@ -76,11 +78,14 @@ async function installApiMocks(page, overrides = {}) {
       if (body.is_default) state.providers.forEach((provider) => { provider.is_default = false; });
       const provider = {
         id: state.nextProviderId++,
+        protocol: body.protocol,
         name: body.name,
         base_url: body.base_url,
         default_model: body.default_model,
         is_default: Boolean(body.is_default),
         api_key_set: Boolean(body.api_key),
+        available_models: body.available_models || [],
+        models_refreshed_at: body.models_refreshed_at || null,
       };
       state.providers.push(provider);
       return provider;
@@ -97,9 +102,12 @@ async function installApiMocks(page, overrides = {}) {
       if (!provider) throw commandError("Provider 不存在。", "provider.not_found");
       state.providerRequests.push({ method: "PATCH", id: providerId, body });
       Object.assign(provider, {
+        protocol: body.protocol,
         name: body.name,
         base_url: body.base_url,
         default_model: body.default_model,
+        available_models: body.available_models || provider.available_models || [],
+        models_refreshed_at: body.models_refreshed_at || provider.models_refreshed_at || null,
       });
       if (body.api_key) provider.api_key_set = true;
       if (body.is_default) {
@@ -122,6 +130,24 @@ async function installApiMocks(page, overrides = {}) {
       state.providerRequests.push({ method: "POST", id: providerId, body: null });
       state.providers.forEach((item) => { item.is_default = Number(item.id) === Number(providerId); });
       return { ...state.providers.find((item) => Number(item.id) === Number(providerId)) };
+    }
+    if (method === "testProviderConnection") {
+      state.providerProbeRequests.push({ method: "test", body: args[0] });
+      if (overrides.providerProbeError) throw commandError(overrides.providerProbeError);
+      return {
+        ok: true,
+        elapsed_ms: 42,
+        checked_at: "2026-07-21T00:00:00Z",
+        message: "连接成功。",
+      };
+    }
+    if (method === "discoverProviderModels") {
+      state.providerProbeRequests.push({ method: "discover", body: args[0] });
+      if (overrides.providerDiscoveryError) throw commandError(overrides.providerDiscoveryError);
+      return {
+        models: overrides.discoveredModels || ["grok-imagine-image", "custom-image"],
+        models_refreshed_at: "2026-07-21T00:00:00Z",
+      };
     }
     if (method === "getStorageLocation") {
       const ordinal = ++state.storageGetRequests;
@@ -267,6 +293,7 @@ async function installApiMocks(page, overrides = {}) {
       "getSettings", "updateSettings", "getStorageLocation", "updateStorageLocation",
       "listProviders", "createProvider", "getProvider", "updateProvider", "deleteProvider",
       "setDefaultProvider", "listProjects", "createProject", "updateProject", "deleteProject",
+      "testProviderConnection", "discoverProviderModels",
       "listSessions", "createSession", "getSession", "updateSession", "deleteSession",
       "setSessionPinned", "listSessionRuns", "saveImage", "stageReference", "generate",
     ];

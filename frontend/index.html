@@ -166,6 +166,8 @@
             <option value="2:3">2:3</option>
             <option value="16:9">16:9</option>
             <option value="9:16">9:16</option>
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
           </select>
         </label>
         <label>
@@ -382,6 +384,14 @@
       <form id="providerForm" class="provider-form">
         <p id="providerDialogStatus" class="dialog-status" role="alert" hidden></p>
         <label>
+          <span>协议</span>
+          <select id="providerProtocol">
+            <option value="openai_compatible">OpenAI Compatible</option>
+            <option value="xai_images">xAI Imagine</option>
+            <option value="gemini_native">Gemini Native Image</option>
+          </select>
+        </label>
+        <label>
           <span>名称</span>
           <input id="providerName" required autocomplete="off" />
         </label>
@@ -395,8 +405,20 @@
         </label>
         <label>
           <span>默认模型</span>
-          <input id="providerDefaultModel" required value="gpt-image-2" autocomplete="off" />
+          <input id="providerDefaultModel" required value="gpt-image-2" autocomplete="off" list="providerModelOptions" />
+          <datalist id="providerModelOptions"></datalist>
         </label>
+        <div class="provider-probe-actions">
+          <button id="providerTestBtn" type="button" class="dialog-button">
+            <i data-lucide="activity"></i>
+            <span>检测联通性</span>
+          </button>
+          <button id="providerDiscoverBtn" type="button" class="dialog-button">
+            <i data-lucide="refresh-cw"></i>
+            <span>获取可用模型</span>
+          </button>
+        </div>
+        <p id="providerProbeStatus" class="dialog-status provider-probe-status" role="status" aria-live="polite" hidden></p>
         <label class="checkbox-field">
           <input id="providerIsDefault" type="checkbox" />
           <span>设为默认 Provider</span>

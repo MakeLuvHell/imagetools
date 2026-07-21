@@ -5,6 +5,24 @@
     medium: "高清",
     large: "超清",
   };
+  const PROVIDER_PROTOCOLS = {
+    openai_compatible: {
+      baseUrl: "https://api.openai.com/v1",
+      recommendedModels: ["gpt-image-2"],
+    },
+    xai_images: {
+      baseUrl: "https://api.x.ai/v1",
+      recommendedModels: [
+        "grok-imagine-image",
+        "grok-imagine-image-pro",
+        "grok-imagine-image-quality",
+      ],
+    },
+    gemini_native: {
+      baseUrl: "https://generativelanguage.googleapis.com",
+      recommendedModels: ["gemini-3-pro-image", "gemini-2.5-flash-image"],
+    },
+  };
   const DRAFT_FIELDS = [
     "prompt",
     "providerId",
@@ -110,6 +128,9 @@
   function normalizeProviders(providers = []) {
     return providers.map((provider) => ({
       id: Number(provider.id),
+      protocol: PROVIDER_PROTOCOLS[provider.protocol]
+        ? provider.protocol
+        : "openai_compatible",
       name: String(provider.name || "Provider"),
       baseUrl: String(provider.base_url || provider.baseUrl || ""),
       defaultModel: String(
@@ -117,7 +138,79 @@
       ),
       isDefault: Boolean(provider.is_default ?? provider.isDefault),
       apiKeySet: Boolean(provider.api_key_set ?? provider.apiKeySet),
+      availableModels: Array.isArray(provider.available_models ?? provider.availableModels)
+        ? [...new Set((provider.available_models ?? provider.availableModels).map(String))]
+        : [],
+      modelsRefreshedAt:
+        provider.models_refreshed_at || provider.modelsRefreshedAt || null,
     }));
+  }
+
+  function proposeProviderBaseUrl(previousProtocol, nextProtocol, currentUrl) {
+    const current = String(currentUrl || "").trim();
+    const previousDefault = PROVIDER_PROTOCOLS[previousProtocol]?.baseUrl || "";
+    if (current && current !== previousDefault) return current;
+    return PROVIDER_PROTOCOLS[nextProtocol]?.baseUrl || current;
+  }
+
+  function providerModelOptions(protocol, availableModels = []) {
+    const recommended = PROVIDER_PROTOCOLS[protocol]?.recommendedModels || [];
+    const recommendedSet = new Set(recommended);
+    const discovered = [...new Set(availableModels.map((model) => String(model).trim()))]
+      .filter((model) => model && !recommendedSet.has(model));
+    return [
+      ...recommended.map((id) => ({ id, recommended: true })),
+      ...discovered.map((id) => ({ id, recommended: false })),
+    ];
+  }
+
+  function providerCapabilities(protocol, model) {
+    if (protocol === "xai_images") {
+      return {
+        maxReferences: 3,
+        maxResults: 4,
+        ratios: ["1:1", "3:2", "2:3", "16:9", "9:16"],
+        resolutions: ["standard", "medium", "large"],
+        supportsOpenAiOptions: false,
+      };
+    }
+    if (protocol === "gemini_native") {
+      return {
+        maxReferences: 3,
+        maxResults: 1,
+        ratios: ["1:1", "3:2", "2:3", "16:9", "9:16"],
+        resolutions: model === "gemini-3-pro-image"
+          ? ["standard", "medium", "large"]
+          : ["standard"],
+        supportsOpenAiOptions: false,
+      };
+    }
+    return {
+      maxReferences: 1,
+      maxResults: 4,
+      ratios: ["1:1", "3:2", "2:3"],
+      resolutions: ["standard", "medium", "large"],
+      supportsOpenAiOptions: true,
+    };
+  }
+
+  function normalizeComposerForProvider(composer, protocol, model) {
+    const capabilities = providerCapabilities(protocol, model);
+    const normalized = {
+      ...composer,
+      count: Math.min(capabilities.maxResults, Math.max(1, Number(composer.count || 1))),
+      resolution: capabilities.resolutions.includes(composer.resolution)
+        ? composer.resolution
+        : capabilities.resolutions[0],
+    };
+    if (!capabilities.supportsOpenAiOptions) {
+      normalized.quality = "auto";
+      normalized.outputFormat = "png";
+      normalized.outputCompression = 100;
+      normalized.background = "auto";
+      normalized.moderation = "auto";
+    }
+    return normalized;
   }
 
   function selectedProvider(providers, providerId) {
@@ -136,12 +229,19 @@
 
   function buildProviderPayload(provider) {
     return {
+      protocol: PROVIDER_PROTOCOLS[provider.protocol]
+        ? provider.protocol
+        : "openai_compatible",
       name: String(provider.name || "").trim(),
       base_url: String(provider.baseUrl || "").trim(),
       api_key: String(provider.apiKey || ""),
       default_model:
         String(provider.defaultModel || "gpt-image-2").trim() || "gpt-image-2",
       is_default: Boolean(provider.isDefault),
+      available_models: Array.isArray(provider.availableModels)
+        ? provider.availableModels.map(String)
+        : [],
+      models_refreshed_at: provider.modelsRefreshedAt || null,
     };
   }
 
@@ -451,6 +551,10 @@
     sessionDropPatch,
     projectIdForSession,
     normalizeProviders,
+    proposeProviderBaseUrl,
+    providerModelOptions,
+    providerCapabilities,
+    normalizeComposerForProvider,
     applySessionList,
     selectSession,
     selectNewTask,

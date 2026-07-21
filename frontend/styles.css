@@ -1753,6 +1753,27 @@ summary:focus-visible {
   color: var(--danger);
 }
 
+.provider-probe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.provider-probe-actions .dialog-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.provider-probe-actions svg {
+  width: 16px;
+  height: 16px;
+}
+
+.provider-probe-status {
+  margin-top: -4px;
+}
+
 .settings-dialog .checkbox-field {
   display: flex;
   grid-template-columns: none;

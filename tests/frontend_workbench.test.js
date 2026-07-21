@@ -371,28 +371,96 @@ test("buildGenerationFields maps composer state to generate payload fields", () 
 test("provider selection returns active provider model fallback", () => {
   const providers = workbench.normalizeProviders([
     { id: 1, name: "A", default_model: "gpt-image-2" },
-    { id: 2, name: "B", default_model: "custom-model" },
+    {
+      id: 2,
+      protocol: "gemini_native",
+      name: "B",
+      default_model: "custom-model",
+      available_models: ["custom-model"],
+      models_refreshed_at: "2026-07-20T00:00:00Z",
+    },
   ]);
 
   assert.equal(workbench.selectedProvider(providers, 2).defaultModel, "custom-model");
+  assert.equal(workbench.selectedProvider(providers, 1).protocol, "openai_compatible");
+  assert.deepEqual(workbench.selectedProvider(providers, 2).availableModels, ["custom-model"]);
   assert.equal(workbench.selectedProvider(providers, 99), null);
+});
+
+test("protocol defaults and capabilities are explicit and model-aware", () => {
+  assert.equal(
+    workbench.proposeProviderBaseUrl("openai_compatible", "xai_images", ""),
+    "https://api.x.ai/v1",
+  );
+  assert.equal(
+    workbench.proposeProviderBaseUrl(
+      "openai_compatible",
+      "gemini_native",
+      "https://custom.example/v1",
+    ),
+    "https://custom.example/v1",
+  );
+  assert.equal(workbench.providerCapabilities("gemini_native", "custom").maxResults, 1);
+  assert.deepEqual(
+    workbench.providerCapabilities("gemini_native", "gemini-3-pro-image").resolutions,
+    ["standard", "medium", "large"],
+  );
+  assert.equal(workbench.providerCapabilities("xai_images", "grok-imagine-image").maxReferences, 3);
+  assert.deepEqual(
+    workbench.providerModelOptions("xai_images", ["other", "grok-imagine-image", "other"]),
+    [
+      { id: "grok-imagine-image", recommended: true },
+      { id: "grok-imagine-image-pro", recommended: true },
+      { id: "grok-imagine-image-quality", recommended: true },
+      { id: "other", recommended: false },
+    ],
+  );
+});
+
+test("composer normalization clears fields unsupported by the selected protocol", () => {
+  assert.deepEqual(
+    workbench.normalizeComposerForProvider({
+      count: 4,
+      resolution: "large",
+      quality: "high",
+      outputFormat: "webp",
+      outputCompression: 72,
+      background: "transparent",
+      moderation: "low",
+    }, "gemini_native", "gemini-2.5-flash-image"),
+    {
+      count: 1,
+      resolution: "standard",
+      quality: "auto",
+      outputFormat: "png",
+      outputCompression: 100,
+      background: "auto",
+      moderation: "auto",
+    },
+  );
 });
 
 test("buildProviderPayload is complete and preserves an empty key", () => {
   assert.deepEqual(
     workbench.buildProviderPayload({
+      protocol: "xai_images",
       name: "Primary",
       baseUrl: "https://api.example/v1",
       apiKey: "",
       defaultModel: "gpt-image-2",
       isDefault: true,
+      availableModels: ["grok-imagine-image"],
+      modelsRefreshedAt: "2026-07-20T00:00:00Z",
     }),
     {
+      protocol: "xai_images",
       name: "Primary",
       base_url: "https://api.example/v1",
       api_key: "",
       default_model: "gpt-image-2",
       is_default: true,
+      available_models: ["grok-imagine-image"],
+      models_refreshed_at: "2026-07-20T00:00:00Z",
     },
   );
 });
