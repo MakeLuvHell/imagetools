@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私下报告安全漏洞
+    url: https://github.com/MakeLuvHell/imagetools/security/advisories/new
+    about: API Key 泄露、任意文件访问等安全问题不要提交公开 Issue。

@@ -3,6 +3,7 @@ from pathlib import Path
 
 README = Path("README.md")
 RELEASE_DOC = Path("docs/releases/github-release.md")
+USER_GUIDE = Path("docs/user-guide.md")
 
 
 def test_readme_is_desktop_first_and_documents_runtime_storage():
@@ -41,3 +42,21 @@ def test_release_docs_mention_windows_x64_assets_and_gate():
     assert "Image-Tools-v0.4.0-Windows-x64.msi" in text
     assert "Image-Tools-v0.4.0-Windows-x64-Portable.zip" in text
     assert "verify_windows_single_process.ps1" in text
+
+
+def test_readme_links_complete_user_guide():
+    readme = README.read_text(encoding="utf-8")
+
+    assert "[使用文档](docs/user-guide.md)" in readme
+
+    guide = USER_GUIDE.read_text(encoding="utf-8")
+    for heading in (
+        "## 安装与启动",
+        "## 配置 Provider",
+        "## 生成图片",
+        "## 使用参考图",
+        "## 管理会话和项目",
+        "## 本地数据与备份",
+        "## 常见问题",
+    ):
+        assert heading in guide

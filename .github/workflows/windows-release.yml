@@ -144,6 +144,25 @@ jobs:
             throw "Windows upgrade and rollback verification failed with exit code $LASTEXITCODE."
           }
 
+      - name: Create SHA-256 checksums
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          $assets = @(
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi",
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip"
+          )
+          $checksumOutput = "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SHA256SUMS.txt"
+          $lines = foreach ($asset in $assets) {
+            $hash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $([System.IO.Path]::GetFileName($asset))"
+          }
+          $lines | Set-Content -LiteralPath $checksumOutput -Encoding ascii
+
       - name: Upload Windows release assets as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -151,6 +170,7 @@ jobs:
           path: |
             release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64.msi
             release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-Portable.zip
+            release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Ensure GitHub Release exists
@@ -195,7 +215,8 @@ jobs:
 
           $assets = @(
             "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi",
-            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip"
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip",
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SHA256SUMS.txt"
           )
 
           foreach ($asset in $assets) {

@@ -1,0 +1,59 @@
+name: Provider 兼容性问题
+description: 报告特定图片服务的探测、模型发现或生成兼容问题
+title: "[Provider] "
+labels: []
+body:
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Provider 协议
+      options:
+        - OpenAI Compatible
+        - xAI Imagine
+        - Gemini Native Image
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: 服务名称
+      description: 官方服务或兼容服务的公开名称。
+    validations:
+      required: true
+  - type: input
+    id: base_url
+    attributes:
+      label: Base URL
+      description: 只填写公开 API 地址，不要包含查询参数、API Key 或账号标识。
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: 模型名称
+    validations:
+      required: true
+  - type: dropdown
+    id: operation
+    attributes:
+      label: 失败操作
+      options:
+        - 检测联通性
+        - 获取可用模型
+        - 文生图
+        - 参考图生成
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 复现步骤和脱敏错误
+    validations:
+      required: true
+  - type: checkboxes
+    id: sensitive
+    attributes:
+      label: 敏感信息确认
+      options:
+        - label: 内容中不包含 API Key、Authorization Header、私人提示词或图片。
+          required: true

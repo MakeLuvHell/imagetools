@@ -1,6 +1,13 @@
 # Image Tools
 
+[![CI](https://github.com/MakeLuvHell/imagetools/actions/workflows/ci.yml/badge.svg)](https://github.com/MakeLuvHell/imagetools/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Windows 桌面图片创作工作台，内置 OpenAI Compatible、xAI Imagine 和 Gemini Native Image 协议，用于文生图、多参考图生成、会话化历史管理和本地结果追溯。
+
+[下载最新公开版本](https://github.com/MakeLuvHell/imagetools/releases/latest) · [使用文档](docs/user-guide.md) · [参与贡献](CONTRIBUTING.md)
+
+![Image Tools 深色主工作台](tests/ui/codex_windows.spec.js-snapshots/shell-1280x860-dark-chromium-linux.png)
 
 ## 当前能力
 
@@ -14,6 +21,15 @@ Windows 桌面图片创作工作台，内置 OpenAI Compatible、xAI Imagine 和
 - 结果图通过只接受数据库图片 ID 的只读媒体协议展示，并可用系统原生保存对话框导出。
 
 不包含云同步、账号、多用户、素材中心、系统凭据存储、自动更新或内置图片编辑器。
+
+## 下载与安装
+
+前往 [GitHub Releases](https://github.com/MakeLuvHell/imagetools/releases/latest) 下载 Windows x64 版本：
+
+- MSI 适合正常安装和从开始菜单启动。
+- Portable ZIP 解压后直接运行，包内只有 `Image Tools.exe`。
+
+程序依赖 Microsoft Edge WebView2 Runtime。发布资产尚未签名，首次运行可能显示 SmartScreen 提示。下载后可使用 Release 附带的 `SHA256SUMS` 校验文件完整性。详细步骤和数据备份要求见 [使用文档](docs/user-guide.md)。
 
 ## 安装开发依赖
 
@@ -138,3 +154,13 @@ Provider 必须显式选择协议，不根据名称、模型或域名猜测：
 - Gemini Native Image：`x-goog-api-key` 请求到 `/v1beta/models/{model}:generateContent`，支持最多三张有序 `inlineData` 参考图，每次返回一张图片。
 
 设置中的“检测联通性”和“获取可用模型”相互独立；模型发现结果缓存在本地 Provider 记录中，失败不会清除上一次成功缓存。完整 OpenAI 字段适配见 [`docs/api/gpt-image-api-frontend-adapter.md`](docs/api/gpt-image-api-frontend-adapter.md)。
+
+## 开源项目
+
+- [贡献指南](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
+- [社区行为准则](CODE_OF_CONDUCT.md)
+- [项目路线图](docs/roadmap.md)
+- [MIT License](LICENSE)
+
+普通缺陷和功能建议请使用仓库的 Issue 模板。安全漏洞或可能泄露 API Key、私人提示词及图片的问题，请按照 [安全策略](SECURITY.md) 私下报告。

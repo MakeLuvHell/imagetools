@@ -82,7 +82,7 @@ def test_windows_release_workflow_uses_official_rustup_dist_on_windows():
     assert "mise exec -- pwsh" in workflow
 
 
-def test_windows_release_workflow_packages_and_uploads_two_stable_assets():
+def test_windows_release_workflow_packages_and_uploads_stable_assets():
     workflow = windows_release_workflow()
 
     assert "actions/upload-artifact@v4" in workflow
@@ -96,6 +96,14 @@ def test_windows_release_workflow_packages_and_uploads_two_stable_assets():
     assert "bundle/nsis" not in workflow.lower()
     assert "nsis" not in workflow.lower()
     assert "--clobber" in workflow
+
+
+def test_windows_release_workflow_publishes_sha256_checksums():
+    workflow = windows_release_workflow()
+
+    assert "Get-FileHash" in workflow
+    assert "Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SHA256SUMS.txt" in workflow
+    assert workflow.count("SHA256SUMS") >= 3
 
 
 def test_windows_release_workflow_selects_one_msi_and_builds_portable_from_main_exe():

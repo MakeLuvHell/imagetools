@@ -51,6 +51,7 @@
 | MP005 | Provider | Add xAI Imagine adapter | JSON generation/edit requests and safe result/error normalization | MP004 | Done |
 | MP006 | Provider | Add Gemini Native Image adapter | generateContent mapping, sizing, inline images, and safety parsing | MP004 | Done |
 | MP007 | Release | Integrate and verify v0.4.0 | Version/docs, schema-v3 upgrade, backup rollback, source and Windows gates | MP001-MP006 | Done |
+| OSS001 | Governance | Add public project documentation and automation | Privacy/security/contribution docs, templates, CI, dependency updates, and release checksums | MP007 | Done |
 
 ## Recommended Order
 
@@ -72,6 +73,7 @@
 16. UI019-UI020 refresh deterministic baselines, preserve decisions, and run the consolidated gates once.
 17. UI021-UI022 keep explicit session entry and prompt submission aligned to the latest run, simplify result actions, and preserve Windows release evidence.
 18. MP001-MP006 add explicit multi-protocol generation and ordered references; MP007 performs the one consolidated source gate and final Windows gate.
+19. OSS001 establishes the public contribution, security, CI, dependency, and release-integrity baseline after v0.4.0 implementation.
 
 ## Single-Process Rust Migration
 
