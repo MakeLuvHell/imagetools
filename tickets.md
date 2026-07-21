@@ -1,5 +1,15 @@
 # Implementation Tickets: Desktop Image Workbench
 
+## Active v0.4.0 Plan
+
+Multi-protocol Provider implementation is tracked in
+`docs/superpowers/plans/2026-07-20-multi-protocol-image-providers.md` as MP001-MP007.
+The approved design is
+`docs/superpowers/specs/2026-07-20-multi-protocol-image-providers-design.md`.
+
+Execution order is MP001 -> MP002 -> MP003 -> MP004 -> MP005/MP006 -> MP007.
+All feature tickets use focused verification; consolidated source and Windows gates run only in MP007.
+
 Source spec: `docs/spec/2026-07-09-desktop-image-workbench.md`
 
 ## T001: SQLite 工作台数据层
