@@ -55,6 +55,7 @@
 - RB014 recorded v0.2.3 to v0.3.0 upgrade and v0.3.0 to v0.2.3 rollback evidence in workflow run `29605770705`.
 - Responsive Settings, Composer, and session-tree changes passed the same non-publishing Windows payload, lifecycle, upgrade, and rollback gate in workflow run `29651658576`; artifact `8431714800` contains the validated MSI and single-executable Portable assets.
 - Latest-run session entry, coordinated prompt follow, and simplified result actions passed the non-publishing Windows payload, lifecycle, upgrade, and rollback gate in workflow run `29655474254`; artifact `8432801140` contains the validated MSI and single-executable Portable assets.
+- v0.4.0 explicit protocols, model discovery, ordered references, schema-v3 migration, and backup-restored v0.3.0 rollback passed non-publishing Windows workflow run `29839460989`; artifact `8498969943` contains the validated MSI and single-executable Portable assets.
 
 ## Reusable Commands
 

@@ -50,7 +50,7 @@
 | MP004 | References | Add ordered multi-reference generation | Up to three ordered sources with durable history snapshots | MP003 | Done |
 | MP005 | Provider | Add xAI Imagine adapter | JSON generation/edit requests and safe result/error normalization | MP004 | Done |
 | MP006 | Provider | Add Gemini Native Image adapter | generateContent mapping, sizing, inline images, and safety parsing | MP004 | Done |
-| MP007 | Release | Integrate and verify v0.4.0 | Version/docs, schema-v3 upgrade, backup rollback, source and Windows gates | MP001-MP006 | In progress |
+| MP007 | Release | Integrate and verify v0.4.0 | Version/docs, schema-v3 upgrade, backup rollback, source and Windows gates | MP001-MP006 | Done |
 
 ## Recommended Order
 

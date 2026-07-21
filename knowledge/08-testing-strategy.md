@@ -7,6 +7,7 @@
 - Keep browser mocks at the `ImageToolsDesktopApi` boundary so Playwright exercises production orchestration without introducing another transport.
 - Treat Linux compilation, mock runtime, and static package checks as supporting evidence, not as proof of Windows behavior.
 - The real Windows MSI and Portable assets passed RB014 in workflow run `29605770705`; public release publication remains an explicit separate action.
+- The v0.4.0 multi-protocol MSI/Portable and schema-v3 upgrade/backup-rollback gate passed workflow run `29839460989`; artifact `8498969943` is the validated non-published Windows payload.
 
 ## Layers
 

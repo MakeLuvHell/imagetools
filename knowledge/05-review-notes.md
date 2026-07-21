@@ -132,8 +132,9 @@ Workflow run [`29651658576`](https://github.com/MakeLuvHell/imagetools/actions/r
 ### Verification Status
 
 - MP001-MP006 focused Rust, Node, and Playwright checks passed during implementation.
-- Version/documentation and Windows upgrade-gate integration are complete locally.
-- Consolidated source gates and the one final Windows MSI/Portable gate remain pending until MP007 finishes.
+- Consolidated source gate passed: pytest 54, Node 101, Playwright 69, Rust 155, `cargo fmt --check`, `desktop-check`, and `git diff --check`.
+- Windows workflow run `29839460989` built commit `1ae2cf5a2f0cfe51b715efc8f2151dfe677a5116` and passed MSI build, single-executable Portable staging, payload/process/listener/shutdown verification, v0.3.0 schema-v2 to v0.4.0 schema-v3 upgrade, backup-restored v0.3.0 rollback, and artifact upload.
+- Artifact `8498969943`, `image-tools-v0.4.0-windows-x64`, contains the validated assets. `publish_release=false`; tag and public GitHub Release creation were not performed.
 
 ## Latest-Run Follow Review
 
