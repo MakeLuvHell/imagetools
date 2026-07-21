@@ -271,7 +271,7 @@ function Stop-TestBackendProcesses {
 
 function Invoke-FixtureTool {
     param(
-        [Parameter(Mandatory = $true)][ValidateSet("create", "verify")][string]$Operation,
+        [Parameter(Mandatory = $true)][ValidateSet("create", "verify", "verify-v3")][string]$Operation,
         [Parameter(Mandatory = $true)][string]$Workspace,
         [Parameter(Mandatory = $true)][string]$ScriptPath
     )

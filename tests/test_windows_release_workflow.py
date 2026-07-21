@@ -241,6 +241,7 @@ def test_upgrade_rollback_verifier_is_isolated_versioned_and_self_cleaning():
     assert '"create"' in script
     assert '"verify"' in script
     assert '"verify-v3"' in script
+    assert 'ValidateSet("create", "verify", "verify-v3")' in script
     assert "Copy-Item" in script
     assert script.index(
         "Copy-Item -LiteralPath $fixtureWorkspace -Destination $rollbackWorkspace -Recurse"
