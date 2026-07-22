@@ -2,6 +2,7 @@
   const dialogOpeners = new WeakMap();
   const dialogKeyHandlers = new WeakMap();
   const motionStates = new WeakMap();
+  const buttonFeedbackStates = new WeakMap();
 
   function focusableElements(dialog) {
     return [...dialog.querySelectorAll("input, select, textarea, button, [href], [tabindex]")].filter(
@@ -14,6 +15,93 @@
 
   function refreshIcons() {
     globalScope.ImageToolsIcons?.refresh();
+  }
+
+  function setButtonIcon(button, icon) {
+    const target = button.querySelector("[data-lucide]");
+    if (!target) return;
+    target.setAttribute("data-lucide", icon);
+    refreshIcons();
+  }
+
+  function restoreButtonFeedback(button, state) {
+    if (buttonFeedbackStates.get(button) !== state) return;
+    button.disabled = state.wasDisabled;
+    delete button.dataset.feedback;
+    button.removeAttribute("aria-busy");
+    if (state.ariaLabel == null) button.removeAttribute("aria-label");
+    else button.setAttribute("aria-label", state.ariaLabel);
+    setButtonIcon(button, state.icon);
+    buttonFeedbackStates.delete(button);
+  }
+
+  function resetButtonFeedback(button) {
+    const state = buttonFeedbackStates.get(button);
+    if (!state) return;
+    if (state.timer) state.view.clearTimeout(state.timer);
+    restoreButtonFeedback(button, state);
+  }
+
+  async function runButtonAction(button, action, { resetDelay = 900 } = {}) {
+    const current = buttonFeedbackStates.get(button);
+    if (current?.status === "pending") return false;
+    if (current?.timer) {
+      current.view.clearTimeout(current.timer);
+      restoreButtonFeedback(button, current);
+    }
+
+    const icon = button.querySelector("[data-lucide]")?.getAttribute("data-lucide") || "check";
+    const view = button.ownerDocument.defaultView || globalScope;
+    const state = {
+      ariaLabel: button.getAttribute("aria-label"),
+      baseLabel:
+        button.getAttribute("aria-label") || button.textContent.trim() || "操作",
+      icon,
+      status: "pending",
+      timer: null,
+      view,
+      wasDisabled: button.disabled,
+    };
+    buttonFeedbackStates.set(button, state);
+    button.disabled = true;
+    button.dataset.feedback = "pending";
+    button.setAttribute("aria-busy", "true");
+    button.setAttribute("aria-label", `${state.baseLabel}，处理中`);
+    setButtonIcon(button, "loader-circle");
+
+    try {
+      const result = await action();
+      if (result === false) {
+        restoreButtonFeedback(button, state);
+        return false;
+      }
+      if (buttonFeedbackStates.get(button) !== state) return result;
+      state.status = "success";
+      button.disabled = state.wasDisabled;
+      button.dataset.feedback = "success";
+      button.setAttribute("aria-busy", "false");
+      button.setAttribute("aria-label", `${state.baseLabel}，已完成`);
+      setButtonIcon(button, "check");
+      state.timer = view.setTimeout(
+        () => restoreButtonFeedback(button, state),
+        resetDelay,
+      );
+      return result;
+    } catch (error) {
+      if (buttonFeedbackStates.get(button) === state) {
+        state.status = "error";
+        button.disabled = state.wasDisabled;
+        button.dataset.feedback = "error";
+        button.setAttribute("aria-busy", "false");
+        button.setAttribute("aria-label", `${state.baseLabel}，失败`);
+        setButtonIcon(button, "circle-alert");
+        state.timer = view.setTimeout(
+          () => restoreButtonFeedback(button, state),
+          resetDelay,
+        );
+      }
+      return false;
+    }
   }
 
   function anchoredLayerPosition({
@@ -87,7 +175,7 @@
 
   function runOpenMotion(element, token) {
     const animations = startMotion(element, "opening");
-    void finishMotion(element, token, animations, () => {
+    return finishMotion(element, token, animations, () => {
       motionStates.set(element, { token, status: "open" });
       element.dataset.motion = "open";
     });
@@ -95,7 +183,7 @@
 
   function openLayer(element, trigger, { placement = "bottom" } = {}) {
     const token = beginOpen(element, trigger, placement);
-    runOpenMotion(element, token);
+    return runOpenMotion(element, token);
   }
 
   function positionAnchoredLayer(
@@ -129,6 +217,22 @@
   function isLayerOpen(element) {
     if (element.hidden) return false;
     return motionStates.get(element)?.status !== "closing";
+  }
+
+  function setProjectGroupExpanded(toggle, children, expanded) {
+    const label = toggle.getAttribute("aria-label") || "项目";
+    const projectLabel = label.replace(/^(?:展开|收起)项目\s*/, "");
+    toggle.setAttribute(
+      "aria-label",
+      `${expanded ? "收起" : "展开"}项目 ${projectLabel}`.trim(),
+    );
+    if (expanded) children.hidden = false;
+    children.style.setProperty(
+      "--project-children-height",
+      `${children.scrollHeight}px`,
+    );
+    if (expanded) return openLayer(children, toggle);
+    return closeLayer(children, toggle);
   }
 
   function closeLayer(
@@ -240,7 +344,7 @@
         "aria-label",
         `${collapsed ? "展开" : "收起"}项目 ${group.project.name}`,
       );
-      toggle.innerHTML = `<i data-lucide="${collapsed ? "chevron-right" : "chevron-down"}"></i>`;
+      toggle.innerHTML = '<i data-lucide="chevron-right"></i>';
       toggle.addEventListener("click", () =>
         callbacks.onProjectToggle?.(group.project.id),
       );
@@ -422,7 +526,11 @@
     button.setAttribute("aria-label", label);
     button.title = label;
     button.innerHTML = `<i data-lucide="${icon}"></i>`;
-    if (callback) button.addEventListener("click", callback);
+    if (callback) {
+      button.addEventListener("click", () => {
+        void runButtonAction(button, callback);
+      });
+    }
     return button;
   }
 
@@ -484,8 +592,17 @@
           preview.className = "result-preview";
           preview.setAttribute("aria-label", "预览图片");
           const element = document.createElement("img");
-          element.src = image.url;
           element.alt = "生成结果";
+          figure.dataset.imageState = "loading";
+          element.addEventListener("load", () => {
+            figure.dataset.imageState = "loaded";
+          });
+          element.addEventListener("error", () => {
+            if (figure.dataset.imageState === "loading") {
+              figure.dataset.imageState = "error";
+            }
+          });
+          element.src = image.url;
           preview.appendChild(element);
           preview.addEventListener("click", () => callbacks.onPreview?.(image, run));
           const actions = document.createElement("figcaption");
@@ -733,6 +850,9 @@
 
   const api = {
     anchoredLayerPosition,
+    runButtonAction,
+    resetButtonFeedback,
+    setProjectGroupExpanded,
     openLayer,
     openAnchoredLayer,
     positionAnchoredLayer,

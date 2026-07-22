@@ -52,6 +52,7 @@
 | MP006 | Provider | Add Gemini Native Image adapter | generateContent mapping, sizing, inline images, and safety parsing | MP004 | Done |
 | MP007 | Release | Integrate and verify v0.4.0 | Version/docs, schema-v3 upgrade, backup rollback, source and Windows gates | MP001-MP006 | Done |
 | OSS001 | Governance | Add public project documentation and automation | Privacy/security/contribution docs, templates, CI, dependency updates, and release checksums | MP007 | Done |
+| UI023 | Interaction | Add local action, project, and image feedback motion | Button-local async states, in-place project motion, and load-driven result reveal | UI022 | Done |
 
 ## Recommended Order
 
@@ -74,6 +75,7 @@
 17. UI021-UI022 keep explicit session entry and prompt submission aligned to the latest run, simplify result actions, and preserve Windows release evidence.
 18. MP001-MP006 add explicit multi-protocol generation and ordered references; MP007 performs the one consolidated source gate and final Windows gate.
 19. OSS001 establishes the public contribution, security, CI, dependency, and release-integrity baseline after v0.4.0 implementation.
+20. UI023 adds restrained local feedback without changing Provider, persistence, or release contracts.
 
 ## Single-Process Rust Migration
 

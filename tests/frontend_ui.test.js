@@ -91,6 +91,49 @@ test("renderSessionList groups pinned and project sessions with compact actions"
   assert.deepEqual(pointerStarts, [[2, "pointerdown"]]);
 });
 
+test("project groups finish collapse motion before hiding and reopen in place", async () => {
+  const dom = new JSDOM(`
+    <button id="toggle" aria-expanded="true" aria-label="收起项目 品牌视觉">
+      <i data-lucide="chevron-right"></i>
+    </button>
+    <div id="children"><button>产品海报</button></div>
+  `);
+  const toggle = dom.window.document.querySelector("#toggle");
+  const children = dom.window.document.querySelector("#children");
+  let finishCollapse;
+  const animation = {
+    playState: "running",
+    finished: new Promise((resolve) => {
+      finishCollapse = resolve;
+    }),
+    cancel() {},
+  };
+  children.getAnimations = () =>
+    children.dataset.motion === "closing" && animation.playState === "running"
+      ? [animation]
+      : [];
+
+  const closing = ui.setProjectGroupExpanded(toggle, children, false);
+
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(toggle.getAttribute("aria-label"), "展开项目 品牌视觉");
+  assert.equal(children.hidden, false);
+  assert.equal(children.dataset.motion, "closing");
+
+  animation.playState = "finished";
+  finishCollapse();
+  await closing;
+  assert.equal(children.hidden, true);
+
+  children.getAnimations = () => [];
+  await ui.setProjectGroupExpanded(toggle, children, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.equal(toggle.getAttribute("aria-label"), "收起项目 品牌视觉");
+  assert.equal(children.hidden, false);
+  assert.equal(toggle.querySelector("i").dataset.lucide, "chevron-right");
+  dom.window.close();
+});
+
 test("renderNewTask creates an unframed creation empty state", () => {
   assert.ok(ui, "frontend/ui.js must exist");
   const dom = new JSDOM('<section id="timeline"></section>');
@@ -254,6 +297,87 @@ test("renderTaskRuns keeps success and failure in one chronological stream", () 
     false,
   );
   assert.match(dom.window.document.querySelector(".run-error").textContent, /上游超时/);
+});
+
+test("result actions expose pending and success feedback without duplicate clicks", async () => {
+  const dom = new JSDOM('<section id="timeline"></section>');
+  let resolveCopy;
+  let copyCalls = 0;
+  ui.renderTaskRuns(
+    dom.window.document.querySelector("#timeline"),
+    [
+      {
+        id: 1,
+        status: "succeeded",
+        prompt: "夏季海报",
+        parameters: {},
+        images: [{ id: 9, url: "imagetools-media://image/9" }],
+      },
+    ],
+    {
+      onCopyLink: () => {
+        copyCalls += 1;
+        return new Promise((resolve) => {
+          resolveCopy = resolve;
+        });
+      },
+    },
+  );
+
+  const button = dom.window.document.querySelector('button[aria-label="复制链接"]');
+  button.click();
+  button.click();
+
+  assert.equal(copyCalls, 1);
+  assert.equal(button.disabled, true);
+  assert.equal(button.dataset.feedback, "pending");
+  assert.equal(button.getAttribute("aria-busy"), "true");
+  assert.equal(button.getAttribute("aria-label"), "复制链接，处理中");
+  assert.equal(button.querySelector("i").dataset.lucide, "loader-circle");
+
+  resolveCopy(true);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(button.disabled, false);
+  assert.equal(button.dataset.feedback, "success");
+  assert.equal(button.getAttribute("aria-busy"), "false");
+  assert.equal(button.getAttribute("aria-label"), "复制链接，已完成");
+  assert.equal(button.querySelector("i").dataset.lucide, "check");
+  ui.resetButtonFeedback(button);
+  assert.equal(button.dataset.feedback, undefined);
+  assert.equal(button.hasAttribute("aria-busy"), false);
+  assert.equal(button.getAttribute("aria-label"), "复制链接");
+  assert.equal(button.querySelector("i").dataset.lucide, "copy");
+  dom.window.close();
+});
+
+test("result images leave their loading state only after load or error", () => {
+  const dom = new JSDOM('<section id="timeline"></section>');
+  ui.renderTaskRuns(
+    dom.window.document.querySelector("#timeline"),
+    [
+      {
+        id: 1,
+        status: "succeeded",
+        prompt: "夏季海报",
+        parameters: {},
+        images: [{ id: 9, url: "imagetools-media://image/9" }],
+      },
+    ],
+  );
+
+  const figure = dom.window.document.querySelector(".result-image");
+  const image = figure.querySelector("img");
+  assert.equal(figure.dataset.imageState, "loading");
+
+  image.dispatchEvent(new dom.window.Event("load"));
+  assert.equal(figure.dataset.imageState, "loaded");
+
+  figure.dataset.imageState = "loading";
+  image.dispatchEvent(new dom.window.Event("error"));
+  assert.equal(figure.dataset.imageState, "error");
+  dom.window.close();
 });
 
 test("renderTaskRuns exposes optimistic prompt handoff targets", () => {

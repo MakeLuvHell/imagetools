@@ -19,6 +19,7 @@ Run `node --test tests/*.test.js`. Coverage includes:
 - Drafts, optimistic run isolation, reconciliation, Composer rules, project/session state, and result-reference handling.
 - Collapsed-project parsing/normalization, 6px drag activation, pinned drop payloads, optimistic failure messages, and prompt handoff cleanup.
 - DOM renderers, dialogs, menus, focus restoration, native save, and injected desktop API orchestration.
+- Button-local pending/success/error feedback, duplicate-click prevention, transient reset, in-place project motion, and result image load/error states.
 - Theme normalization, pre-paint bootstrap, localStorage, the retained Tauri cookie compatibility mirror, native retry, and stale completion ownership.
 - Static HTML/CSS/Tauri/release contracts and v0.4.0 version consistency.
 
@@ -51,6 +52,7 @@ Coverage includes:
 - Composer menus, Provider and storage settings, generation running/success/failure states, and image actions.
 - Native Settings modal geometry/focus/backdrop/nested Escape, row-targeted session commands, project persistence, Pointer Event move/cancel/failure behavior, and 500ms hover expansion.
 - Immediate accepted-prompt clearing, validation placement, reference handoff, 250ms Telegram motion, reduced motion, resize/session-switch cleanup, and animation rejection fallback.
+- Real Lucide feedback-icon replacement, project collapse completion, and decoded result-image reveal.
 - Enter/Shift+Enter, focus restoration, rapid submit, long CJK text, resize, reduced motion, stale asynchronous responses, and overflow.
 - Exactly 20 settings baselines across Appearance, Provider list, Provider dialog, storage status, and storage dialog.
 

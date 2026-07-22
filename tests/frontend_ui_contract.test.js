@@ -236,6 +236,27 @@ test("Provider settings uses a scan-first list and dedicated task dialogs", () =
   assert.match(app, /function openProviderDeleteDialog\(/);
 });
 
+test("Provider probe and discovery use button-local progress feedback", () => {
+  const probeFlow = app.slice(
+    app.indexOf("async function handleProviderTest"),
+    app.indexOf("async function handleProviderDiscovery"),
+  );
+  const discoveryFlow = app.slice(
+    app.indexOf("async function handleProviderDiscovery"),
+    app.indexOf("function openNewProviderDialog"),
+  );
+  assert.match(
+    probeFlow,
+    /runButtonAction\(providerTestBtn,[\s\S]*testProviderConnection/,
+  );
+  assert.match(
+    discoveryFlow,
+    /runButtonAction\(providerDiscoverBtn,[\s\S]*discoverProviderModels/,
+  );
+  assert.doesNotMatch(probeFlow, /providerTestBtn\.disabled\s*=/);
+  assert.doesNotMatch(discoveryFlow, /providerDiscoverBtn\.disabled\s*=/);
+});
+
 test("settings uses a native modal with separate provider and storage navigation", () => {
   for (const id of [
     "settingsView",
@@ -389,4 +410,28 @@ test("temporary layers use restrained motion with a reduced-motion fallback", ()
   assert.match(styles, /\.popover\[data-motion="opening"\]/);
   assert.match(styles, /\.app-dialog\[data-motion="closing"\]/);
   assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+});
+
+test("action feedback uses restrained pending success and error states", () => {
+  assert.match(styles, /button\[data-feedback="pending"\]\s+svg/);
+  assert.match(styles, /animation:\s*spin 0\.8s linear infinite/);
+  assert.match(styles, /button\[data-feedback="success"\]/);
+  assert.match(styles, /button\[data-feedback="error"\]/);
+  assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+});
+
+test("project groups rotate their chevron and animate content in place", () => {
+  assert.match(styles, /\.project-toggle\s+svg\s*\{[^}]*transition:\s*transform/s);
+  assert.match(styles, /\.project-toggle\[aria-expanded="true"\]\s+svg\s*\{[^}]*rotate\(90deg\)/s);
+  assert.match(styles, /\.project-children\[data-motion="opening"\]/);
+  assert.match(styles, /\.project-children\[data-motion="closing"\]/);
+  assert.match(styles, /@keyframes\s+project-children-in/);
+  assert.match(styles, /@keyframes\s+project-children-out/);
+});
+
+test("result images crossfade from a stable skeleton surface", () => {
+  assert.match(styles, /\.result-image\[data-image-state="loading"\]\s+\.result-preview/);
+  assert.match(styles, /\.result-preview\s+img\s*,[\s\S]*transition:[^}]*opacity 180ms/);
+  assert.match(styles, /\.result-image\[data-image-state="loaded"\][\s\S]*opacity:\s*1/);
+  assert.match(styles, /\.result-image\[data-image-state="error"\][\s\S]*opacity:\s*1/);
 });

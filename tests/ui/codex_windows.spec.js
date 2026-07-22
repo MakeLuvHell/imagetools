@@ -116,8 +116,11 @@ test("project collapse persists and selected sessions expand their project", asy
     runs: { 2: [] },
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "收起项目 品牌视觉" }).click();
-  await expect(page.locator('[data-project-sessions="8"]')).toBeHidden();
+  const projectToggle = page.getByRole("button", { name: "收起项目 品牌视觉" });
+  const projectChildren = page.locator('[data-project-sessions="8"]');
+  await projectToggle.evaluate((element) => element.click());
+  expect(await projectChildren.getAttribute("data-motion")).toBe("closing");
+  await expect(projectChildren).toBeHidden();
   await page.reload();
   await expect(page.getByRole("button", { name: "展开项目 品牌视觉" })).toBeVisible();
 
@@ -388,6 +391,7 @@ test("successful result actions omit the redundant continuation command", async 
   await page.getByRole("button", { name: "夏季饮品广告图", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "设为参考图" })).toBeVisible();
+  await expect(page.locator('.result-image[data-image-state="loaded"]')).toHaveCount(1);
   await expect(page.getByRole("button", { name: "基于结果继续" })).toHaveCount(0);
 });
 
@@ -520,7 +524,10 @@ test("historical result references submit an image id without refetching bytes",
   await page
     .getByRole("button", { name: "夏季饮品广告图", exact: true })
     .click();
-  await page.getByRole("button", { name: "设为参考图" }).click();
+  const referenceAction = page.locator('button[aria-label^="设为参考图"]');
+  await referenceAction.click();
+  await expect(referenceAction).toHaveAttribute("data-feedback", "success");
+  await expect(referenceAction.locator('[data-lucide="check"]')).toBeVisible();
   const prompt = page.getByPlaceholder("描述你想创作的图片");
   await prompt.fill("继续优化");
   await prompt.press("Enter");
@@ -747,10 +754,16 @@ test("Provider dialog tests connectivity and discovers models from the active dr
   await expect(dialog.getByLabel("Base URL")).toHaveValue("https://api.x.ai/v1");
   await dialog.getByLabel("名称").fill("xAI");
   await dialog.getByLabel("API Key").fill("draft-secret");
-  await dialog.getByRole("button", { name: "检测联通性" }).click();
+  const testButton = dialog.locator("#providerTestBtn");
+  await testButton.click();
   await expect(dialog.locator("#providerProbeStatus")).toContainText("连接成功");
-  await dialog.getByRole("button", { name: "获取可用模型" }).click();
+  await expect(testButton).toHaveAttribute("data-feedback", "success");
+  await expect(testButton.locator('[data-lucide="check"]')).toBeVisible();
+  const discoverButton = dialog.locator("#providerDiscoverBtn");
+  await discoverButton.click();
   await expect(dialog.locator("#providerProbeStatus")).toHaveText("已获取 2 个模型。");
+  await expect(discoverButton).toHaveAttribute("data-feedback", "success");
+  await expect(discoverButton.locator('[data-lucide="check"]')).toBeVisible();
 
   expect(requests.providerProbeRequests.map((request) => request.method)).toEqual([
     "test",

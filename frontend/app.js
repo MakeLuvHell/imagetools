@@ -266,7 +266,13 @@ function setProjectExpanded(projectId, expanded, { persist = true } = {}) {
   if (expanded) collapsedProjectIds.delete(numericId);
   else collapsedProjectIds.add(numericId);
   if (persist) persistCollapsedProjects();
-  renderSessions();
+  const toggle = sessionList.querySelector(`[data-project-toggle="${numericId}"]`);
+  const children = sessionList.querySelector(`[data-project-sessions="${numericId}"]`);
+  if (toggle && children) {
+    void window.ImageToolsUi.setProjectGroupExpanded(toggle, children, expanded);
+  } else {
+    renderSessions();
+  }
 }
 
 function filteredSessions() {
@@ -545,8 +551,10 @@ async function downloadImage(image) {
     if (saved) {
       showToast("图片已保存");
     }
+    return Boolean(saved);
   } catch (error) {
     showToast(error.message);
+    throw error;
   }
 }
 
@@ -554,6 +562,7 @@ async function copyImageLink(url) {
   const absoluteUrl = new URL(url, location.origin).href;
   await navigator.clipboard.writeText(absoluteUrl);
   showToast("图片链接已复制");
+  return true;
 }
 
 async function setReferenceFromImage(image) {
@@ -566,7 +575,7 @@ async function setReferenceFromImage(image) {
   });
   if (!nextReference) {
     showToast("无法使用这个历史结果作为参考图");
-    return;
+    return false;
   }
   const provider = window.ImageToolsWorkbench.selectedProvider(providers, providerSelect.value);
   const limit = window.ImageToolsWorkbench.providerCapabilities(
@@ -575,17 +584,18 @@ async function setReferenceFromImage(image) {
   ).maxReferences;
   if (referenceSources.length >= limit) {
     setComposerNotice(`当前 Provider 最多支持 ${limit} 张参考图`);
-    return;
+    return false;
   }
   if (referenceSources.some((reference) => referenceIdentity(reference) === referenceIdentity(nextReference))) {
     setComposerNotice("不能重复添加同一张参考图");
-    return;
+    return false;
   }
   referenceSources.push(nextReference);
   renderReferenceStrip();
   syncReferenceState();
   saveActiveDraft();
   showToast("已设为参考图");
+  return true;
 }
 
 function applyRunToComposer(run) {
@@ -604,6 +614,7 @@ function applyRunToComposer(run) {
   backgroundSelect.value = next.background;
   moderationSelect.value = next.moderation;
   showToast("已复制参数到输入区");
+  return true;
 }
 
 async function loadTimeline(sessionId) {
@@ -773,6 +784,8 @@ function resetProviderForm() {
   providerCancelBtn.disabled = false;
   providerDialogClose.disabled = false;
   providerSaveBtn.textContent = "保存";
+  window.ImageToolsUi.resetButtonFeedback(providerTestBtn);
+  window.ImageToolsUi.resetButtonFeedback(providerDiscoverBtn);
   providerTestBtn.disabled = false;
   providerDiscoverBtn.disabled = false;
   setInlineStatus(providerDialogStatus, "");
@@ -804,42 +817,42 @@ function currentProviderProbeInput() {
 
 async function handleProviderTest() {
   const token = ++providerProbeToken;
-  providerTestBtn.disabled = true;
-  setInlineStatus(providerProbeStatus, "正在检测连接...");
-  try {
-    const result = await desktopApi.testProviderConnection(currentProviderProbeInput());
-    if (token !== providerProbeToken || !providerDialog.open) return;
-    setInlineStatus(
-      providerProbeStatus,
-      `${result.message} ${result.elapsed_ms} ms`,
-    );
-  } catch (error) {
-    if (token === providerProbeToken && providerDialog.open) {
+  return window.ImageToolsUi.runButtonAction(providerTestBtn, async () => {
+    setInlineStatus(providerProbeStatus, "正在检测连接...");
+    try {
+      const result = await desktopApi.testProviderConnection(currentProviderProbeInput());
+      if (token !== providerProbeToken || !providerDialog.open) return false;
+      setInlineStatus(
+        providerProbeStatus,
+        `${result.message} ${result.elapsed_ms} ms`,
+      );
+      return true;
+    } catch (error) {
+      if (token !== providerProbeToken || !providerDialog.open) return false;
       setInlineStatus(providerProbeStatus, error.message, "error");
+      throw error;
     }
-  } finally {
-    if (token === providerProbeToken) providerTestBtn.disabled = false;
-  }
+  });
 }
 
 async function handleProviderDiscovery() {
   const token = ++providerDiscoveryToken;
-  providerDiscoverBtn.disabled = true;
-  setInlineStatus(providerProbeStatus, "正在获取模型...");
-  try {
-    const result = await desktopApi.discoverProviderModels(currentProviderProbeInput());
-    if (token !== providerDiscoveryToken || !providerDialog.open) return;
-    providerDraftModels = result.models;
-    providerDraftModelsRefreshedAt = result.models_refreshed_at;
-    renderProviderModelOptions();
-    setInlineStatus(providerProbeStatus, `已获取 ${result.models.length} 个模型。`);
-  } catch (error) {
-    if (token === providerDiscoveryToken && providerDialog.open) {
+  return window.ImageToolsUi.runButtonAction(providerDiscoverBtn, async () => {
+    setInlineStatus(providerProbeStatus, "正在获取模型...");
+    try {
+      const result = await desktopApi.discoverProviderModels(currentProviderProbeInput());
+      if (token !== providerDiscoveryToken || !providerDialog.open) return false;
+      providerDraftModels = result.models;
+      providerDraftModelsRefreshedAt = result.models_refreshed_at;
+      renderProviderModelOptions();
+      setInlineStatus(providerProbeStatus, `已获取 ${result.models.length} 个模型。`);
+      return true;
+    } catch (error) {
+      if (token !== providerDiscoveryToken || !providerDialog.open) return false;
       setInlineStatus(providerProbeStatus, error.message, "error");
+      throw error;
     }
-  } finally {
-    if (token === providerDiscoveryToken) providerDiscoverBtn.disabled = false;
-  }
+  });
 }
 
 function openNewProviderDialog(opener) {

@@ -21,6 +21,9 @@
 - Clear an accepted Composer prompt immediately while retaining common parameters, place pre-submit validation directly above the Composer, and coordinate the prompt's 250ms optimistic-bubble handoff with following the latest timeline record unless reduced motion is requested.
 - Enter an existing session at its latest generation run. Later backend reconciliation must preserve the current timeline position instead of causing a second follow jump.
 - Keep result actions distinct: preview, save, copy the link, or set the image as a reference. Do not expose a combined "continue from result" action that duplicates reference and parameter workflows.
+- Give asynchronous result and Provider actions button-local pending, success, and error feedback; prevent duplicate activation while pending and reset transient state when an editor reopens.
+- Expand and collapse project children in place with synchronized chevron, accessibility state, and reduced-motion behavior instead of rerendering the sidebar for a normal toggle.
+- Keep successful result geometry stable while image bytes load, then crossfade the decoded image from its skeleton surface; end the loading state on errors.
 - Expose pin, move, rename, and delete on each sidebar session row; projects expand/collapse with device-local persistence and accept pointer-driven session moves.
 - Move and unpin a pinned session in one `update_session` command and one SQLite transaction.
 
