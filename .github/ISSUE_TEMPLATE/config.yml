@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 使用支持与自助排查
+    url: https://github.com/MakeLuvHell/imagetools/blob/main/SUPPORT.md
+    about: 安装、Provider 配置和常见问题请先阅读支持说明与使用文档。
   - name: 私下报告安全漏洞
     url: https://github.com/MakeLuvHell/imagetools/security/advisories/new
     about: API Key 泄露、任意文件访问等安全问题不要提交公开 Issue。

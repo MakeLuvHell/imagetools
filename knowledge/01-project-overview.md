@@ -52,4 +52,4 @@ Out of scope:
 
 ## Current Status
 
-RB001-RB014 of the single-process Rust migration and MP001-MP007 of the v0.4.0 multi-protocol release are complete. Open-source governance now includes user/privacy documentation, contribution and security policies, structured issue/PR templates, routine CI, dependency update automation, and release checksums.
+RB001-RB014 of the single-process Rust migration and MP001-MP007 of the v0.4.0 multi-protocol release are complete. Open-source governance now includes user/privacy documentation, contribution and security policies, support boundaries, default code ownership, structured issue/PR templates, routine CI, dependency update automation, release checksums, SPDX SBOMs, and build provenance.

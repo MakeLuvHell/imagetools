@@ -163,6 +163,44 @@ jobs:
           }
           $lines | Set-Content -LiteralPath $checksumOutput -Encoding ascii
 
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-SBOM.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Create build provenance
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          BUILD_REF: ${{ inputs.build_ref }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+
+          $buildInfo = [ordered]@{
+            schema_version = 1
+            release_tag = $env:RELEASE_TAG
+            build_ref = $env:BUILD_REF
+            repository = $env:GITHUB_REPOSITORY
+            commit_sha = $env:GITHUB_SHA
+            workflow_run_id = $env:GITHUB_RUN_ID
+            workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
+            built_at_utc = [DateTime]::UtcNow.ToString("o")
+            assets = @(
+              "Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi",
+              "Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip",
+              "Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SHA256SUMS.txt",
+              "Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SBOM.spdx.json"
+            )
+          }
+          $buildInfo |
+            ConvertTo-Json -Depth 4 |
+            Set-Content -LiteralPath "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-build-info.json" -Encoding utf8NoBOM
+
       - name: Upload Windows release assets as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -171,6 +209,8 @@ jobs:
             release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64.msi
             release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-Portable.zip
             release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-SHA256SUMS.txt
+            release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-SBOM.spdx.json
+            release-assets/Image-Tools-${{ inputs.release_tag }}-Windows-x64-build-info.json
           if-no-files-found: error
 
       - name: Ensure GitHub Release exists
@@ -216,7 +256,9 @@ jobs:
           $assets = @(
             "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64.msi",
             "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-Portable.zip",
-            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SHA256SUMS.txt"
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SHA256SUMS.txt",
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SBOM.spdx.json",
+            "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-build-info.json"
           )
 
           foreach ($asset in $assets) {

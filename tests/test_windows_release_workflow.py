@@ -106,6 +106,20 @@ def test_windows_release_workflow_publishes_sha256_checksums():
     assert workflow.count("SHA256SUMS") >= 3
 
 
+def test_windows_release_workflow_publishes_sbom_and_build_provenance():
+    workflow = windows_release_workflow()
+
+    assert "anchore/sbom-action" in workflow
+    assert "spdx-json" in workflow
+    assert "upload-artifact: false" in workflow
+    assert "upload-release-assets: false" in workflow
+    assert "Image-Tools-$($env:RELEASE_TAG)-Windows-x64-SBOM.spdx.json" in workflow
+    assert "Image-Tools-$($env:RELEASE_TAG)-Windows-x64-build-info.json" in workflow
+    assert "GITHUB_SHA" in workflow
+    assert "GITHUB_RUN_ID" in workflow
+    assert workflow.index("anchore/sbom-action") < workflow.index("actions/upload-artifact@v4")
+
+
 def test_windows_release_workflow_selects_one_msi_and_builds_portable_from_main_exe():
     workflow = windows_release_workflow()
 

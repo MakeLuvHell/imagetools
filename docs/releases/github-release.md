@@ -4,15 +4,17 @@
 
 ## 发布资产
 
-Windows workflow 发布三个稳定命名资产：
+Windows workflow 发布五个稳定命名资产：
 
 ```text
 Image-Tools-v0.4.0-Windows-x64.msi
 Image-Tools-v0.4.0-Windows-x64-Portable.zip
 Image-Tools-v0.4.0-Windows-x64-SHA256SUMS.txt
+Image-Tools-v0.4.0-Windows-x64-SBOM.spdx.json
+Image-Tools-v0.4.0-Windows-x64-build-info.json
 ```
 
-Portable ZIP 必须只包含 `Image Tools.exe`。MSI 的行政解包负载必须只包含一个应用可执行文件 `Image Tools.exe`。可执行资产均未签名，Windows 可能显示未知发布者或 SmartScreen 提示；应用不包含自动更新。`SHA256SUMS` 由通过门禁的 MSI 和 Portable 字节生成。
+Portable ZIP 必须只包含 `Image Tools.exe`。MSI 的行政解包负载必须只包含一个应用可执行文件 `Image Tools.exe`。可执行资产均未签名，Windows 可能显示未知发布者或 SmartScreen 提示；应用不包含自动更新。`SHA256SUMS` 由通过门禁的 MSI 和 Portable 字节生成。`SBOM.spdx.json` 是由 workflow 生成的 SPDX JSON 软件物料清单，描述构建依赖；`build-info.json` 记录 tag、build ref、repository、commit SHA、workflow run、尝试次数、生成时间和资产文件名，不包含 API Key 或工作区数据。
 
 ## 版本一致性
 
@@ -78,7 +80,8 @@ git push origin v0.4.0
 5. 运行 `scripts/verify_windows_single_process.ps1`。
 6. 下载公开 Release 中固定的 v0.3.0 MSI，在隔离工作区运行 v0.3.0 → v0.4.0 升级，并在回滚 v0.3.0 前恢复升级前的 schema-v2 备份。
 7. 为 MSI 和 Portable 生成 SHA-256 校验文件。
-8. 无条件上传三个 workflow artifact；只有 `publish_release=true` 时才创建 GitHub Release 并上传 release assets。
+8. 生成 SPDX JSON SBOM 和不含机密的 `build-info.json` 构建来源清单。
+9. 无条件上传五个 workflow artifact；只有 `publish_release=true` 时才创建 GitHub Release 并上传 release assets。
 
 触发命令：
 
@@ -135,9 +138,10 @@ gh release view v0.4.0 --repo MakeLuvHell/imagetools
 确认：
 
 - tag 和标题均为 `v0.4.0`。
-- 只有预期的 MSI、Portable ZIP 与 `SHA256SUMS`，文件名完全匹配。
+- 只有预期的 MSI、Portable ZIP、`SHA256SUMS`、SPDX JSON SBOM 与 `build-info.json`，文件名完全匹配。
 - workflow 的 `Verify Windows single-process release` 步骤成功，并发生在任何资产上传前。
 - Release 正文来自 `docs/releases/v0.4.0.md`。
 - 下载后的 MSI 与 Portable 哈希均与 `SHA256SUMS` 一致。
+- `build-info.json` 中的 `commit_sha` 与 tag 指向的提交一致，`workflow_run_id` 指向本次发布 run；SBOM 中不包含工作区或 API Key。
 
 发布门禁证据和升级/回滚记录应附在发布 run 或 RB014 验证记录中；不能用源代码检查结果代替。

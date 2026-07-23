@@ -23,6 +23,7 @@ def test_readme_exposes_release_visuals_and_community_documents():
         "SECURITY.md",
         "CODE_OF_CONDUCT.md",
         "docs/roadmap.md",
+        "docs/privacy.md",
         "LICENSE",
     ):
         assert f"]({target})" in text
@@ -102,3 +103,30 @@ def test_roadmap_states_supported_platform_and_non_commitments():
     assert "macOS" in roadmap
     assert "代码签名" in roadmap
     assert "自动更新" in roadmap
+
+
+def test_open_source_support_privacy_ownership_and_english_entry_are_present():
+    readme = read("README.md")
+    privacy = read("docs/privacy.md")
+    support = read("SUPPORT.md")
+    codeowners = read(".github/CODEOWNERS")
+    english_readme = read("README.en.md")
+
+    assert "README.en.md" in readme
+    assert "SUPPORT.md" in readme
+    assert "docs/privacy.md" in readme
+    assert "本地" in privacy and "Provider" in privacy and "删除" in privacy
+    assert "Private vulnerability reporting" in support
+    assert "@MakeLuvHell" in codeowners
+    assert "Windows-first" in english_readme
+    assert "Privacy" in english_readme
+
+
+def test_release_documentation_explains_sbom_and_build_provenance():
+    readme = read("README.md")
+    release_guide = read("docs/releases/github-release.md")
+
+    assert "SBOM" in readme
+    assert "SBOM" in release_guide
+    assert "build-info.json" in release_guide
+    assert "SPDX" in release_guide

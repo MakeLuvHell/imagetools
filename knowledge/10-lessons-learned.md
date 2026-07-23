@@ -33,6 +33,7 @@
 - Prevalidate every staged reference before moving any file so a bad later token cannot partially consume an ordered batch.
 - Preserve the last successful model cache when probe or discovery fails; connectivity and model availability are separate facts.
 - A schema-changing rollback must restore a pre-upgrade workspace backup. Installing an older binary does not downgrade SQLite safely.
+- A release checksum proves downloaded bytes, while an SPDX SBOM and build provenance record answer different questions: which dependencies entered the build and which commit/workflow produced the assets. Neither artifact may include API keys or workspace data.
 
 ## Mistakes Or Pitfalls
 

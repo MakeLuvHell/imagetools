@@ -1,5 +1,7 @@
 # Image Tools
 
+[English](README.en.md) · [隐私说明](docs/privacy.md) · [支持说明](SUPPORT.md)
+
 [![CI](https://github.com/MakeLuvHell/imagetools/actions/workflows/ci.yml/badge.svg)](https://github.com/MakeLuvHell/imagetools/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -29,7 +31,7 @@ Windows 桌面图片创作工作台，内置 OpenAI Compatible、xAI Imagine 和
 - MSI 适合正常安装和从开始菜单启动。
 - Portable ZIP 解压后直接运行，包内只有 `Image Tools.exe`。
 
-程序依赖 Microsoft Edge WebView2 Runtime。发布资产尚未签名，首次运行可能显示 SmartScreen 提示。下载后可使用 Release 附带的 `SHA256SUMS` 校验文件完整性。详细步骤和数据备份要求见 [使用文档](docs/user-guide.md)。
+程序依赖 Microsoft Edge WebView2 Runtime。发布资产尚未签名，首次运行可能显示 SmartScreen 提示。下载后可使用 Release 附带的 `SHA256SUMS` 校验文件完整性；`SBOM.spdx.json` 列出构建依赖，`build-info.json` 记录对应的源码提交和 workflow run。详细步骤和数据备份要求见 [使用文档](docs/user-guide.md)。
 
 ## 安装开发依赖
 
@@ -105,9 +107,12 @@ GitHub Actions 的 Windows runner 会同时发布：
 ```text
 Image-Tools-v0.4.0-Windows-x64.msi
 Image-Tools-v0.4.0-Windows-x64-Portable.zip
+Image-Tools-v0.4.0-Windows-x64-SHA256SUMS.txt
+Image-Tools-v0.4.0-Windows-x64-SBOM.spdx.json
+Image-Tools-v0.4.0-Windows-x64-build-info.json
 ```
 
-Portable ZIP 中只有 `Image Tools.exe`。工作流会检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭退出和无监听端口，并用公开的 v0.3.0 MSI 验证 schema-v2 到 schema-v3 的升级。回滚到 v0.3.0 时必须恢复升级前的 schema-v2 工作区备份，不能直接打开已迁移的 schema-v3 数据库。手动运行默认只验证并保留 workflow artifact；只有显式设置 `publish_release=true` 才会公开 Release 资产。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
+Portable ZIP 中只有 `Image Tools.exe`。工作流会检查 MSI 与 Portable 的负载、安装/卸载、单进程行为、关闭退出和无监听端口，并用公开的 v0.3.0 MSI 验证 schema-v2 到 schema-v3 的升级。回滚到 v0.3.0 时必须恢复升级前的 schema-v2 工作区备份，不能直接打开已迁移的 schema-v3 数据库。通过门禁的构建还会生成 SPDX JSON SBOM 与不含机密的构建来源清单。手动运行默认只验证并保留 workflow artifact；只有显式设置 `publish_release=true` 才会公开 Release 资产。发布流程见 [`docs/releases/github-release.md`](docs/releases/github-release.md)。
 
 ## 运行时数据
 
@@ -160,6 +165,8 @@ Provider 必须显式选择协议，不根据名称、模型或域名猜测：
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 - [社区行为准则](CODE_OF_CONDUCT.md)
+- [隐私说明](docs/privacy.md)
+- [支持说明](SUPPORT.md)
 - [项目路线图](docs/roadmap.md)
 - [MIT License](LICENSE)
 

@@ -136,6 +136,8 @@ Provider API Key 不会返回给前端界面，但当前版本也不使用 Windo
 
 ## 数据与隐私
 
+完整说明见 [隐私说明](privacy.md)。
+
 Image Tools 没有项目自建的云服务或用户账号。会话历史、Provider 配置、API Key、上传参考图和生成结果保存在工作区数据目录中，不会由本项目主动收集。
 
 执行以下操作时，应用会直接连接到你配置的 Provider：
