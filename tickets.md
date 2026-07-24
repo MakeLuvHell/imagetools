@@ -6,8 +6,8 @@ Source: `docs/spec/2026-07-23-open-source-readiness.md`.
 
 | ID | Deliverable | Blocked by | Status | Acceptance evidence |
 | --- | --- | --- | --- | --- |
-| OS001 | Privacy, support, ownership, and English contributor entry points | None | In progress | Static documentation tests and link review |
-| OS002 | SPDX SBOM and build-provenance release assets | OS001 | Pending | Workflow static test; Windows workflow at the next consolidated release gate |
+| OS001 | Privacy, support, ownership, and English contributor entry points | None | Done | Static documentation tests and link review |
+| OS002 | SPDX SBOM and build-provenance release assets | OS001 | Done | Workflow static tests; Windows workflow `30110946102` passed, artifact `8603681924` |
 | OS003 | Windows signing configuration and trust verification | Certificate and signing-service decision | Deferred | Signed MSI/Portable release gate |
 
 ## Active v0.4.0 Plan
