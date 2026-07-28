@@ -202,7 +202,7 @@ jobs:
             Set-Content -LiteralPath "release-assets/Image-Tools-$($env:RELEASE_TAG)-Windows-x64-build-info.json" -Encoding utf8NoBOM
 
       - name: Upload Windows release assets as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: image-tools-${{ inputs.release_tag }}-windows-x64
           path: |
