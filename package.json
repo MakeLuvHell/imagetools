@@ -12,7 +12,7 @@
     "desktop:build:windows": "tauri build --target x86_64-pc-windows-msvc --bundles msi"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.0",
     "@tauri-apps/cli": "^2.11.4",
     "jsdom": "29.1.1",
     "lucide": "1.24.0"
